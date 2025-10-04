@@ -1,0 +1,77 @@
+{
+  "id": "550e8400-e29b-41d4-a716-446655440001",
+  "name": "Subfinder",
+  "slug": "subfinder",
+  "version": "1.0.0",
+  "category": "security-tool",
+  "type": "scan",
+
+  "author": {
+    "name": "ShipSector",
+    "type": "shipsector"
+  },
+
+  "description": "Fast subdomain enumeration tool using passive sources",
+  "documentation": "Subfinder is a subdomain discovery tool that discovers valid subdomains using passive online sources.",
+  "icon": "Network",
+
+  "isLatest": true,
+  "deprecated": false,
+
+  "inputs": [
+    {
+      "id": "domain",
+      "label": "Target Domain",
+      "type": "string",
+      "required": true,
+      "description": "The root domain to enumerate (e.g., example.com)"
+    }
+  ],
+
+  "outputs": [
+    {
+      "id": "subdomains",
+      "label": "Discovered Subdomains",
+      "type": "array",
+      "description": "List of discovered subdomains",
+      "format": "application/json"
+    }
+  ],
+
+  "parameters": [
+    {
+      "id": "sources",
+      "label": "Data Sources",
+      "type": "multi-select",
+      "required": false,
+      "default": ["all"],
+      "options": [
+        { "label": "All Sources", "value": "all" },
+        { "label": "CertSpotter", "value": "certspotter" },
+        { "label": "VirusTotal", "value": "virustotal" },
+        { "label": "Shodan", "value": "shodan" }
+      ],
+      "description": "Which passive sources to query"
+    },
+    {
+      "id": "timeout",
+      "label": "Timeout (seconds)",
+      "type": "number",
+      "required": false,
+      "default": 30,
+      "min": 5,
+      "max": 300,
+      "description": "Maximum execution time"
+    },
+    {
+      "id": "recursive",
+      "label": "Recursive Enumeration",
+      "type": "boolean",
+      "default": false,
+      "description": "Recursively enumerate discovered subdomains"
+    }
+  ],
+
+  "createdAt": "2025-01-15T10:00:00Z",
+  "updatedAt": "2025-01-15T10:00:00Z"
+}
