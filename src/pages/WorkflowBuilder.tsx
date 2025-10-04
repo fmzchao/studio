@@ -1,7 +1,9 @@
 import { useParams } from 'react-router-dom'
+import { ReactFlowProvider } from 'reactflow'
 import { TopBar } from '@/components/layout/TopBar'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { BottomPanel } from '@/components/layout/BottomPanel'
+import { Canvas } from '@/components/workflow/Canvas'
 
 export function WorkflowBuilder() {
   const { id } = useParams<{ id: string }>()
@@ -14,13 +16,11 @@ export function WorkflowBuilder() {
       <div className="flex flex-1 overflow-hidden">
         <Sidebar />
         
-        <main className="flex-1 relative">
-          <div className="absolute inset-0 bg-muted/20">
-            <div className="h-full flex items-center justify-center text-muted-foreground">
-              Canvas will be here (React Flow)
-            </div>
-          </div>
-        </main>
+        <ReactFlowProvider>
+          <main className="flex-1 relative">
+            <Canvas className="absolute inset-0" />
+          </main>
+        </ReactFlowProvider>
       </div>
       
       <BottomPanel />
