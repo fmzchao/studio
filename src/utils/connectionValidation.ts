@@ -8,6 +8,17 @@ export interface ValidationResult {
 }
 
 /**
+ * Type hierarchy for enhanced compatibility checking
+ */
+const TYPE_HIERARCHY: Record<string, string[]> = {
+  'any': ['string', 'array', 'object', 'file'],
+  'array': ['any'],
+  'string': ['any'],
+  'object': ['any'],
+  'file': ['string', 'any'],
+}
+
+/**
  * Check if two port types are compatible
  */
 function areTypesCompatible(sourceType: string, targetType: string): boolean {
@@ -17,8 +28,20 @@ function areTypesCompatible(sourceType: string, targetType: string): boolean {
   // Exact match
   if (sourceType === targetType) return true
 
-  // Additional compatibility rules can be added here
-  // For example: array can connect to any, object can connect to any, etc.
+  // Check if source type can connect to target type via hierarchy
+  if (TYPE_HIERARCHY[sourceType]?.includes(targetType)) return true
+
+  // Check if target type can accept from source type via hierarchy
+  if (TYPE_HIERARCHY[targetType]?.includes(sourceType)) return true
+
+  // Special compatibility rules for common data flow patterns
+  const compatibilityMatrix: Record<string, string[]> = {
+    'file': ['string', 'array', 'object', 'any'], // File can provide text, parsed data, etc.
+    'array': ['string', 'any'], // Array can be serialized to string
+    'object': ['string', 'any'], // Object can be serialized to string
+  }
+
+  if (compatibilityMatrix[sourceType]?.includes(targetType)) return true
 
   return false
 }

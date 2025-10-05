@@ -34,11 +34,43 @@ interface CanvasProps {
 
 export function Canvas({ className }: CanvasProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes)
-  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges)
+  const [edges, setEdges, originalOnEdgesChange] = useEdgesState(initialEdges)
   const [reactFlowInstance, setReactFlowInstance] = useState<any>(null)
   const [selectedNode, setSelectedNode] = useState<Node<NodeData> | null>(null)
   const { getComponent } = useComponentStore()
   const { nodeStates } = useExecutionStore()
+
+  // Enhanced edge change handler that also updates input mappings
+  const onEdgesChange = useCallback((changes: any[]) => {
+    // Handle edge removals by cleaning up input mappings
+    const removedEdges = changes
+      .filter(change => change.type === 'remove')
+      .map(change => edges.find(edge => edge.id === change.id))
+      .filter(Boolean)
+
+    if (removedEdges.length > 0) {
+      setNodes((nds) =>
+        nds.map((node) => {
+          const edgeToRemove = removedEdges.find(edge => edge && edge.target === node.id)
+          if (edgeToRemove && edgeToRemove.targetHandle && node.data.inputs?.[edgeToRemove.targetHandle]) {
+            const targetHandle = edgeToRemove.targetHandle
+            const { [targetHandle]: removed, ...remainingInputs } = node.data.inputs
+            return {
+              ...node,
+              data: {
+                ...node.data,
+                inputs: remainingInputs,
+              },
+            }
+          }
+          return node
+        })
+      )
+    }
+
+    // Apply the original edge changes
+    originalOnEdgesChange(changes)
+  }, [edges, setNodes, originalOnEdgesChange])
 
   // Sync execution node states to canvas nodes
   useEffect(() => {
@@ -70,13 +102,38 @@ export function Canvas({ className }: CanvasProps) {
         return
       }
 
+      // Add the edge
       setEdges((eds) => addEdge({
         ...params,
         type: 'smoothstep',
         animated: false,
       }, eds))
+
+      // Update target node's input mapping
+      if (params.target && params.targetHandle && params.source && params.sourceHandle) {
+        const targetHandle = params.targetHandle
+        setNodes((nds) =>
+          nds.map((node) =>
+            node.id === params.target
+              ? {
+                  ...node,
+                  data: {
+                    ...node.data,
+                    inputs: {
+                      ...node.data.inputs,
+                      [targetHandle]: {
+                        source: params.source,
+                        output: params.sourceHandle,
+                      },
+                    },
+                  },
+                }
+              : node
+          )
+        )
+      }
     },
-    [setEdges, nodes, edges, getComponent]
+    [setEdges, setNodes, nodes, edges, getComponent]
   )
 
   const onDragOver = useCallback((event: React.DragEvent) => {

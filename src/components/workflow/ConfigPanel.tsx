@@ -131,18 +131,35 @@ export function ConfigPanel({ selectedNode, onClose, onUpdateNode }: ConfigPanel
                     )}
                     {/* Connection status */}
                     <div className="mt-2 pt-2 border-t">
-                      <div className="text-xs text-muted-foreground">
+                      <div className="text-xs">
                         {selectedNode.data.inputs?.[input.id] ? (
-                          <span className="text-green-600">
-                            ✓ Connected from{' '}
-                            <span className="font-mono">
-                              {selectedNode.data.inputs[input.id].source}
-                            </span>
-                          </span>
+                          <div className="space-y-1">
+                            <div className="text-green-600 flex items-center gap-1">
+                              ✓ <span className="font-medium">Connected</span>
+                            </div>
+                            <div className="text-muted-foreground">
+                              Source: <span className="font-mono text-blue-600">
+                                {selectedNode.data.inputs[input.id].source}
+                              </span>
+                            </div>
+                            <div className="text-muted-foreground">
+                              Output: <span className="font-mono">
+                                {selectedNode.data.inputs[input.id].output}
+                              </span>
+                            </div>
+                          </div>
                         ) : (
-                          <span className="text-amber-600">
-                            ⚠ Not connected
-                          </span>
+                          <div className="flex items-center gap-1">
+                            {input.required ? (
+                              <span className="text-red-500">
+                                ⚠ <span className="font-medium">Required but not connected</span>
+                              </span>
+                            ) : (
+                              <span className="text-muted-foreground">
+                                ○ <span className="font-medium">Not connected (optional)</span>
+                              </span>
+                            )}
+                          </div>
                         )}
                       </div>
                     </div>

@@ -48,13 +48,21 @@ export const WorkflowNode = memo(({ data, selected }: NodeProps<NodeData>) => {
   // Display label (custom or component name)
   const displayLabel = data.label || component.name
 
-  // Check if there are unfilled required parameters
+  // Check if there are unfilled required parameters or inputs
   const requiredParams = component.parameters.filter(param => param.required)
-  const hasUnfilledRequired = requiredParams.some(param => {
-    const value = data.parameters?.[param.id]
-    const effectiveValue = value !== undefined ? value : param.default
-    return effectiveValue === undefined || effectiveValue === null || effectiveValue === ''
-  })
+  const requiredInputs = component.inputs.filter(input => input.required)
+  
+  const hasUnfilledRequired = 
+    // Check unfilled required parameters
+    requiredParams.some(param => {
+      const value = data.parameters?.[param.id]
+      const effectiveValue = value !== undefined ? value : param.default
+      return effectiveValue === undefined || effectiveValue === null || effectiveValue === ''
+    }) ||
+    // Check unfilled required inputs (not connected)
+    requiredInputs.some(input => {
+      return !data.inputs?.[input.id] // No connection to this input
+    })
 
   return (
     <div
@@ -147,43 +155,42 @@ export const WorkflowNode = memo(({ data, selected }: NodeProps<NodeData>) => {
         )}
 
         {/* Required Parameters Display */}
-        {component.parameters.filter(param => param.required).length > 0 && (
+        {requiredParams.length > 0 && (
           <div className="pt-2 border-t border-border/50">
             <div className="space-y-1">
-              {component.parameters
-                .filter(param => param.required)
-                .map((param) => {
-                  const value = data.parameters?.[param.id]
-                  const effectiveValue = value !== undefined ? value : param.default
-                  const hasValue = effectiveValue !== undefined && effectiveValue !== null && effectiveValue !== ''
-                  const displayValue = hasValue ? effectiveValue : ''
-                  const isDefault = value === undefined && param.default !== undefined
-                  
-                  return (
-                    <div key={param.id} className="flex items-center justify-between gap-2 text-xs">
-                      <span className="text-muted-foreground font-medium truncate">
-                        {param.label}
-                      </span>
-                      <div className="flex items-center gap-1">
-                        {hasValue ? (
-                          <span 
-                            className={cn(
-                              "font-mono px-1 py-0.5 rounded text-[10px] truncate max-w-[80px]",
-                              isDefault 
-                                ? "text-muted-foreground bg-muted/50 italic" 
-                                : "text-foreground bg-muted"
-                            )}
-                            title={isDefault ? `Default: ${String(displayValue)}` : String(displayValue)}
-                          >
-                            {String(displayValue)}
-                          </span>
-                        ) : (
-                          <span className="text-red-500 text-[10px]">*required</span>
-                        )}
-                      </div>
+              {/* Required Parameters */}
+              {requiredParams.map((param) => {
+                const value = data.parameters?.[param.id]
+                const effectiveValue = value !== undefined ? value : param.default
+                const hasValue = effectiveValue !== undefined && effectiveValue !== null && effectiveValue !== ''
+                const displayValue = hasValue ? effectiveValue : ''
+                const isDefault = value === undefined && param.default !== undefined
+
+                return (
+                  <div key={`param-${param.id}`} className="flex items-center justify-between gap-2 text-xs">
+                    <span className="text-muted-foreground font-medium truncate">
+                      {param.label}
+                    </span>
+                    <div className="flex items-center gap-1">
+                      {hasValue ? (
+                        <span
+                          className={cn(
+                            "font-mono px-1 py-0.5 rounded text-[10px] truncate max-w-[80px]",
+                            isDefault
+                              ? "text-muted-foreground bg-muted/50 italic"
+                              : "text-foreground bg-muted"
+                          )}
+                          title={isDefault ? `Default: ${String(displayValue)}` : String(displayValue)}
+                        >
+                          {String(displayValue)}
+                        </span>
+                      ) : (
+                        <span className="text-red-500 text-[10px]">*required</span>
+                      )}
                     </div>
-                  )
-                })}
+                  </div>
+                )
+              })}
             </div>
           </div>
         )}

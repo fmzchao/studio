@@ -218,6 +218,142 @@ function registerComponent(spec: unknown, logoOverride?: string): void {
 - Type-safe imports with build-time validation
 - Backwards compatibility with external URLs
 
+### Data Flow Implementation (2025-01)
+**Feature**: Complete data flow system enabling component output → input connections with visual feedback and smart required field detection.
+
+**Key Challenge**: Bridging the gap between React Flow's edge connections and application state management while maintaining type safety and user experience.
+
+**Architecture Decision**: Hybrid input/parameter approach rather than forcing pure separation. This allows treating connected inputs as satisfying "required" conditions while maintaining backwards compatibility.
+
+**Implementation Strategy**:
+1. **Dual State Management**: Enhanced Canvas to maintain both React Flow edges AND node input mappings
+2. **Type Hierarchy System**: Implemented flexible type compatibility beyond exact matches
+3. **Visual State Unification**: Combined required parameters and inputs in unified display system
+
+**Technical Implementation**:
+
+**Connection Data Management** (`src/components/workflow/Canvas.tsx`):
+```typescript
+// Enhanced onConnect to populate node.data.inputs
+const onConnect: OnConnect = useCallback((params) => {
+  // ... validation
+  setEdges(eds => addEdge(params, eds))
+  
+  // Update target node's input mapping
+  setNodes(nds => nds.map(node => 
+    node.id === params.target 
+      ? { ...node, data: { ...node.data, inputs: { 
+          ...node.data.inputs, 
+          [params.targetHandle]: { source: params.source, output: params.sourceHandle }
+        }}}
+      : node
+  ))
+})
+
+// Enhanced onEdgesChange to cleanup input mappings on removal
+const onEdgesChange = useCallback((changes) => {
+  const removedEdges = changes.filter(c => c.type === 'remove')
+  // Clean up node.data.inputs when edges are removed
+})
+```
+
+**Type Compatibility Matrix** (`src/utils/connectionValidation.ts`):
+```typescript
+const TYPE_HIERARCHY: Record<string, string[]> = {
+  'any': ['string', 'array', 'object', 'file'],
+  'file': ['string', 'array', 'object', 'any'],
+  'array': ['string', 'any'],
+  'object': ['string', 'any'],
+}
+```
+
+**Smart Required Detection** (`src/components/workflow/WorkflowNode.tsx`):
+- **Parameters**: Check for user values, then defaults, then mark as required
+- **Inputs**: Check for connections in `node.data.inputs` mapping
+- **Visual Indicators**: Red borders/alerts only when genuinely missing data
+
+**Connection Visual System**:
+- **Connected Inputs**: Blue badges showing `← SourceNode` 
+- **Parameter Values**: Gray badges for user values, italic for defaults
+- **Connection Status**: Detailed source/output information in ConfigPanel
+
+**Key Technical Challenges Solved**:
+
+1. **State Synchronization Problem**
+   - **Issue**: React Flow edges and node input mappings getting out of sync
+   - **Solution**: Single source of truth with bidirectional sync in Canvas handlers
+
+2. **Type System Flexibility**
+   - **Issue**: Rigid exact-match type checking prevented useful connections
+   - **Solution**: Hierarchical type system with compatibility matrix for common patterns
+
+3. **Input vs Parameter Confusion**
+   - **Issue**: Subfinder "Target Domain" defined as input port but used like parameter
+   - **Solution**: Unified display treating connected inputs as satisfying required conditions
+
+4. **Edge Removal Cleanup**
+   - **Issue**: Disconnecting edges left stale input mapping data
+   - **Solution**: Enhanced edge change handler with automatic cleanup
+
+**User Experience Improvements**:
+- **Before**: Static "*required" indicators regardless of connections
+- **After**: Dynamic indicators showing connection status and source information
+- **Visual Hierarchy**: Clear distinction between user values, defaults, and connections
+- **Type Safety**: Prevents incompatible connections while allowing useful data flow patterns
+
+**Testing Strategy**:
+- FileLoader (`any` output) → Subfinder (`string` input) connection validation
+- Edge removal and input mapping cleanup
+- Visual feedback for all connection states
+- TypeScript compilation verification
+
+**Files Modified**:
+- `src/components/workflow/Canvas.tsx` - Connection state management
+- `src/utils/connectionValidation.ts` - Enhanced type compatibility
+- `src/components/workflow/WorkflowNode.tsx` - Unified required field display
+- `src/components/workflow/ConfigPanel.tsx` - Detailed connection status
+
+**Performance Considerations**:
+- Used React.useCallback for connection handlers to prevent unnecessary re-renders
+- Optimized node updates to only modify affected nodes
+- Maintained existing React Flow optimization patterns
+
+**Future Extensibility**:
+- Data propagation system can build on input mapping infrastructure
+- Type system easily extensible for new component types
+- Visual indicators can be enhanced with actual data values
+
+### Duplicate Required Field Display Fix (2025-01)
+**Issue**: Required input fields (like "Target Domain" in Subfinder) were being displayed twice on the node card - once in the input ports section and again in the required parameters/inputs section at the bottom.
+
+**Root Cause**: The WorkflowNode component was displaying all required fields in two separate sections:
+1. Lines 115-135: Input ports with connection handles and "*required" labels
+2. Lines 195-219: Dedicated "Required Parameters and Inputs" section showing connection status for both parameters and inputs
+
+**Problem**: This created visual redundancy where inputs like "Target Domain" appeared twice with "*required" indicators, causing user confusion.
+
+**Solution**: Removed the required inputs display from the bottom section, keeping only required parameters there. The bottom section now exclusively shows required parameter values/status, while inputs are only shown once in their natural location with connection handles.
+
+**Implementation**:
+- Changed section title from "Required Parameters and Inputs Display" to "Required Parameters Display"
+- Removed the entire "Required Inputs" mapping loop (lines 195-219)
+- Kept only the "Required Parameters" display logic that shows parameter values and defaults
+- Updated conditional rendering to check only `requiredParams.length > 0` instead of both params and inputs
+
+**Visual Result**:
+- **Input ports**: Shown once with connection handles and required indicators
+- **Required parameters**: Shown in bottom section with current values (e.g., "Output Format: json")
+- **No duplication**: Each required field appears exactly once on the node card
+
+**Files Modified**:
+- `src/components/workflow/WorkflowNode.tsx` (lines 157-196)
+
+**Benefits**:
+- Cleaner, less cluttered node card UI
+- Eliminates user confusion about duplicate field displays
+- Maintains all functionality while improving visual clarity
+- Separates concerns: connection ports in one place, parameter values in another
+
 ## Outstanding Tasks
 
 1. Implement actual API integration for workflow execution
