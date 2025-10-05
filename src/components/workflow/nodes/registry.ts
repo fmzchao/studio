@@ -3,6 +3,7 @@ import { ComponentMetadata, ComponentMetadataSchema } from '@/schemas/component'
 // Import component specifications
 import subfinderSpec from './security-tools/Subfinder/Subfinder.spec.json'
 import fileLoaderSpec from './input-output/FileLoader/FileLoader.spec.json'
+import outputSaverSpec from './input-output/OutputSaver/OutputSaver.spec.json'
 import mergeSpec from './building-blocks/Merge/Merge.spec.json'
 
 // Import logo assets
@@ -31,6 +32,7 @@ function registerComponent(spec: unknown, logoOverride?: string): void {
 // Register all components
 registerComponent(subfinderSpec, subfinderLogo)
 registerComponent(fileLoaderSpec)
+registerComponent(outputSaverSpec)
 registerComponent(mergeSpec)
 
 /**
