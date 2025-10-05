@@ -1,4 +1,4 @@
-import { X } from 'lucide-react'
+import { X, ExternalLink } from 'lucide-react'
 import * as LucideIcons from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useComponentStore } from '@/store/componentStore'
@@ -156,16 +156,31 @@ export function ConfigPanel({ selectedNode, onClose, onUpdateNode }: ConfigPanel
           )}
 
           {/* Documentation */}
-          {component.documentation && (
+          {(component.documentation || component.documentationUrl) && (
             <div>
-              <h5 className="text-sm font-semibold mb-3 text-foreground">
-                Documentation
-              </h5>
-              <div className="p-3 rounded-lg border bg-muted/50">
-                <p className="text-xs text-muted-foreground whitespace-pre-wrap">
-                  {component.documentation}
-                </p>
+              <div className="flex items-center justify-between mb-3">
+                <h5 className="text-sm font-semibold text-foreground">
+                  Documentation
+                </h5>
+                {component.documentationUrl && (
+                  <a
+                    href={component.documentationUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors"
+                  >
+                    <span>View docs</span>
+                    <ExternalLink className="h-3 w-3" />
+                  </a>
+                )}
               </div>
+              {component.documentation && (
+                <div className="p-3 rounded-lg border bg-muted/50">
+                  <p className="text-xs text-muted-foreground whitespace-pre-wrap">
+                    {component.documentation}
+                  </p>
+                </div>
+              )}
             </div>
           )}
         </div>

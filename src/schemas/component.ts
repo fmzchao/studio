@@ -92,6 +92,7 @@ export const ComponentMetadataSchema = z.object({
   // Documentation
   description: z.string().max(200),
   documentation: z.string().optional(),
+  documentationUrl: z.string().url().optional(),
   icon: z.string(), // Lucide icon name
 
   // Status
