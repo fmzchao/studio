@@ -2,6 +2,28 @@ import { z } from 'zod'
 import { NodeSchema } from './node'
 import { EdgeSchema } from './edge'
 
+/**
+ * Workflow metadata schema (for list endpoint)
+ * Contains summary information without nodes/edges
+ */
+export const WorkflowMetadataSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string().min(1, 'Workflow name is required'),
+  description: z.string().optional(),
+  nodeCount: z.number().int().min(0),
+  edgeCount: z.number().int().min(0),
+  lastRun: z.string().datetime().nullable(),
+  runCount: z.number().int().min(0),
+  createdAt: z.string().datetime(),
+  updatedAt: z.string().datetime(),
+})
+
+export type WorkflowMetadata = z.infer<typeof WorkflowMetadataSchema>
+
+/**
+ * Complete workflow schema (for detail endpoint)
+ * Contains full nodes and edges data
+ */
 export const WorkflowSchema = z.object({
   id: z.string().uuid(),
   name: z.string().min(1, 'Workflow name is required'),

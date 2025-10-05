@@ -1,5 +1,10 @@
 import axios, { type AxiosInstance } from 'axios'
-import { WorkflowSchema, type Workflow } from '@/schemas/workflow'
+import {
+  WorkflowMetadataSchema,
+  WorkflowSchema,
+  type WorkflowMetadata,
+  type Workflow
+} from '@/schemas/workflow'
 import { type Node } from '@/schemas/node'
 import { type Edge } from '@/schemas/edge'
 import {
@@ -38,11 +43,11 @@ export const api = {
    */
   workflows: {
     /**
-     * Get all workflows
+     * Get all workflows (metadata only)
      */
-    list: async (): Promise<Workflow[]> => {
+    list: async (): Promise<WorkflowMetadata[]> => {
       const response = await apiClient.get('/workflows')
-      return response.data.map((w: unknown) => WorkflowSchema.parse(w))
+      return response.data.map((w: unknown) => WorkflowMetadataSchema.parse(w))
     },
 
     /**

@@ -4,7 +4,7 @@ This document provides sample JSON responses that the backend should return for 
 
 ## GET /workflows
 
-**Description**: List all workflows
+**Description**: List all workflows (metadata only, no nodes/edges)
 
 **Response** (200 OK):
 ```json
@@ -13,60 +13,10 @@ This document provides sample JSON responses that the backend should return for 
     "id": "550e8400-e29b-41d4-a716-446655440000",
     "name": "Subdomain Enumeration Workflow",
     "description": "Automated subdomain discovery using Subfinder",
-    "nodes": [
-      {
-        "id": "file-loader-1705317600000",
-        "type": "input",
-        "position": {
-          "x": 100,
-          "y": 200
-        },
-        "data": {
-          "componentSlug": "file-loader",
-          "componentVersion": "1.0.0",
-          "label": "Load Target Domains",
-          "parameters": {
-            "parseAs": "auto"
-          }
-        }
-      },
-      {
-        "id": "subfinder-1705317605000",
-        "type": "scan",
-        "position": {
-          "x": 450,
-          "y": 200
-        },
-        "data": {
-          "componentSlug": "subfinder",
-          "componentVersion": "1.0.0",
-          "parameters": {
-            "outputFormat": "json",
-            "maxTime": 10,
-            "threads": 10,
-            "rateLimit": 8,
-            "silent": true,
-            "verbose": false
-          },
-          "inputs": {
-            "domain": {
-              "source": "file-loader-1705317600000",
-              "output": "fileContents"
-            }
-          }
-        }
-      }
-    ],
-    "edges": [
-      {
-        "id": "reactflow__edge-file-loader-1705317600000fileContents-subfinder-1705317605000domain",
-        "source": "file-loader-1705317600000",
-        "target": "subfinder-1705317605000",
-        "sourceHandle": "fileContents",
-        "targetHandle": "domain",
-        "type": "smoothstep"
-      }
-    ],
+    "nodeCount": 2,
+    "edgeCount": 1,
+    "lastRun": "2025-01-15T14:20:00Z",
+    "runCount": 5,
     "createdAt": "2025-01-15T10:30:00Z",
     "updatedAt": "2025-01-15T14:22:00Z"
   },
@@ -74,13 +24,37 @@ This document provides sample JSON responses that the backend should return for 
     "id": "650e8400-e29b-41d4-a716-446655440001",
     "name": "Vulnerability Scanning Pipeline",
     "description": "Multi-stage security scanning workflow",
-    "nodes": [],
-    "edges": [],
+    "nodeCount": 0,
+    "edgeCount": 0,
+    "lastRun": null,
+    "runCount": 0,
     "createdAt": "2025-01-14T08:15:00Z",
     "updatedAt": "2025-01-14T08:15:00Z"
+  },
+  {
+    "id": "750e8400-e29b-41d4-a716-446655440002",
+    "name": "Security Audit Workflow",
+    "description": "Comprehensive security assessment pipeline",
+    "nodeCount": 5,
+    "edgeCount": 4,
+    "lastRun": "2025-01-16T09:45:00Z",
+    "runCount": 12,
+    "createdAt": "2025-01-12T16:00:00Z",
+    "updatedAt": "2025-01-16T10:30:00Z"
   }
 ]
 ```
+
+**Fields Explanation**:
+- `id` - Unique workflow identifier (UUID)
+- `name` - Workflow name
+- `description` - Optional workflow description
+- `nodeCount` - Total number of nodes in the workflow
+- `edgeCount` - Total number of connections/edges in the workflow
+- `lastRun` - ISO datetime of the most recent execution (null if never run)
+- `runCount` - Total number of times this workflow has been executed
+- `createdAt` - ISO datetime when workflow was created
+- `updatedAt` - ISO datetime of last modification
 
 ---
 
