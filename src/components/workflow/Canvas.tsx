@@ -275,7 +275,6 @@ export function Canvas({ className }: CanvasProps) {
             onNodeClick={onNodeClick}
             onPaneClick={onPaneClick}
             nodeTypes={nodeTypes}
-            fitView
             attributionPosition="bottom-left"
           >
             <Background color="#aaa" gap={16} />
