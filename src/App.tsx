@@ -7,7 +7,7 @@ function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<WorkflowList />} />
-        <Route path="/workflow/:id" element={<WorkflowBuilder />} />
+        <Route path="/workflows/:id" element={<WorkflowBuilder />} />
       </Routes>
     </BrowserRouter>
   )

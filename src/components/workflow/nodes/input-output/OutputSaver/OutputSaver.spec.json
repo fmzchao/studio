@@ -42,7 +42,7 @@
     {
       "id": "fileName",
       "label": "File Name",
-      "type": "string",
+      "type": "text",
       "required": true,
       "default": "workflow-output",
       "placeholder": "e.g., scan-results",
@@ -65,7 +65,7 @@
     {
       "id": "outputPath",
       "label": "Output Directory",
-      "type": "string",
+      "type": "text",
       "required": false,
       "default": "./outputs",
       "placeholder": "./outputs",

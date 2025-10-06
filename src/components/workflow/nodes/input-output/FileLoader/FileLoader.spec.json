@@ -35,7 +35,6 @@
       "label": "File Upload",
       "type": "file",
       "required": true,
-      "accepts": ["text/plain", "application/json", "text/csv"],
       "description": "Upload file to load"
     },
     {

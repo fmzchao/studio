@@ -56,7 +56,7 @@ export function WorkflowList() {
 
         <div className="mb-6">
           <Button
-            onClick={() => navigate('/workflow/new')}
+            onClick={() => navigate('/workflows/new')}
             size="lg"
             className="gap-2"
           >
@@ -72,7 +72,7 @@ export function WorkflowList() {
             <p className="text-muted-foreground mb-4">
               Create your first workflow to get started
             </p>
-            <Button onClick={() => navigate('/workflow/new')}>
+            <Button onClick={() => navigate('/workflows/new')}>
               Create Workflow
             </Button>
           </div>
@@ -81,7 +81,7 @@ export function WorkflowList() {
             {mockWorkflows.map((workflow) => (
               <div
                 key={workflow.id}
-                onClick={() => navigate(`/workflow/${workflow.id}`)}
+                onClick={() => navigate(`/workflows/${workflow.id}`)}
                 className="border rounded-lg p-6 cursor-pointer hover:shadow-md transition-shadow bg-card"
               >
                 <div className="flex items-start justify-between mb-3">
