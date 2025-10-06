@@ -218,7 +218,10 @@ export function Canvas({ className }: CanvasProps) {
   useEffect(() => {
     if (selectedNode) {
       const updatedNode = nodes.find(n => n.id === selectedNode.id)
-      if (updatedNode && updatedNode !== selectedNode) {
+      if (!updatedNode) {
+        // Node was deleted, clear selection
+        setSelectedNode(null)
+      } else if (updatedNode !== selectedNode) {
         setSelectedNode(updatedNode as Node<NodeData>)
       }
     }
