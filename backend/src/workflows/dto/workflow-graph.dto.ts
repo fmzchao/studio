@@ -35,6 +35,8 @@ export const WorkflowGraphSchema = z.object({
   viewport: WorkflowViewportSchema,
 });
 
+export type WorkflowGraph = z.infer<typeof WorkflowGraphSchema>;
+
 export class WorkflowGraphDto extends createZodDto(WorkflowGraphSchema) {}
 export class CreateWorkflowRequestDto extends WorkflowGraphDto {}
 export class UpdateWorkflowRequestDto extends WorkflowGraphDto {}

@@ -25,17 +25,17 @@ This plan is written for an LLM coding agent (“Agent”). Each phase ends with
 - [x] **Step 4:** Provide stubbed `ExecutionContext` (logger, secrets, artifacts).
 - [x] **Step 5:** Create sample components (FileLoader, Subfinder, Webhook) with placeholder logic; register them.
 - [x] **Step 6:** Add unit tests ensuring registry works.
-- [ ] **Step 7:** Commit `feat: scaffold component registry`. ➜ **Human review before next phase**
+- [x] **Step 7:** Commit `feat: scaffold component registry`. ➜ **Human review before next phase**
 
 ---
 ## Phase 3 – DSL Compiler & Validation
 
 **Goal:** Convert stored workflow graphs into a validated DSL representation.
 
-- [ ] **Step 1:** Define DSL types (`WorkflowDefinition`, `ActionDefinition`).
-- [ ] **Step 2:** Implement `compileWorkflowGraph` function (validate, topological sort, build actions).
-- [ ] **Step 3:** Add `POST /workflows/:id/commit` endpoint using compiler; store DSL.
-- [ ] **Step 4:** Add tests verifying sample graph compiles correctly.
+- [x] **Step 1:** Define DSL types (`WorkflowDefinition`, `ActionDefinition`).
+- [x] **Step 2:** Implement `compileWorkflowGraph` function (validate, topological sort, build actions).
+- [x] **Step 3:** Add `POST /workflows/:id/commit` endpoint using compiler; store DSL.
+- [x] **Step 4:** Add tests verifying sample graph compiles correctly.
 - [ ] **Step 5:** Commit `feat: add workflow compiler`. ➜ **Human review before next phase**
 
 ---

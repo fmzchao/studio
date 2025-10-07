@@ -3,6 +3,7 @@ import { eq } from 'drizzle-orm';
 import { type NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { z } from 'zod';
 
+import { WorkflowDefinition } from '../../dsl/types';
 import { WorkflowGraphSchema } from '../dto/workflow-graph.dto';
 import { workflowsTable } from '../../database/schema/workflows';
 import { DRIZZLE_TOKEN } from '../../database/database.module';
@@ -25,6 +26,7 @@ export class WorkflowRepository {
         name: input.name,
         description: input.description ?? null,
         graph: input,
+        compiledDefinition: null,
       })
       .returning();
 
@@ -38,6 +40,26 @@ export class WorkflowRepository {
         name: input.name,
         description: input.description ?? null,
         graph: input,
+        updatedAt: new Date(),
+      })
+      .where(eq(workflowsTable.id, id))
+      .returning();
+
+    if (!record) {
+      throw new Error(`Workflow ${id} not found`);
+    }
+
+    return record;
+  }
+
+  async saveCompiledDefinition(
+    id: string,
+    definition: WorkflowDefinition,
+  ): Promise<WorkflowRecord> {
+    const [record] = await this.db
+      .update(workflowsTable)
+      .set({
+        compiledDefinition: definition,
         updatedAt: new Date(),
       })
       .where(eq(workflowsTable.id, id))

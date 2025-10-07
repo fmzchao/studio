@@ -45,6 +45,11 @@ export class WorkflowsController {
     return { status: 'deleted', id };
   }
 
+  @Post(':id/commit')
+  async commit(@Param('id') id: string) {
+    return this.workflowsService.commit(id);
+  }
+
   @Get()
   async findAll() {
     return this.workflowsService.list();

@@ -1,5 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 
+import { compileWorkflowGraph } from '../dsl/compiler';
+import { WorkflowDefinition } from '../dsl/types';
 import { WorkflowGraphDto, WorkflowGraphSchema } from './dto/workflow-graph.dto';
 import { WorkflowRecord, WorkflowRepository } from './repository/workflow.repository';
 
@@ -31,6 +33,13 @@ export class WorkflowsService {
 
   async list(): Promise<WorkflowRecord[]> {
     return this.repository.list();
+  }
+
+  async commit(id: string): Promise<WorkflowDefinition> {
+    const workflow = await this.findById(id);
+    const definition = compileWorkflowGraph(workflow.graph);
+    await this.repository.saveCompiledDefinition(id, definition);
+    return definition;
   }
 
   private parse(dto: WorkflowGraphDto) {
