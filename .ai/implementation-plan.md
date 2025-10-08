@@ -69,7 +69,7 @@ This plan is written for an LLM coding agent (“Agent”). Each phase ends with
 - [x] **Step 2:** Implement in-memory trace collector.
 - [x] **Step 3:** Emit trace events around component execution in SDK/workflow.
 - [x] **Step 4:** Add `GET /workflow-runs/:id/trace` endpoint.
-- [ ] **Step 5:** Commit `feat: add execution trace foundation`. ➜ **Human review before next phase**
+- [x] **Step 5:** Commit `feat: add execution trace foundation`. ➜ **Human review before next phase**
 
 ---
 ## Phase 7 – Frontend Integration (Initial)
