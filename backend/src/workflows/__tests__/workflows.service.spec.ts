@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, it } from 'bun:test';
-import { Test } from '@nestjs/testing';
 
 import { WorkflowGraphSchema } from '../dto/workflow-graph.dto';
 import '../../components/register-default-components';
@@ -97,22 +96,12 @@ describe('WorkflowsService', () => {
 
   let savedDefinition: WorkflowDefinition | null = null;
 
-  beforeEach(async () => {
+  beforeEach(() => {
     createCalls = 0;
     savedDefinition = null;
     traceCollector.clear();
 
-    const moduleRef = await Test.createTestingModule({
-      providers: [
-        WorkflowsService,
-        {
-          provide: WorkflowRepository,
-          useValue: repositoryMock,
-        },
-      ],
-    }).compile();
-
-    service = moduleRef.get(WorkflowsService);
+    service = new WorkflowsService(repositoryMock);
   });
 
   it('creates a workflow using the repository', async () => {

@@ -1,6 +1,7 @@
 # ShipSec Studio – Implementation Plan
 
-This plan is written for an LLM coding agent (“Agent”). Each phase ends with a human review before continuing.
+This plan is written for an LLM coding agent (“Agent”). Each phase ends with a human review before continuing.  
+**Frontend freeze:** per latest direction, defer all new frontend work until backend Phases 5–6 ship; Phase 7 remains on hold.
 
 ---
 ## Phase 1 – Workflow Storage & CRUD API
@@ -72,13 +73,13 @@ This plan is written for an LLM coding agent (“Agent”). Each phase ends with
 - [x] **Step 5:** Commit `feat: add execution trace foundation`. ➜ **Human review before next phase**
 
 ---
-## Phase 7 – Frontend Integration (Initial)
+## Phase 7 – Frontend Integration (Initial) **(On Hold)**
 
-**Goal:** Hook frontend to new backend APIs.
+**Goal:** Hook frontend to new backend APIs once backend runner/trace work is stable.
 
-- [ ] **Step 1:** Update frontend API client to call workflow CRUD/commit/run/trace endpoints.
-- [ ] **Step 2:** Wire UI to save workflows and display traces (basic view).
-- [ ] **Step 3:** Commit `feat: connect frontend to backend APIs`. ➜ **Human review before next phase**
+- [ ] **Step 1:** Update frontend API client to call workflow CRUD/commit/run/trace endpoints. **Deferred.**
+- [ ] **Step 2:** Wire UI to save workflows and display traces (basic view). **Deferred.**
+- [ ] **Step 3:** Commit `feat: connect frontend to backend APIs` after backend readiness review. ➜ **Human review before next phase**
 
 ---
 ## Phase 8 – Final Review & Roadmap
