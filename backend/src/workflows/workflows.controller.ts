@@ -6,6 +6,7 @@ import {
   Param,
   Post,
   Put,
+  Query,
   UsePipes,
 } from '@nestjs/common';
 import {
@@ -107,11 +108,28 @@ export class WorkflowsController {
     schema: {
       type: 'object',
       properties: {
-        runId: { type: 'string', description: 'Execution run identifier' },
-        outputs: {
-          type: 'object',
-          additionalProperties: true,
-          description: 'Outputs keyed by node reference',
+        runId: { type: 'string', description: 'Temporal workflow identifier' },
+        workflowId: { type: 'string', description: 'Workflow record id' },
+        temporalRunId: {
+          type: 'string',
+          description: 'Temporal first execution run id',
+        },
+        taskQueue: {
+          type: 'string',
+          description: 'Temporal task queue used for execution',
+        },
+        status: {
+          type: 'string',
+          enum: [
+            'RUNNING',
+            'COMPLETED',
+            'FAILED',
+            'CANCELLED',
+            'TERMINATED',
+            'CONTINUED_AS_NEW',
+            'TIMED_OUT',
+            'UNKNOWN',
+          ],
         },
       },
     },
@@ -121,6 +139,41 @@ export class WorkflowsController {
     @Body() body: { inputs?: Record<string, unknown> } = {},
   ) {
     return this.workflowsService.run(id, body);
+  }
+
+  @Get('/runs/:runId/status')
+  @ApiOkResponse({
+    description: 'Current Temporal execution status',
+  })
+  async status(
+    @Param('runId') runId: string,
+    @Query('temporalRunId') temporalRunId?: string,
+  ) {
+    return this.workflowsService.getRunStatus(runId, temporalRunId);
+  }
+
+  @Get('/runs/:runId/result')
+  @ApiOkResponse({
+    description: 'Resolved workflow result payload',
+  })
+  async result(
+    @Param('runId') runId: string,
+    @Query('temporalRunId') temporalRunId?: string,
+  ) {
+    const result = await this.workflowsService.getRunResult(runId, temporalRunId);
+    return { runId, result };
+  }
+
+  @Post('/runs/:runId/cancel')
+  @ApiOkResponse({
+    description: 'Cancels a running workflow execution',
+  })
+  async cancel(
+    @Param('runId') runId: string,
+    @Query('temporalRunId') temporalRunId?: string,
+  ) {
+    await this.workflowsService.cancelRun(runId, temporalRunId);
+    return { status: 'cancelled', runId };
   }
 
   @Get('/runs/:runId/trace')
@@ -149,7 +202,8 @@ export class WorkflowsController {
     },
   })
   async trace(@Param('runId') runId: string) {
-    return { runId, events: this.traceService.list(runId) };
+    const events = await this.traceService.list(runId);
+    return { runId, events };
   }
 
   @Get()

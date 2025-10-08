@@ -1,9 +1,10 @@
 import { beforeEach, describe, expect, it } from 'bun:test';
 
-import '../../components/register-default-components';
+import type {
+  TemporalService,
+  WorkflowRunStatus,
+} from '../../temporal/temporal.service';
 import { TraceService } from '../../trace/trace.service';
-import { traceCollector } from '../../trace/collector';
-import { WorkflowDefinition } from '../../dsl/types';
 import {
   WorkflowGraphDto,
   WorkflowGraphSchema,
@@ -37,71 +38,105 @@ const baseGraph: WorkflowGraphDto = WorkflowGraphSchema.parse({
 describe('WorkflowsController', () => {
   let controller: WorkflowsController;
   let repositoryStore: Map<string, WorkflowRecord>;
+  let lastCancelledRun: { workflowId: string; runId?: string } | null = null;
+  const now = new Date().toISOString();
+
+  const repositoryStub: Partial<WorkflowRepository> = {
+    async create(input) {
+      const id = `wf-${repositoryStore.size + 1}`;
+      const record: WorkflowRecord = {
+        id,
+        name: input.name,
+        description: input.description ?? null,
+        graph: input,
+        compiledDefinition: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      repositoryStore.set(id, record);
+      return record;
+    },
+    async update(id, input) {
+      const existing = repositoryStore.get(id);
+      if (!existing) {
+        throw new Error(`Workflow ${id} not found`);
+      }
+      const updated: WorkflowRecord = {
+        ...existing,
+        name: input.name,
+        description: input.description ?? null,
+        graph: input,
+        updatedAt: new Date(),
+        compiledDefinition: existing.compiledDefinition,
+      };
+      repositoryStore.set(id, updated);
+      return updated;
+    },
+    async findById(id) {
+      return repositoryStore.get(id);
+    },
+    async delete(id) {
+      repositoryStore.delete(id);
+    },
+    async list() {
+      return Array.from(repositoryStore.values());
+    },
+    async saveCompiledDefinition(id, definition) {
+      const existing = repositoryStore.get(id);
+      if (!existing) {
+        throw new Error(`Workflow ${id} not found`);
+      }
+      const updated: WorkflowRecord = {
+        ...existing,
+        compiledDefinition: definition,
+        updatedAt: new Date(),
+      };
+      repositoryStore.set(id, updated);
+      return updated;
+    },
+  };
 
   beforeEach(() => {
-    traceCollector.clear();
     repositoryStore = new Map();
+    lastCancelledRun = null;
 
-    let compiledSnapshot: WorkflowDefinition | null = null;
-
-    const repositoryStub: Partial<WorkflowRepository> = {
-      async create(input) {
-        const id = `wf-${repositoryStore.size + 1}`;
-        const record: WorkflowRecord = {
-          id,
-          name: input.name,
-          description: input.description ?? null,
-          graph: input,
-          compiledDefinition: compiledSnapshot,
-          createdAt: new Date(),
-          updatedAt: new Date(),
+    const temporalStub: Pick<
+      TemporalService,
+      'startWorkflow' | 'describeWorkflow' | 'getWorkflowResult' | 'cancelWorkflow' | 'getDefaultTaskQueue'
+    > = {
+      async startWorkflow(options) {
+        return {
+          workflowId: options.workflowId ?? 'shipsec-run-controller',
+          runId: 'temporal-run-controller',
+          taskQueue: options.taskQueue ?? 'shipsec-default',
         };
-        repositoryStore.set(id, record);
-        return record;
       },
-      async update(id, input) {
-        const existing = repositoryStore.get(id);
-        if (!existing) {
-          throw new Error(`Workflow ${id} not found`);
-        }
-        const updated: WorkflowRecord = {
-          ...existing,
-          name: input.name,
-          description: input.description ?? null,
-          graph: input,
-          updatedAt: new Date(),
-          compiledDefinition: compiledSnapshot,
+      async describeWorkflow(ref) {
+        const status: WorkflowRunStatus = {
+          workflowId: ref.workflowId,
+          runId: ref.runId ?? 'temporal-run-controller',
+          status: 'RUNNING',
+          startTime: now,
+          closeTime: undefined,
+          historyLength: 0,
+          taskQueue: 'shipsec-default',
         };
-        repositoryStore.set(id, updated);
-        return updated;
+        return status;
       },
-      async findById(id) {
-        return repositoryStore.get(id);
+      async getWorkflowResult(ref) {
+        return { workflowId: ref.workflowId, success: true };
       },
-      async delete(id) {
-        repositoryStore.delete(id);
+      async cancelWorkflow(ref) {
+        lastCancelledRun = ref;
       },
-      async list() {
-        return Array.from(repositoryStore.values());
-      },
-      async saveCompiledDefinition(id, definition) {
-        const existing = repositoryStore.get(id);
-        if (!existing) {
-          throw new Error(`Workflow ${id} not found`);
-        }
-        compiledSnapshot = definition;
-        const updated: WorkflowRecord = {
-          ...existing,
-          compiledDefinition: definition,
-          updatedAt: new Date(),
-        };
-        repositoryStore.set(id, updated);
-        return updated;
+      getDefaultTaskQueue() {
+        return 'shipsec-default';
       },
     };
 
     const workflowsService = new WorkflowsService(
       repositoryStub as WorkflowRepository,
+      temporalStub as TemporalService,
     );
     const traceService = new TraceService();
     controller = new WorkflowsController(workflowsService, traceService);
@@ -128,20 +163,38 @@ describe('WorkflowsController', () => {
     expect(response).toEqual({ status: 'deleted', id: created.id });
   });
 
-  it('commits and runs workflows while exposing traces', async () => {
+  it('commits, starts, and inspects workflow runs', async () => {
     const created = await controller.create(baseGraph);
 
     const definition = await controller.commit(created.id);
     expect(definition.actions).toHaveLength(2);
 
-    const result = await controller.run(created.id, {
+    const run = await controller.run(created.id, {
       inputs: { payload: { note: 'hello' } },
     });
-    expect(result.outputs.trigger).toHaveProperty('payload');
-    expect(result.outputs.loader).toHaveProperty('fileName', 'controller.txt');
+    expect(run.runId).toMatch(/^shipsec-run-/);
+    expect(run.temporalRunId).toBe('temporal-run-controller');
+    expect(run.status).toBe('RUNNING');
+    expect(run.taskQueue).toBe('shipsec-default');
 
-    const trace = await controller.trace(result.runId);
-    expect(trace.runId).toBe(result.runId);
-    expect(trace.events.length).toBeGreaterThan(0);
+    const status = await controller.status(run.runId, run.temporalRunId);
+    expect(status.runId).toBe('temporal-run-controller');
+
+    const result = await controller.result(run.runId, run.temporalRunId);
+    expect(result).toEqual({
+      runId: run.runId,
+      result: { workflowId: run.runId, success: true },
+    });
+
+    const cancelResponse = await controller.cancel(run.runId, run.temporalRunId);
+    expect(cancelResponse).toEqual({ status: 'cancelled', runId: run.runId });
+    expect(lastCancelledRun).toEqual({
+      workflowId: run.runId,
+      runId: run.temporalRunId,
+    });
+
+    const trace = await controller.trace(run.runId);
+    expect(trace.runId).toBe(run.runId);
+    expect(trace.events).toHaveLength(0);
   });
 });

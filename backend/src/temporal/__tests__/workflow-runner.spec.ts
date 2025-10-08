@@ -38,7 +38,6 @@ describe('executeWorkflow', () => {
 
   const baseDefinition: WorkflowDefinition = {
     title: 'Valid workflow',
-    description: null,
     entrypoint: { ref: 'trigger' },
     actions: [
       {

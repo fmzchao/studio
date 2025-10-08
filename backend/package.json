@@ -9,7 +9,8 @@
     "build": "bun build src/main.ts --outdir build --target bun",
     "test": "bun test",
     "typecheck": "tsc --noEmit",
-    "generate:openapi": "bun scripts/generate-openapi.ts"
+    "generate:openapi": "bun scripts/generate-openapi.ts",
+    "worker:dev": "tsx src/temporal/workers/dev.worker.ts"
   },
   "dependencies": {
     "@nestjs/common": "^10.4.0",
@@ -19,6 +20,9 @@
     "@nestjs/swagger": "^11.2.0",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.1",
+    "@temporalio/client": "^1.11.3",
+    "@temporalio/worker": "^1.11.3",
+    "@temporalio/workflow": "^1.11.3",
     "dotenv": "^17.2.3",
     "drizzle-orm": "^0.44.6",
     "nestjs-zod": "^5.0.1",

@@ -1,10 +1,13 @@
 import { beforeEach, describe, expect, it } from 'bun:test';
 
 import { WorkflowGraphSchema } from '../dto/workflow-graph.dto';
-import '../../components/register-default-components';
 import { compileWorkflowGraph } from '../../dsl/compiler';
 import { WorkflowDefinition } from '../../dsl/types';
-import { traceCollector } from '../../trace/collector';
+import type {
+  StartWorkflowOptions,
+  TemporalService,
+  WorkflowRunStatus,
+} from '../../temporal/temporal.service';
 import { WorkflowRepository } from '../repository/workflow.repository';
 import { WorkflowsService } from '../workflows.service';
 
@@ -37,7 +40,12 @@ const sampleGraph = WorkflowGraphSchema.parse({
 describe('WorkflowsService', () => {
   let service: WorkflowsService;
   let createCalls = 0;
+  let startCalls: StartWorkflowOptions[] = [];
+  let lastDescribeRef: { workflowId: string; runId?: string } | null = null;
+  let lastCancelRef: { workflowId: string; runId?: string } | null = null;
   const now = new Date().toISOString();
+
+  let savedDefinition: WorkflowDefinition | null = null;
 
   const repositoryMock = {
     async create() {
@@ -94,14 +102,58 @@ describe('WorkflowsService', () => {
     },
   } as unknown as WorkflowRepository;
 
-  let savedDefinition: WorkflowDefinition | null = null;
+  const buildTemporalStub = () => {
+    const temporalStub: Pick<
+      TemporalService,
+      'startWorkflow' | 'describeWorkflow' | 'getWorkflowResult' | 'cancelWorkflow' | 'getDefaultTaskQueue'
+    > = {
+      async startWorkflow(options) {
+        startCalls.push(options);
+        return {
+          workflowId: options.workflowId ?? 'shipsec-run-mock',
+          runId: 'temporal-run-mock',
+          taskQueue: options.taskQueue ?? 'shipsec-default',
+        };
+      },
+      async describeWorkflow(ref) {
+        lastDescribeRef = ref;
+        const status: WorkflowRunStatus = {
+          workflowId: ref.workflowId,
+          runId: ref.runId ?? 'temporal-run-mock',
+          status: 'RUNNING',
+          startTime: now,
+          closeTime: undefined,
+          historyLength: 0,
+          taskQueue: 'shipsec-default',
+        };
+        return status;
+      },
+      async getWorkflowResult(ref) {
+        return { workflowId: ref.workflowId, completed: true };
+      },
+      async cancelWorkflow(ref) {
+        lastCancelRef = ref;
+      },
+      getDefaultTaskQueue() {
+        return 'shipsec-default';
+      },
+    };
+
+    return temporalStub;
+  };
 
   beforeEach(() => {
     createCalls = 0;
+    startCalls = [];
+    lastDescribeRef = null;
+    lastCancelRef = null;
     savedDefinition = null;
-    traceCollector.clear();
 
-    service = new WorkflowsService(repositoryMock);
+    const temporalService = buildTemporalStub();
+    service = new WorkflowsService(
+      repositoryMock,
+      temporalService as TemporalService,
+    );
   });
 
   it('creates a workflow using the repository', async () => {
@@ -116,7 +168,7 @@ describe('WorkflowsService', () => {
     expect(savedDefinition).toEqual(definition);
   });
 
-  it('runs a workflow definition', async () => {
+  it('runs a workflow definition via the Temporal service', async () => {
     const definition = compileWorkflowGraph(sampleGraph);
     repositoryMock.findById = async () => ({
       id: 'workflow-id',
@@ -128,13 +180,36 @@ describe('WorkflowsService', () => {
       compiledDefinition: definition,
     });
 
-    const result = await service.run('workflow-id');
-    expect(result.runId).toBeDefined();
-    expect(result.outputs).toHaveProperty('trigger');
-    expect(result.outputs).toHaveProperty('loader');
+    const run = await service.run('workflow-id', { inputs: { message: 'hi' } });
 
-    const events = traceCollector.list(result.runId);
-    expect(events.length).toBeGreaterThan(0);
-    expect(events[0].type).toBe('NODE_STARTED');
+    expect(run.runId).toMatch(/^shipsec-run-/);
+    expect(run.workflowId).toBe('workflow-id');
+    expect(run.status).toBe('RUNNING');
+    expect(run.taskQueue).toBe('shipsec-default');
+    expect(startCalls).toHaveLength(1);
+    expect(startCalls[0].workflowType).toBe('shipsecWorkflowRun');
+    expect(startCalls[0].args?.[0]).toMatchObject({
+      runId: run.runId,
+      workflowId: 'workflow-id',
+      inputs: { message: 'hi' },
+    });
+  });
+
+  it('delegates status, result, and cancel operations to the Temporal service', async () => {
+    const run = await service.run('workflow-id');
+    const status = await service.getRunStatus(run.runId, run.temporalRunId);
+    const result = await service.getRunResult(run.runId, run.temporalRunId);
+    await service.cancelRun(run.runId, run.temporalRunId);
+
+    expect(status.workflowId).toBe(run.runId);
+    expect(result).toMatchObject({ workflowId: run.runId, completed: true });
+    expect(lastDescribeRef).toEqual({
+      workflowId: run.runId,
+      runId: run.temporalRunId,
+    });
+    expect(lastCancelRef).toEqual({
+      workflowId: run.runId,
+      runId: run.temporalRunId,
+    });
   });
 });

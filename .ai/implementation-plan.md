@@ -50,6 +50,22 @@ This plan is written for an LLM coding agent (“Agent”). Each phase ends with
 - [ ] **Step 4:** Update `WorkflowsService` to start workflows through Temporal (generate run IDs, call client) and expose status/result/cancel helpers.
 - [ ] **Step 5:** Commit `feat: add temporal infrastructure & client`. ➜ **Human review before next phase**
 
+> **Current State Snapshot – 2025-10-08**
+>
+> - Temporal services run via docker compose (`shipsec-temporal`, `shipsec-temporal-ui`, `shipsec-postgres`, `shipsec-minio`). We recently dropped and recreated the `temporal` and `temporal_visibility` databases, so the cluster is clean—no workflows or workers registered except what boots now.
+> - Backend (`bun run dev`) and worker (`bun run worker:dev`) are managed through PM2 (`pm2.config.cjs`). Use `npx pm2 start shipsec-backend shipsec-worker`, `npx pm2 logs <name> --lines 100 --nostream`, etc.
+> - Nest backend now owns:
+>   * `TemporalModule`/`TemporalService` that auto-register `shipsec-dev` namespace and returns task queue info.
+>   * `WorkflowsService` starting workflow type `shipsecWorkflowRun` through Temporal, with status/result/cancel passthroughs.
+>   * Optional demo bootstrap (`WorkflowsBootstrapService`) when `TEMPORAL_BOOTSTRAP_DEMO=true`—it seeds a minimal workflow and kicks off a run, visible in Temporal UI (http://localhost:8081). Toggle the env flag off if you don’t want that behaviour.
+> - Worker registers workflow `shipsecWorkflowRun` and activity `runWorkflowActivity`, which simply shells into existing component execution (no DB trace persistence). Workflow bundle is located under `backend/src/temporal/workflows`.
+> - Tests (`bun test`) and `bun run typecheck` pass; Bun/PM2 tasks expect `.env` populated with `DATABASE_URL`, Temporal vars, and optional bootstrap flag.
+> - Next agent should:
+>   1. Verify Temporal namespace creation and workflow run in UI after startup—if namespace missing, backend logs show auto-registration attempt.
+>   2. Implement remaining Phase 4 checklist items (documentation tweaks, final commits).
+>   3. Plan Phase 5 work (activities should emit trace events/persistence per spec).
+> - Recent temporal DB reset means there is no historical data; safe to build migrations or run integration tests without cleanup.
+
 ---
 ## Phase 5 – Temporal Worker Execution
 

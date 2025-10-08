@@ -15,11 +15,18 @@ export interface WorkflowRunResult {
   outputs: Record<string, unknown>;
 }
 
+interface ExecuteWorkflowOptions {
+  runId?: string;
+}
+
+export type { ExecuteWorkflowOptions };
+
 export async function executeWorkflow(
   definition: WorkflowDefinition,
   request: WorkflowRunRequest = {},
+  options: ExecuteWorkflowOptions = {},
 ): Promise<WorkflowRunResult> {
-  const runId = randomUUID();
+  const runId = options.runId ?? randomUUID();
   const results = new Map<string, unknown>();
 
   for (const action of definition.actions) {
