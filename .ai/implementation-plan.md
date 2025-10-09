@@ -50,32 +50,56 @@ This plan is written for an LLM coding agent (“Agent”). Each phase ends with
 - [ ] **Step 4:** Update `WorkflowsService` to start workflows through Temporal (generate run IDs, call client) and expose status/result/cancel helpers.
 - [ ] **Step 5:** Commit `feat: add temporal infrastructure & client`. ➜ **Human review before next phase**
 
-> **Current State Snapshot – 2025-10-08**
+> **Current State Snapshot – 2025-10-09**
 >
-> - Temporal services run via docker compose (`shipsec-temporal`, `shipsec-temporal-ui`, `shipsec-postgres`, `shipsec-minio`). We recently dropped and recreated the `temporal` and `temporal_visibility` databases, so the cluster is clean—no workflows or workers registered except what boots now.
-> - Backend (`bun run dev`) and worker (`bun run worker:dev`) are managed through PM2 (`pm2.config.cjs`). Use `npx pm2 start shipsec-backend shipsec-worker`, `npx pm2 logs <name> --lines 100 --nostream`, etc.
+> - Temporal services run via docker compose (`shipsec-temporal`, `shipsec-temporal-ui`, `shipsec-postgres`, `shipsec-minio`).
+> - Backend (`bun run dev`) and worker (`npm run worker:dev` via tsx/Node.js) are managed through PM2 (`pm2.config.cjs`). Use `npx pm2 start pm2.config.cjs`, `npx pm2 logs <name> --lines 100 --nostream`, etc.
+> - **Phase 5 Complete:** Temporal worker execution fully functional with Node.js runtime (Bun incompatible with Temporal SDK).
+> - **Phase 5.5 Complete:** Real file storage and component registry API shipped.
 > - Nest backend now owns:
 >   * `TemporalModule`/`TemporalService` that auto-register `shipsec-dev` namespace and returns task queue info.
 >   * `WorkflowsService` starting workflow type `shipsecWorkflowRun` through Temporal, with status/result/cancel passthroughs.
->   * Optional demo bootstrap (`WorkflowsBootstrapService`) when `TEMPORAL_BOOTSTRAP_DEMO=true`—it seeds a minimal workflow and kicks off a run, visible in Temporal UI (http://localhost:8081). Toggle the env flag off if you don’t want that behaviour.
-> - Worker registers workflow `shipsecWorkflowRun` and activity `runWorkflowActivity`, which simply shells into existing component execution (no DB trace persistence). Workflow bundle is located under `backend/src/temporal/workflows`.
-> - Tests (`bun test`) and `bun run typecheck` pass; Bun/PM2 tasks expect `.env` populated with `DATABASE_URL`, Temporal vars, and optional bootstrap flag.
-> - Next agent should:
->   1. Verify Temporal namespace creation and workflow run in UI after startup—if namespace missing, backend logs show auto-registration attempt.
->   2. Implement remaining Phase 4 checklist items (documentation tweaks, final commits).
->   3. Plan Phase 5 work (activities should emit trace events/persistence per spec).
-> - Recent temporal DB reset means there is no historical data; safe to build migrations or run integration tests without cleanup.
+>   * `StorageModule` with MinIO integration for file upload/download/delete operations.
+>   * `ComponentsModule` exposing component registry via REST API.
+>   * Optional demo bootstrap disabled (`WorkflowsBootstrapService` removed from providers).
+> - Worker (`backend/src/temporal/workers/dev.worker.ts`) registers:
+>   * Workflow `shipsecWorkflowRun` and activity `runWorkflowActivity`.
+>   * Service container with `FilesService` and `StorageService` for component DI.
+>   * Database + MinIO connections initialized at worker startup.
+> - Components:
+>   * `core.file.loader` - Real component fetching files from MinIO by UUID reference.
+>   * `core.trigger.manual` - Manual trigger with payload.
+>   * `shipsec.subfinder.run` - Docker-based subdomain discovery (stubbed).
+>   * `core.webhook.post` - HTTP POST webhook sender (stubbed).
+> - Database schema includes: `workflows`, `files` tables (Drizzle ORM migrations applied).
+> - Tests (`bun test`) and `bun run typecheck` pass; PM2 tasks expect `.env` populated with `DATABASE_URL`, Temporal vars, MinIO config.
+> - **End-to-end verified:** File upload → MinIO storage → Workflow execution → Component fetches file → Base64 result returned.
+> - Next steps: Phase 6 (trace persistence to database for Temporal runs).
 
 ---
 ## Phase 5 – Temporal Worker Execution
 
 **Goal:** Move component execution into Temporal workers with dedicated task queues and activities.
 
-- [ ] **Step 1:** Implement worker entrypoints (e.g., `src/temporal/workers/dev.worker.ts`) that register workflows/activities and initialise the component registry.
-- [ ] **Step 2:** Port the existing inline runner into Temporal activities (invoke registry components, capture outputs/artifacts, emit trace events).
-- [ ] **Step 3:** Ensure namespace/queue naming is configurable (default to `shipsec-dev` namespace, `shipsec-default` task queue).
-- [ ] **Step 4:** Provide scripts (package.json targets) to run API + worker separately and update documentation.
-- [ ] **Step 5:** Commit `feat: add temporal worker execution`. ➜ **Human review before next phase**
+- [x] **Step 1:** Implement worker entrypoints (e.g., `src/temporal/workers/dev.worker.ts`) that register workflows/activities and initialise the component registry.
+- [x] **Step 2:** Port the existing inline runner into Temporal activities (invoke registry components, capture outputs/artifacts, emit trace events).
+- [x] **Step 3:** Ensure namespace/queue naming is configurable (default to `shipsec-dev` namespace, `shipsec-default` task queue).
+- [x] **Step 4:** Provide scripts (package.json targets) to run API + worker separately and update documentation.
+- [x] **Step 5:** Commit `feat: add temporal worker execution`. ➜ **Human review before next phase**
+
+---
+## Phase 5.5 – File Storage & Component Registry API
+
+**Goal:** Implement real file storage with MinIO and expose component registry to frontend.
+
+- [x] **Step 1:** Integrate MinIO client and create storage service for file upload/download/delete operations.
+- [x] **Step 2:** Create files database schema and repository for metadata tracking.
+- [x] **Step 3:** Implement Files REST API (`POST /files/upload`, `GET /files`, `GET /files/:id/download`, `DELETE /files/:id`).
+- [x] **Step 4:** Update file loader component from mock to real MinIO-backed implementation.
+- [x] **Step 5:** Implement service container for dependency injection in Temporal workers.
+- [x] **Step 6:** Add Component Registry API (`GET /components`, `GET /components/:id`) with OpenAPI docs.
+- [x] **Step 7:** End-to-end test file upload → workflow execution → MinIO fetch → result.
+- [x] **Step 8:** Commit `feat: implement real file storage with MinIO` and `feat: add component registry API`. ➜ **Phase complete**
 
 ---
 ## Phase 6 – Execution Trace Foundation (Temporal-backed)
