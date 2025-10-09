@@ -1,7 +1,25 @@
 # ShipSec Studio – Implementation Plan
 
-This plan is written for an LLM coding agent (“Agent”). Each phase ends with a human review before continuing.  
+This plan is written for an LLM coding agent ("Agent"). Each phase ends with a human review before continuing.  
 **Frontend freeze:** per latest direction, defer all new frontend work until backend Phases 5–6 ship; Phase 7 remains on hold.
+
+## Progress Overview
+
+| Phase | Status | Description |
+|-------|--------|-------------|
+| Phase 1 | ✅ Complete | Workflow Storage & CRUD API |
+| Phase 2 | ✅ Complete | Component Registry Foundation |
+| Phase 3 | ✅ Complete | DSL Compiler & Validation |
+| Phase 4 | ✅ Complete | Temporal Infrastructure & Client Integration |
+| Phase 5 | ✅ Complete | Temporal Worker Execution |
+| Phase 5.5 | ✅ Complete | File Storage & Component Registry API |
+| Phase 5.9 | ✅ Complete | Component SDK Package Separation |
+| Phase 5.10 | 🚧 In Progress | Testing Infrastructure & Unit Tests (31/31 unit tests ✅) |
+| Phase 6 | ⏳ Partial | Execution Trace Foundation (in-memory only) |
+| Phase 7 | ⏸️ On Hold | Frontend Integration |
+| Phase 8 | ⏳ Pending | Final Review & Roadmap |
+
+**Current Focus:** Phase 5.10 - Testing Infrastructure (Levels 3-6: Integration & E2E tests)
 
 ---
 ## Phase 1 – Workflow Storage & CRUD API
@@ -40,44 +58,18 @@ This plan is written for an LLM coding agent (“Agent”). Each phase ends with
 - [x] **Step 5:** Commit `feat: add workflow compiler`. ➜ **Human review before next phase**
 
 ---
-## Phase 4 – Temporal Infrastructure & Client Integration
+## Phase 4 – Temporal Infrastructure & Client Integration ✅
 
 **Goal:** Stand up Temporal + MinIO infrastructure locally and replace the stub runner with a real Temporal client in the Nest API.
 
-- [ ] **Step 1:** Expand `docker-compose.yml` to include Temporal server/UI and MinIO while reusing the existing Postgres service (new `temporal` database/schema).
-- [ ] **Step 2:** Document required env vars (`TEMPORAL_ADDRESS`, `TEMPORAL_NAMESPACE`, `TEMPORAL_TASK_QUEUE`, MinIO creds) in README/`.env.example`.
-- [ ] **Step 3:** Add Temporal SDK dependencies to the backend and create `TemporalModule`/`TemporalService` that manages connections, namespaces, and workflow starts.
-- [ ] **Step 4:** Update `WorkflowsService` to start workflows through Temporal (generate run IDs, call client) and expose status/result/cancel helpers.
-- [ ] **Step 5:** Commit `feat: add temporal infrastructure & client`. ➜ **Human review before next phase**
-
-> **Current State Snapshot – 2025-10-09**
->
-> - Temporal services run via docker compose (`shipsec-temporal`, `shipsec-temporal-ui`, `shipsec-postgres`, `shipsec-minio`).
-> - Backend (`bun run dev`) and worker (`npm run worker:dev` via tsx/Node.js) are managed through PM2 (`pm2.config.cjs`). Use `npx pm2 start pm2.config.cjs`, `npx pm2 logs <name> --lines 100 --nostream`, etc.
-> - **Phase 5 Complete:** Temporal worker execution fully functional with Node.js runtime (Bun incompatible with Temporal SDK).
-> - **Phase 5.5 Complete:** Real file storage and component registry API shipped.
-> - Nest backend now owns:
->   * `TemporalModule`/`TemporalService` that auto-register `shipsec-dev` namespace and returns task queue info.
->   * `WorkflowsService` starting workflow type `shipsecWorkflowRun` through Temporal, with status/result/cancel passthroughs.
->   * `StorageModule` with MinIO integration for file upload/download/delete operations.
->   * `ComponentsModule` exposing component registry via REST API.
->   * Optional demo bootstrap disabled (`WorkflowsBootstrapService` removed from providers).
-> - Worker (`backend/src/temporal/workers/dev.worker.ts`) registers:
->   * Workflow `shipsecWorkflowRun` and activity `runWorkflowActivity`.
->   * Service container with `FilesService` and `StorageService` for component DI.
->   * Database + MinIO connections initialized at worker startup.
-> - Components:
->   * `core.file.loader` - Real component fetching files from MinIO by UUID reference.
->   * `core.trigger.manual` - Manual trigger with payload.
->   * `shipsec.subfinder.run` - Docker-based subdomain discovery (stubbed).
->   * `core.webhook.post` - HTTP POST webhook sender (stubbed).
-> - Database schema includes: `workflows`, `files` tables (Drizzle ORM migrations applied).
-> - Tests (`bun test`) and `bun run typecheck` pass; PM2 tasks expect `.env` populated with `DATABASE_URL`, Temporal vars, MinIO config.
-> - **End-to-end verified:** File upload → MinIO storage → Workflow execution → Component fetches file → Base64 result returned.
-> - Next steps: Phase 6 (trace persistence to database for Temporal runs).
+- [x] **Step 1:** Expand `docker-compose.yml` to include Temporal server/UI and MinIO while reusing the existing Postgres service (new `temporal` database/schema).
+- [x] **Step 2:** Document required env vars (`TEMPORAL_ADDRESS`, `TEMPORAL_NAMESPACE`, `TEMPORAL_TASK_QUEUE`, MinIO creds) in README/`.env.example`.
+- [x] **Step 3:** Add Temporal SDK dependencies to the backend and create `TemporalModule`/`TemporalService` that manages connections, namespaces, and workflow starts.
+- [x] **Step 4:** Update `WorkflowsService` to start workflows through Temporal (generate run IDs, call client) and expose status/result/cancel helpers.
+- [x] **Step 5:** Commit `feat: add temporal infrastructure & client`. ➜ **Phase complete**
 
 ---
-## Phase 5 – Temporal Worker Execution
+## Phase 5 – Temporal Worker Execution ✅
 
 **Goal:** Move component execution into Temporal workers with dedicated task queues and activities.
 
@@ -85,10 +77,11 @@ This plan is written for an LLM coding agent (“Agent”). Each phase ends with
 - [x] **Step 2:** Port the existing inline runner into Temporal activities (invoke registry components, capture outputs/artifacts, emit trace events).
 - [x] **Step 3:** Ensure namespace/queue naming is configurable (default to `shipsec-dev` namespace, `shipsec-default` task queue).
 - [x] **Step 4:** Provide scripts (package.json targets) to run API + worker separately and update documentation.
-- [x] **Step 5:** Commit `feat: add temporal worker execution`. ➜ **Human review before next phase**
+- [x] **Step 5:** Switch worker runtime from Bun to Node.js+tsx (Bun incompatible with Temporal SDK).
+- [x] **Step 6:** Commit `feat: add temporal worker execution`. ➜ **Phase complete**
 
 ---
-## Phase 5.5 – File Storage & Component Registry API
+## Phase 5.5 – File Storage & Component Registry API ✅
 
 **Goal:** Implement real file storage with MinIO and expose component registry to frontend.
 
@@ -209,13 +202,15 @@ We follow a bottom-up testing approach with increasing integration complexity:
 - [ ] **Step 8:** Add end-to-end tests.
 - [ ] **Step 9:** Add CI/CD pipeline for automated testing. ➜ **In Progress**
 
-**Test Coverage:**
-- ✅ Component SDK: 100% (registry, context, runner)
-- ✅ Worker Components: 100% (all 4 components)
-- ⏳ Adapters: 0% (needs real service tests)
-- ⏳ Worker Integration: 0% (needs Temporal cluster)
-- ⏳ Backend Integration: 0% (needs E2E setup)
-- ⏳ End-to-End: 0% (needs full stack)
+**Test Coverage Summary:**
+- ✅ **Unit Tests:** 31/31 passing (18 SDK + 13 Worker)
+  - Component SDK: 100% (registry, context, runner)
+  - Worker Components: 100% (all 4 components)
+- ⏳ **Integration Tests:** 0% (Levels 3-6 pending)
+  - Adapters: MinIO + PostgreSQL
+  - Worker: Temporal + Components
+  - Backend: REST API → Temporal
+  - End-to-End: Full stack
 
 ---
 ## Phase 6 – Execution Trace Foundation (Temporal-backed)
