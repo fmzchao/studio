@@ -196,21 +196,28 @@ We follow a bottom-up testing approach with increasing integration complexity:
   - subfinder: docker runner config, stubbed results
 - [x] **Step 3:** Verify all 31 tests pass (18 SDK + 13 Worker).
 - [x] **Step 4:** Commit `test: add comprehensive unit tests`.
-- [ ] **Step 5:** Add adapter tests for MinIO + PostgreSQL integration.
-- [ ] **Step 6:** Add worker integration tests with Temporal.
-- [ ] **Step 7:** Add backend integration tests.
-- [ ] **Step 8:** Add end-to-end tests.
-- [ ] **Step 9:** Add CI/CD pipeline for automated testing. ➜ **In Progress**
+- [x] **Step 5:** Add adapter tests for MinIO + PostgreSQL integration (18 tests).
+  - FileStorageAdapter: Real MinIO + PostgreSQL, upload/download, error scenarios
+  - TraceAdapter: In-memory event recording, retrieval, ordering
+- [x] **Step 6:** Commit `test: add adapter integration tests`.
+- [ ] **Step 7:** Add worker integration tests with Temporal.
+- [ ] **Step 8:** Add backend integration tests.
+- [ ] **Step 9:** Add end-to-end tests.
+- [ ] **Step 10:** Add CI/CD pipeline for automated testing. ➜ **In Progress**
 
 **Test Coverage Summary:**
 - ✅ **Unit Tests:** 31/31 passing (18 SDK + 13 Worker)
   - Component SDK: 100% (registry, context, runner)
   - Worker Components: 100% (all 4 components)
-- ⏳ **Integration Tests:** 0% (Levels 3-6 pending)
-  - Adapters: MinIO + PostgreSQL
+- ✅ **Adapter Tests:** 18/18 passing (Level 3 complete!)
+  - FileStorageAdapter: 100% (9 tests with real MinIO + PostgreSQL)
+  - TraceAdapter: 100% (9 tests with in-memory storage)
+- ⏳ **Integration Tests:** 0% (Levels 4-6 pending)
   - Worker: Temporal + Components
   - Backend: REST API → Temporal
   - End-to-End: Full stack
+
+**Total: 49/49 tests passing** ✅
 
 ---
 ## Phase 6 – Execution Trace Foundation (Temporal-backed)
