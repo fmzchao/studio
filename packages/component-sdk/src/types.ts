@@ -17,7 +17,9 @@ export interface DockerRunnerConfig {
   kind: 'docker';
   image: string;
   command: string[];
+  entrypoint?: string; // Override container's default entrypoint
   env?: Record<string, string>;
+  network?: 'none' | 'bridge' | 'host'; // Network mode (default: none for security)
   timeoutSeconds?: number;
 }
 
