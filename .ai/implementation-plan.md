@@ -375,3 +375,76 @@ Successfully implemented real HTTP POST/PUT/PATCH functionality:
 **Commits:**
 - `c6c9d8f` - Docker runner implementation
 - `fffd35c` - Webhook component implementation
+
+---
+
+## Phase 6 – Frontend OpenAPI Integration ✅
+
+**Status**: COMPLETE  
+**Goal**: Replace axios with type-safe OpenAPI-generated client for frontend-backend communication
+
+### Implementation Details
+
+**Package Created: `@shipsec/backend-client`**
+- Auto-generated TypeScript types from OpenAPI spec using `openapi-typescript`
+- High-level API wrapper with typed methods for all endpoints
+- Uses `openapi-fetch` library (modern fetch-based client)
+- Full type inference for requests, responses, and errors
+
+**Key Features:**
+- ✅ Workflows API (list, get, create, delete, commit, run)
+- ✅ Workflow Runs API (status, result, trace, cancel)
+- ✅ Files API (list, upload, download, delete, metadata)
+- ✅ Components API (list, get)
+- ✅ Health check endpoint
+- ✅ Automatic JSON serialization
+- ✅ Multipart/form-data support for file uploads
+- ✅ Query parameter handling
+
+**Frontend Updates:**
+- Replaced axios-based `api.ts` with OpenAPI client
+- Added data transformation between React Flow format and backend API format
+- Maintained existing API surface for minimal disruption
+- All existing frontend features continue to work
+
+**Developer Experience:**
+- Full TypeScript type safety and IntelliSense
+- Compile-time error detection for API misuse
+- Single source of truth (OpenAPI spec)
+- Easy regeneration: `bun run generate` in backend-client package
+
+**Testing:**
+- ✅ Integration test script with 7 test cases
+- ✅ Tests health, workflows CRUD, components list
+- ✅ Frontend builds and runs successfully
+- ✅ Full monorepo typecheck passes
+
+**Documentation:**
+- Created `.ai/FRONTEND-INTEGRATION.md` with architecture, usage, and examples
+- Updated `packages/backend-client/README.md` with API methods and regeneration guide
+- Added inline JSDoc comments for all client methods
+
+**Known Issues:**
+- Workflow update endpoint has validation issue (workaround: recreate workflow)
+- `temporalRunId` query param shows as required but is optional
+
+**Files Modified:**
+- `packages/backend-client/src/client.ts` (generated)
+- `packages/backend-client/src/api-client.ts` (new)
+- `packages/backend-client/src/index.ts` (updated)
+- `packages/backend-client/package.json` (updated)
+- `packages/backend-client/README.md` (new)
+- `packages/backend-client/test-client.ts` (new)
+- `frontend/src/services/api.ts` (refactored)
+- `frontend/package.json` (added workspace dependency)
+
+**Benefits:**
+- 🔒 Type safety prevents runtime API errors
+- 📝 Self-documenting API through types
+- ⚡ Better developer experience with autocompletion
+- 🔄 Easy to keep frontend/backend in sync
+- 🧪 Easier to write tests with typed mocks
+
+**Commit:** `e12feee` - feat: add type-safe OpenAPI client for frontend integration
+
+---
