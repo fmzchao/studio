@@ -34,12 +34,14 @@ export class WorkflowsService {
 
   async create(dto: WorkflowGraphDto): Promise<WorkflowRecord> {
     const input = this.parse(dto);
-    return this.repository.create(input);
+    const record = await this.repository.create(input);
+    return this.flattenWorkflowGraph(record);
   }
 
   async update(id: string, dto: WorkflowGraphDto): Promise<WorkflowRecord> {
     const input = this.parse(dto);
-    return this.repository.update(id, input);
+    const record = await this.repository.update(id, input);
+    return this.flattenWorkflowGraph(record);
   }
 
   async findById(id: string): Promise<WorkflowRecord> {

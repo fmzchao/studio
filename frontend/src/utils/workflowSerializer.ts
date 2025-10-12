@@ -64,12 +64,8 @@ export function serializeWorkflowForCreate(
   nodes: ReactFlowNode<NodeData>[],
   edges: ReactFlowEdge[]
 ) {
-  console.log('[serializeWorkflowForCreate] Input:', { name, description, nodesCount: nodes?.length, edgesCount: edges?.length })
-  
   const serializedNodes = serializeNodes(nodes)
   const serializedEdges = serializeEdges(edges)
-  
-  console.log('[serializeWorkflowForCreate] Serialized:', { serializedNodesCount: serializedNodes?.length, serializedEdgesCount: serializedEdges?.length })
   
   const payload = {
     name,
@@ -77,8 +73,6 @@ export function serializeWorkflowForCreate(
     nodes: serializedNodes,
     edges: serializedEdges,
   }
-
-  console.log('[serializeWorkflowForCreate] Payload:', payload)
 
   // Validate with schema
   return CreateWorkflowSchema.parse(payload)
