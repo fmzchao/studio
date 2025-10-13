@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 
 import { compileWorkflowGraph } from '../dsl/compiler';
 import { WorkflowDefinition } from '../dsl/types';
@@ -27,6 +27,8 @@ const SHIPSEC_WORKFLOW_TYPE = 'shipsecWorkflowRun';
 
 @Injectable()
 export class WorkflowsService {
+  private readonly logger = new Logger(WorkflowsService.name);
+
   constructor(
     private readonly repository: WorkflowRepository,
     private readonly temporalService: TemporalService,
@@ -35,13 +37,21 @@ export class WorkflowsService {
   async create(dto: WorkflowGraphDto): Promise<WorkflowRecord> {
     const input = this.parse(dto);
     const record = await this.repository.create(input);
-    return this.flattenWorkflowGraph(record);
+    const flattened = this.flattenWorkflowGraph(record);
+    this.logger.log(
+      `Created workflow ${flattened.id} (nodes=${input.nodes.length}, edges=${input.edges.length})`,
+    );
+    return flattened;
   }
 
   async update(id: string, dto: WorkflowGraphDto): Promise<WorkflowRecord> {
     const input = this.parse(dto);
     const record = await this.repository.update(id, input);
-    return this.flattenWorkflowGraph(record);
+    const flattened = this.flattenWorkflowGraph(record);
+    this.logger.log(
+      `Updated workflow ${flattened.id} (nodes=${input.nodes.length}, edges=${input.edges.length})`,
+    );
+    return flattened;
   }
 
   async findById(id: string): Promise<WorkflowRecord> {
@@ -64,63 +74,143 @@ export class WorkflowsService {
 
   async delete(id: string): Promise<void> {
     await this.repository.delete(id);
+    this.logger.log(`Deleted workflow ${id}`);
   }
 
   async list(): Promise<WorkflowRecord[]> {
     const records = await this.repository.list();
-    return records.map(r => this.flattenWorkflowGraph(r));
+    const flattened = records.map((record) => this.flattenWorkflowGraph(record));
+    this.logger.log(`Loaded ${flattened.length} workflow(s) from repository`);
+    return flattened;
   }
 
   async commit(id: string): Promise<WorkflowDefinition> {
     const workflow = await this.findById(id);
+    this.logger.log(`Compiling workflow ${workflow.id}`);
     const definition = compileWorkflowGraph(workflow.graph);
     await this.repository.saveCompiledDefinition(id, definition);
+    this.logger.log(
+      `Compiled workflow ${workflow.id} with ${definition.actions.length} action(s); entrypoint=${definition.entrypoint.ref}`,
+    );
     return definition;
   }
 
   async run(id: string, request: WorkflowRunRequest = {}): Promise<WorkflowRunHandle> {
     const workflow = await this.findById(id);
-    const definition = workflow.compiledDefinition ?? (await this.commit(id));
+    const inputSummary = this.formatInputSummary(request.inputs);
+    this.logger.log(
+      `Received run request for workflow ${workflow.id} (inputs=${inputSummary})`,
+    );
+
+    let definition = workflow.compiledDefinition;
+    const needsRecompile =
+      !definition?.actions?.every((action: any) => action && 'inputMappings' in action);
+
+    if (!definition || needsRecompile) {
+      this.logger.log(`Recompiling workflow ${workflow.id} for latest schema`);
+      definition = await this.commit(id);
+    }
+
+    if (!definition) {
+      throw new Error(`Failed to compile workflow ${workflow.id}`);
+    }
+    const compiledDefinition = definition as WorkflowDefinition;
     const runId = `shipsec-run-${randomUUID()}`;
 
     // Track execution stats
     await this.repository.incrementRunCount(id);
 
-    const temporalRun = await this.temporalService.startWorkflow({
-      workflowType: SHIPSEC_WORKFLOW_TYPE,
-      workflowId: runId,
-      args: [
-        {
-          runId,
-          workflowId: workflow.id,
-          definition,
-          inputs: request.inputs ?? {},
-        },
-      ],
-    });
+    try {
+      const temporalRun = await this.temporalService.startWorkflow({
+        workflowType: SHIPSEC_WORKFLOW_TYPE,
+        workflowId: runId,
+        args: [
+          {
+            runId,
+            workflowId: workflow.id,
+            definition: compiledDefinition,
+            inputs: request.inputs ?? {},
+          },
+        ],
+      });
 
-    return {
-      runId,
-      workflowId: workflow.id,
-      temporalRunId: temporalRun.runId,
-      status: 'RUNNING',
-      taskQueue: temporalRun.taskQueue,
-    };
+      this.logger.log(
+        `Started workflow run ${runId} (temporalRunId=${temporalRun.runId}, taskQueue=${temporalRun.taskQueue}, actions=${compiledDefinition.actions.length})`,
+      );
+
+      return {
+        runId,
+        workflowId: workflow.id,
+        temporalRunId: temporalRun.runId,
+        status: 'RUNNING',
+        taskQueue: temporalRun.taskQueue,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Failed to start workflow ${workflow.id} run ${runId}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+      throw error;
+    }
   }
 
   async getRunStatus(runId: string, temporalRunId?: string): Promise<WorkflowRunStatus> {
+    this.logger.log(
+      `Fetching status for workflow run ${runId} (temporalRunId=${temporalRunId ?? 'latest'})`,
+    );
     return this.temporalService.describeWorkflow({ workflowId: runId, runId: temporalRunId });
   }
 
   async getRunResult(runId: string, temporalRunId?: string) {
+    this.logger.log(
+      `Fetching result for workflow run ${runId} (temporalRunId=${temporalRunId ?? 'latest'})`,
+    );
     return this.temporalService.getWorkflowResult({ workflowId: runId, runId: temporalRunId });
   }
 
   async cancelRun(runId: string, temporalRunId?: string): Promise<void> {
+    this.logger.warn(
+      `Cancelling workflow run ${runId} (temporalRunId=${temporalRunId ?? 'latest'})`,
+    );
     await this.temporalService.cancelWorkflow({ workflowId: runId, runId: temporalRunId });
   }
 
   private parse(dto: WorkflowGraphDto) {
     return WorkflowGraphSchema.parse(dto);
+  }
+
+  private formatInputSummary(inputs?: Record<string, unknown>): string {
+    if (!inputs || Object.keys(inputs).length === 0) {
+      return 'none';
+    }
+
+    return Object.entries(inputs)
+      .map(([key, value]) => `${key}=${this.describeValue(value)}`)
+      .join(', ');
+  }
+
+  private describeValue(value: unknown): string {
+    if (value === null || value === undefined) {
+      return String(value);
+    }
+
+    if (Array.isArray(value)) {
+      return `array(len=${value.length})`;
+    }
+
+    if (typeof value === 'object') {
+      return 'object';
+    }
+
+    if (typeof value === 'string') {
+      if (value.length <= 48) {
+        return value;
+      }
+
+      return `${value.slice(0, 48)}… (len=${value.length})`;
+    }
+
+    return String(value);
   }
 }

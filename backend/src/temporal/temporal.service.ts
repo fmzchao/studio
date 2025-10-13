@@ -76,6 +76,11 @@ export class TemporalService implements OnModuleDestroy {
     const workflowId = options.workflowId ?? `shipsec-workflow-${randomUUID()}`;
     const taskQueue = options.taskQueue ?? this.defaultTaskQueue;
 
+    const argsSummary = this.formatArgsSummary(options.args);
+    this.logger.log(
+      `Starting Temporal workflow ${options.workflowType} (workflowId=${workflowId}, taskQueue=${taskQueue}, args=${argsSummary})`,
+    );
+
     // Map workflow type string to function reference
     const workflowFn = this.getWorkflowFunction(options.workflowType);
 
@@ -87,7 +92,7 @@ export class TemporalService implements OnModuleDestroy {
       searchAttributes: options.searchAttributes as any,
     });
 
-    this.logger.debug(
+    this.logger.log(
       `Started Temporal workflow ${handle.workflowId} (run ${handle.firstExecutionRunId})`,
     );
 
@@ -113,6 +118,9 @@ export class TemporalService implements OnModuleDestroy {
 
   async describeWorkflow(ref: WorkflowRunReference): Promise<WorkflowRunStatus> {
     const handle = await this.getWorkflowHandle(ref);
+    this.logger.log(
+      `Describing workflow ${handle.workflowId} (runId=${ref.runId ?? 'latest'})`,
+    );
     const description = await handle.describe();
     return {
       workflowId: description.workflowId,
@@ -127,11 +135,17 @@ export class TemporalService implements OnModuleDestroy {
 
   async getWorkflowResult(ref: WorkflowRunReference) {
     const handle = await this.getWorkflowHandle(ref);
+    this.logger.log(
+      `Retrieving workflow result for ${handle.workflowId} (runId=${ref.runId ?? 'latest'})`,
+    );
     return handle.result();
   }
 
   async cancelWorkflow(ref: WorkflowRunReference): Promise<void> {
     const handle = await this.getWorkflowHandle(ref);
+    this.logger.warn(
+      `Cancelling workflow ${handle.workflowId} (runId=${ref.runId ?? 'latest'})`,
+    );
     await handle.cancel();
   }
 
@@ -151,15 +165,27 @@ export class TemporalService implements OnModuleDestroy {
 
     this.clientPromise = (async () => {
       try {
+        this.logger.log(
+          `Connecting to Temporal at ${this.address} (namespace=${this.namespace})`,
+        );
         const connection = await Connection.connect({ address: this.address });
         await this.ensureNamespace(connection);
         this.connection = connection;
-        return new WorkflowClient({
+        const client = new WorkflowClient({
           connection,
           namespace: this.namespace,
         });
+        this.logger.log(
+          `Temporal client ready (namespace=${this.namespace}, defaultTaskQueue=${this.defaultTaskQueue})`,
+        );
+        return client;
       } catch (error) {
         this.clientPromise = undefined;
+        this.logger.error(
+          `Failed to connect to Temporal: ${error instanceof Error ? error.message : String(
+            error,
+          )}`,
+        );
         throw error;
       }
     })();
@@ -174,6 +200,11 @@ export class TemporalService implements OnModuleDestroy {
       });
     } catch (error) {
       if (!this.isNotFoundError(error)) {
+        this.logger.error(
+          `Failed to describe Temporal namespace ${this.namespace}: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
         throw error;
       }
 
@@ -192,5 +223,41 @@ export class TemporalService implements OnModuleDestroy {
 
     const serviceError = error as ServiceError;
     return serviceError.code === grpcStatus.NOT_FOUND;
+  }
+
+  private formatArgsSummary(args?: unknown[]): string {
+    if (!args || args.length === 0) {
+      return 'none';
+    }
+
+    return args
+      .map((arg) => {
+        if (arg && typeof arg === 'object') {
+          const payload = arg as Record<string, unknown>;
+          const runId = typeof payload.runId === 'string' ? payload.runId : undefined;
+          const workflowId = typeof payload.workflowId === 'string' ? payload.workflowId : undefined;
+          const definition = payload.definition as { actions?: unknown[] } | undefined;
+          const actionCount =
+            definition && Array.isArray(definition.actions) ? definition.actions.length : undefined;
+
+          const summaries = [];
+          if (workflowId) summaries.push(`workflowId=${workflowId}`);
+          if (runId) summaries.push(`runId=${runId}`);
+          if (actionCount !== undefined) summaries.push(`actions=${actionCount}`);
+          if (payload.inputs && typeof payload.inputs === 'object') {
+            const inputKeys = Object.keys(payload.inputs as Record<string, unknown>);
+            summaries.push(`inputs=[${inputKeys.join(', ')}]`);
+          }
+
+          return summaries.length > 0 ? summaries.join(', ') : 'object';
+        }
+
+        if (Array.isArray(arg)) {
+          return `array(len=${arg.length})`;
+        }
+
+        return String(arg);
+      })
+      .join(' | ');
   }
 }

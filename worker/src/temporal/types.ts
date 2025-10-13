@@ -7,6 +7,13 @@ export interface WorkflowAction {
   componentId: string;
   params: Record<string, unknown>;
   dependsOn: string[];
+  inputMappings: Record<
+    string,
+    {
+      sourceRef: string;
+      sourceHandle: string;
+    }
+  >;
 }
 
 export interface WorkflowDefinition {
@@ -47,5 +54,4 @@ export interface RunWorkflowActivityOutput {
   success: boolean;
   error?: string;
 }
-
 

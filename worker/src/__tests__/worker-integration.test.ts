@@ -98,9 +98,10 @@ describe('Worker Integration Tests', () => {
                 test: true,
                 message: 'Integration test',
               },
-            },
-            dependsOn: [],
           },
+          dependsOn: [],
+          inputMappings: {},
+        },
         ],
       };
 
@@ -164,6 +165,7 @@ describe('Worker Integration Tests', () => {
             componentId: 'core.trigger.manual',
             params: {},
             dependsOn: [],
+            inputMappings: {},
           },
           {
             ref: 'loader',
@@ -172,6 +174,7 @@ describe('Worker Integration Tests', () => {
               fileId,
             },
             dependsOn: ['trigger'],
+            inputMappings: {},
           },
         ],
       };
@@ -240,6 +243,7 @@ describe('Worker Integration Tests', () => {
               fileId: nonExistentFileId,
             },
             dependsOn: [],
+            inputMappings: {},
           },
         ],
       };
@@ -297,6 +301,7 @@ describe('Worker Integration Tests', () => {
               payload: { step: 1 },
             },
             dependsOn: [],
+            inputMappings: {},
           },
           {
             ref: 'step2',
@@ -305,6 +310,7 @@ describe('Worker Integration Tests', () => {
               payload: { step: 2 },
             },
             dependsOn: ['trigger'],
+            inputMappings: {},
           },
           {
             ref: 'step3',
@@ -313,6 +319,7 @@ describe('Worker Integration Tests', () => {
               payload: { step: 3 },
             },
             dependsOn: ['step2'],
+            inputMappings: {},
           },
         ],
       };
@@ -385,4 +392,3 @@ describe('Worker Integration Tests', () => {
     });
   });
 });
-

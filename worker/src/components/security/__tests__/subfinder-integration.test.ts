@@ -39,27 +39,26 @@ describe('Subfinder Integration (Docker)', () => {
     const component = componentRegistry.get('shipsec.subfinder.run');
     expect(component).toBeDefined();
 
-    const params = { domain: 'example.com' };
+    const params = { domains: ['example.com'] };
     
-    // Run with the component's runner (Docker)
-    const { runComponentWithRunner } = await import('@shipsec/component-sdk');
-    const result = await runComponentWithRunner(
-      component!.runner,
-      component!.execute as any,
-      params,
-      context,
-    ) as { subdomains: string[], rawOutput: string };
+    // Use the component's execute method which will handle raw output parsing
+    const result = await component!.execute(params, context) as any;
 
     console.log('Subfinder result:', result);
 
     // Verify output structure
     expect(result).toHaveProperty('subdomains');
     expect(result).toHaveProperty('rawOutput');
+    expect(result).toHaveProperty('domainCount');
+    expect(result).toHaveProperty('subdomainCount');
     expect(Array.isArray(result.subdomains)).toBe(true);
+    expect(typeof result.rawOutput).toBe('string');
+    expect(typeof result.domainCount).toBe('number');
+    expect(typeof result.subdomainCount).toBe('number');
     
     // Subfinder might find 0 subdomains for example.com (it's protected)
     // but should still return valid structure
-    expect(typeof result.rawOutput).toBe('string');
+    expect(result.domainCount).toBe(1);
 
     // Check logs
     expect(logs.some(log => log.includes('subfinder'))).toBe(true);
@@ -67,20 +66,13 @@ describe('Subfinder Integration (Docker)', () => {
 
   test('should handle invalid domain gracefully', async () => {
     const component = componentRegistry.get('shipsec.subfinder.run');
-    const params = { domain: 'this-domain-definitely-does-not-exist-12345.invalid' };
+    const params = { domains: ['this-domain-definitely-does-not-exist-12345.invalid'] };
     
-    const { runComponentWithRunner } = await import('@shipsec/component-sdk');
-    
-    // Subfinder should complete but return empty results
-    const result = await runComponentWithRunner(
-      component!.runner,
-      component!.execute as any,
-      params,
-      context,
-    ) as { subdomains: string[], rawOutput: string };
+    // Use the component's execute method which will handle raw output parsing
+    const result = await component!.execute(params, context) as any;
 
     expect(result).toHaveProperty('subdomains');
     expect(Array.isArray(result.subdomains)).toBe(true);
+    expect(result.domainCount).toBe(1);
   }, 120000);
 });
-

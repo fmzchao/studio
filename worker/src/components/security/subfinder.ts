@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { componentRegistry, ComponentDefinition } from '@shipsec/component-sdk';
+import { componentRegistry, ComponentDefinition, runComponentWithRunner } from '@shipsec/component-sdk';
 
 const inputSchema = z.object({
   domains: z.array(z.string()).describe('Array of target domains'),
@@ -29,78 +29,55 @@ const definition: ComponentDefinition<Input, Output> = {
     kind: 'docker',
     image: 'projectdiscovery/subfinder:latest',
     entrypoint: 'sh',
-    network: 'bridge', // Needs network access for DNS queries
+    network: 'bridge',
     command: [
       '-c',
-      `INPUT=$(cat)
+      String.raw`set -eo pipefail
 
-# Extract domains array from JSON input
-DOMAINS=$(echo "$INPUT" | awk -F'"' '
-/domains/ {
-  in_array=1
-  next
-}
-in_array && /"/ {
-  gsub(/[\\[\\],"]/, "", $0)
-  gsub(/^[[:space:]]+|[[:space:]]+$/, "", $0)
-  if (length($0) > 0 && $0 != "]") {
-    print $0
-  }
-  if (/]/) in_array=0
-}
-')
+INPUT=$(cat)
+
+DOMAINS=$(printf "%s" "$INPUT" | tr '"[],{}' '\n' | grep -E '^[A-Za-z0-9.-]+$' | grep -v '^domains$' | sed '/^$/d')
 
 if [ -z "$DOMAINS" ]; then
-  echo '{"subdomains":[],"rawOutput":"","domainCount":0,"subdomainCount":0}'
+  printf '{"subdomains":[],"rawOutput":"","domainCount":0,"subdomainCount":0}'
   exit 0
 fi
 
-# Count domains
-DOMAIN_COUNT=$(echo "$DOMAINS" | wc -l)
+RAW_FILE=$(mktemp)
+DEDUP_FILE=$(mktemp)
+trap 'rm -f "$RAW_FILE" "$DEDUP_FILE"' EXIT
 
-# Run subfinder for each domain and collect results
-ALL_RESULTS=""
-echo "$DOMAINS" | while read -r DOMAIN; do
+DOMAIN_COUNT=0
+
+for DOMAIN in $DOMAINS; do
   if [ -n "$DOMAIN" ]; then
-    RESULTS=$(subfinder -d "$DOMAIN" -silent 2>&1 | grep -v "INF" | grep -v "subfinder" | grep -v "projectdiscovery" | grep -v "^$" | grep -v "^[[:space:]]*$" | grep -v "^─")
-    if [ -n "$RESULTS" ]; then
-      ALL_RESULTS="$ALL_RESULTS$RESULTS\\n"
-    fi
+    DOMAIN_COUNT=$((DOMAIN_COUNT + 1))
+    subfinder -silent -d "$DOMAIN" 2>/dev/null | sed 's/\r//g' | sed '/^$/d' >> "$RAW_FILE"
   fi
 done
 
-# Remove trailing newline
-ALL_RESULTS=$(echo -e "$ALL_RESULTS" | sed '/^$/d')
-
-# Check if results are empty
-if [ -z "$ALL_RESULTS" ]; then
-  echo "{\\\"subdomains\\\":[],\\\"rawOutput\\\":\\\"\\\",\\\"domainCount\\\":$DOMAIN_COUNT,\\\"subdomainCount\\\":0}"
+if [ ! -s "$RAW_FILE" ]; then
+  printf '{"subdomains":[],"rawOutput":"","domainCount":%d,"subdomainCount":0}' "$DOMAIN_COUNT"
   exit 0
 fi
 
-# Build JSON with awk for proper formatting
-echo "$ALL_RESULTS" | awk -v dc="$DOMAIN_COUNT" '
-BEGIN {
-  printf "{\\"subdomains\\":["
-  count=0
-}
-{
-  if (length($0) > 0) {
-    if (count > 0) printf ","
-    gsub(/"/, "\\\\\\"", $0)
-    printf "\\""$0"\\""
-    raw = raw (count>0 ? " " : "") $0
-    count++
-  }
-}
-END {
-  gsub(/"/, "\\\\\\"", raw)
-  printf "],\\"rawOutput\\":\\""raw"\\",\\"domainCount\\":" dc ",\\"subdomainCount\\":" count "}\\n"
-}'`,
+sort -u "$RAW_FILE" > "$DEDUP_FILE"
+SUBDOMAIN_COUNT=$(wc -l < "$DEDUP_FILE" | tr -d ' ')
+
+SUBDOMAIN_JSON=$(awk 'NR==1{printf("[\"%s\"", $0); next} {printf(",\"%s\"", $0)} END {if (NR==0) printf("[]"); else printf("]");}' "$DEDUP_FILE")
+
+RAW_OUTPUT_ESCAPED=$(printf '%s' "$(cat "$RAW_FILE")" | sed ':a;N;$!ba;s/\\/\\\\/g; s/"/\\"/g; s/\n/\\n/g')
+
+printf '{"subdomains":%s,"rawOutput":"%s","domainCount":%d,"subdomainCount":%d}' \
+  "$SUBDOMAIN_JSON" \
+  "$RAW_OUTPUT_ESCAPED" \
+  "$DOMAIN_COUNT" \
+  "$SUBDOMAIN_COUNT"
+`,
     ],
     timeoutSeconds: 120,
     env: {
-      HOME: '/root', // subfinder needs a home directory for config
+      HOME: '/root',
     },
   },
   inputSchema,
@@ -142,19 +119,69 @@ END {
         type: 'string',
         description: 'Raw tool output for debugging.',
       },
-      {
-        id: 'stats',
-        label: 'Statistics',
-        type: 'object',
-        description: 'Domain and subdomain counts.',
-      },
     ],
     parameters: [],
   },
-  async execute(params, context) {
-    // This function should never be called when using Docker runner
-    // The Docker runner intercepts execution and runs the container directly
-    throw new Error('Subfinder should run in Docker, not inline. Runner config may be misconfigured.');
+  async execute(input, context) {
+    const result = await runComponentWithRunner(
+      this.runner,
+      async () => ({}),
+      input,
+      context,
+    );
+
+    if (typeof result === 'string') {
+      const rawOutput = result;
+      const subdomains = rawOutput
+        .split('\n')
+        .map(line => line.trim())
+        .filter(line => line.length > 0);
+
+      return {
+        subdomains,
+        rawOutput,
+        domainCount: input.domains.length,
+        subdomainCount: subdomains.length,
+      };
+    }
+
+    if (result && typeof result === 'object') {
+      const parsed = outputSchema.safeParse(result);
+      if (parsed.success) {
+        return parsed.data;
+      }
+
+      // Fallback: attempt to normalise unexpected object shapes
+      const maybeRaw = 'rawOutput' in result ? String((result as any).rawOutput ?? '') : '';
+      const subdomainsValue = Array.isArray((result as any).subdomains)
+        ? ((result as any).subdomains as unknown[])
+            .map(value => (typeof value === 'string' ? value.trim() : String(value)))
+            .filter(value => value.length > 0)
+        : maybeRaw
+            .split('\n')
+            .map(line => line.trim())
+            .filter(line => line.length > 0);
+
+      const output: Output = {
+        subdomains: subdomainsValue,
+        rawOutput: maybeRaw || subdomainsValue.join('\n'),
+        domainCount: typeof (result as any).domainCount === 'number'
+          ? (result as any).domainCount
+          : input.domains.length,
+        subdomainCount: typeof (result as any).subdomainCount === 'number'
+          ? (result as any).subdomainCount
+          : subdomainsValue.length,
+      };
+
+      return output;
+    }
+
+    return {
+      subdomains: [],
+      rawOutput: '',
+      domainCount: input.domains.length,
+      subdomainCount: 0,
+    };
   },
 };
 

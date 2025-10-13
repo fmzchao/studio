@@ -1,7 +1,7 @@
 # ShipSec Studio – Implementation Plan
 
 This plan is written for an LLM coding agent ("Agent"). Each phase ends with a human review before continuing.  
-**Frontend freeze:** per latest direction, defer all new frontend work until backend Phases 5–6 ship; Phase 7 remains on hold.
+**Status update (2025-10-12):** Backend phases through 6.7 are complete, Phase 7 frontend integration has shipped, and remaining focus is finishing Phase 6 persistent trace storage and Phase 8 review.
 
 ## Progress Overview
 
@@ -20,10 +20,10 @@ This plan is written for an LLM coding agent ("Agent"). Each phase ends with a h
 | Phase 6.5 | ✅ Complete | Component Metadata Sync |
 | Phase 6.6 | ✅ Complete | Dynamic Runtime Inputs & File Upload |
 | Phase 6.7 | ✅ Complete | Workflow Save Fix |
-| Phase 7 | ⏸️ On Hold | Frontend Integration |
+| Phase 7 | ✅ Complete | Frontend Integration (type-safe client + UI wiring) |
 | Phase 8 | ⏳ Pending | Final Review & Roadmap |
 
-**Current Focus:** All major features complete - Ready for user testing and feedback
+**Current Focus:** Persist execution traces (Phase 6 follow-up) and prepare Phase 8 final review/roadmap handoff.
 
 ---
 ## Phase 1 – Workflow Storage & CRUD API
@@ -33,9 +33,9 @@ This plan is written for an LLM coding agent ("Agent"). Each phase ends with a h
 - [x] **Step 1:** Define shared TypeScript DTOs for `WorkflowGraph`, with validation.
 - [x] **Step 2:** Create a repository (in-memory for now) to persist workflows.
 - [x] **Step 3:** Implement `WorkflowsModule`, `WorkflowsService`, `WorkflowsController` with CRUD endpoints.
-- [ ] **Step 4:** (Optional) Add frontend API client stubs for workflows.
+- [x] **Step 4:** Add frontend API client stubs for workflows (superseded by OpenAPI client in Phase 6).
 - [x] **Step 5:** Add minimal tests validating controller behavior.
-- [ ] **Step 6:** Commit `feat: add workflow storage CRUD`. ➜ **Human review before next phase**
+- [x] **Step 6:** Commit `feat: add workflow storage CRUD`. ➜ **Human review before next phase**
 
 ---
 ## Phase 2 – Component Registry Foundation
@@ -49,6 +49,15 @@ This plan is written for an LLM coding agent ("Agent"). Each phase ends with a h
 - [x] **Step 5:** Create sample components (FileLoader, Subfinder, Webhook) with placeholder logic; register them.
 - [x] **Step 6:** Add unit tests ensuring registry works.
 - [x] **Step 7:** Commit `feat: scaffold component registry`. ➜ **Human review before next phase**
+
+**Current Component Catalog (Phase 2 foundations + later additions):**
+- `core/trigger-manual` – Manual trigger component (upgraded to v2 with runtime inputs in Phase 6.6).
+- `core/file-loader` – MinIO-backed file ingestion with optional text extraction.
+- `core/webhook` – HTTP webhook executor with retries, timeouts, and auth support.
+- `core/text-splitter` – Text segmentation utility for downstream processors.
+- `core/console-log` – Structured logging helper for workflow debugging.
+- `security/subfinder` – Docker-powered subdomain discovery (ProjectDiscovery image) emitting structured JSON (`subdomains`, `rawOutput`, counts) from the container for worker compatibility.
+- `test/docker-echo` – Diagnostic component for verifying Docker runner paths.
 
 ---
 ## Phase 3 – DSL Compiler & Validation
@@ -301,13 +310,17 @@ We follow a bottom-up testing approach with increasing integration complexity:
 - [ ] **Step 6:** Commit `feat: augment trace persistence for temporal runs`. ➜ **Human review before next phase**
 
 ---
-## Phase 7 – Frontend Integration (Initial) **(On Hold)**
+## Phase 7 – Frontend Integration ✅
 
-**Goal:** Hook frontend to new backend APIs once backend runner/trace work is stable.
+**Goal:** Deliver an end-to-end frontend experience backed by the production APIs.
 
-- [ ] **Step 1:** Update frontend API client to call workflow CRUD/commit/run/trace endpoints. **Deferred.**
-- [ ] **Step 2:** Wire UI to save workflows and display traces (basic view). **Deferred.**
-- [ ] **Step 3:** Commit `feat: connect frontend to backend APIs` after backend readiness review. ➜ **Human review before next phase**
+**Key Outcomes:**
+- [x] Replaced mock data with real workflow CRUD using the OpenAPI client (`frontend/src/services/api.ts`).
+- [x] Enabled workflow builder to load, create, update, commit, and run workflows via backend endpoints.
+- [x] Implemented execution monitoring with live status + trace polling (`executionStore`, `BottomPanel`).
+- [x] Added runtime-input collection UI (Run Workflow dialog) integrated with Manual Trigger v2.
+- [x] Verified frontend build, dev server (`bun dev`), and typecheck succeed with shared types.
+- [x] Captured integration patterns and regeneration flow in `packages/backend-client/README.md`.
 
 ---
 ## Phase 8 – Final Review & Roadmap
@@ -423,8 +436,8 @@ Successfully implemented real HTTP POST/PUT/PATCH functionality:
 - ✅ Full monorepo typecheck passes
 
 **Documentation:**
-- Created `.ai/FRONTEND-INTEGRATION.md` with architecture, usage, and examples
-- Updated `packages/backend-client/README.md` with API methods and regeneration guide
+- Documented architecture, usage, and examples in `packages/backend-client/README.md`
+- Added migration notes to this implementation plan for future agents
 - Added inline JSDoc comments for all client methods
 
 **Known Issues:**
@@ -469,7 +482,7 @@ Successfully implemented real HTTP POST/PUT/PATCH functionality:
 
 **Status**: ✅ COMPLETE - Frontend is 100% backend-driven for components
 
-See: `.ai/FRONTEND-CLEANUP-COMPLETE.md` for detailed documentation
+See component catalog above and frontend store notes for current source of truth.
 
 ---
 ## Phase 6.6 – Dynamic Runtime Inputs & File Upload ✅ **COMPLETE**

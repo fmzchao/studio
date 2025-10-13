@@ -56,22 +56,43 @@ export function compileWorkflowGraph(graph: WorkflowGraph): WorkflowDefinition {
   }
 
   const orderedIds = topoSort(nodeIds, graph.edges);
-  const incomingEdges = new Map<string, string[]>();
+  const incomingEdges = new Map<string, Set<string>>();
+  type GraphEdge = typeof graph.edges[number];
+  const edgesByTarget = new Map<string, GraphEdge[]>();
   for (const nodeId of nodeIds) {
-    incomingEdges.set(nodeId, []);
+    incomingEdges.set(nodeId, new Set());
+    edgesByTarget.set(nodeId, []);
   }
   for (const edge of graph.edges) {
-    incomingEdges.get(edge.target)?.push(edge.source);
+    incomingEdges.get(edge.target)?.add(edge.source);
+    edgesByTarget.get(edge.target)?.push(edge);
   }
 
   const actions: WorkflowAction[] = orderedIds.map((id) => {
     const node = graph.nodes.find((n) => n.id === id)!;
     const params = node.data?.config ?? {};
+    const inputMappings: WorkflowAction['inputMappings'] = {};
+
+    for (const edge of edgesByTarget.get(id) ?? []) {
+      const targetHandle = edge.targetHandle ?? edge.sourceHandle;
+      const sourceHandle = edge.sourceHandle ?? '__self__';
+
+      if (!targetHandle) {
+        continue;
+      }
+
+      inputMappings[targetHandle] = {
+        sourceRef: edge.source,
+        sourceHandle,
+      };
+    }
+
     return {
       ref: id,
       componentId: node.type,
       params,
-      dependsOn: incomingEdges.get(id) ?? [],
+      dependsOn: Array.from(incomingEdges.get(id) ?? []),
+      inputMappings,
     };
   });
 
