@@ -222,6 +222,7 @@ Document project-specific shortcuts or scripts in this section as they evolve so
 
 **Change Log**
 
+- `2025-10-14` – Added workflow run metadata + trace level/data persistence; Phase 2 backend alignment underway.
 - `2025-10-13` – Added execution contract spec (`docs/execution-contract.md`) and shared TypeScript schemas via `@shipsec/shared`.
 - `2025-10-13` – Added operational runbook and local environment guidance.
 - `2025-10-13` – Replaced legacy implementation plan with observability-focused roadmap (this document).
