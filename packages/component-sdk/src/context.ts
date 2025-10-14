@@ -26,21 +26,37 @@ export function createExecutionContext(options: CreateContextOptions): Execution
     level: LogEventInput['level'],
     args: unknown[],
   ) => {
-    if (!logCollector || args.length === 0) {
+    if (args.length === 0) {
       return;
     }
     const message = format(...args);
     if (message.length === 0) {
       return;
     }
-    logCollector({
+    const entry: LogEventInput = {
       runId,
       nodeRef: componentRef,
       stream,
       level,
       message,
       timestamp: new Date().toISOString(),
-    });
+    };
+
+    if (logCollector) {
+      logCollector(entry);
+    }
+
+    if (trace) {
+      trace.record({
+        type: 'NODE_PROGRESS',
+        runId,
+        nodeRef: componentRef,
+        timestamp: entry.timestamp,
+        level: level ?? 'info',
+        message,
+        data: { stream, origin: 'log' },
+      });
+    }
   };
 
   const logger: Logger = {

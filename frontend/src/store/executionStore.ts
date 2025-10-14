@@ -1,6 +1,11 @@
 import { create } from 'zustand'
 import { api } from '@/services/api'
-import type { ExecutionLog, ExecutionStatus, ExecutionStatusResponse } from '@/schemas/execution'
+import {
+  ExecutionStatusResponseSchema,
+  type ExecutionLog,
+  type ExecutionStatus,
+  type ExecutionStatusResponse,
+} from '@/schemas/execution'
 import type { NodeStatus } from '@/schemas/node'
 
 type ExecutionLifecycle =
@@ -20,6 +25,8 @@ interface ExecutionStoreState {
   nodeStates: Record<string, NodeStatus>
   cursor: string | null
   pollingInterval: NodeJS.Timeout | null
+  eventSource: EventSource | null
+  streamingMode: 'realtime' | 'polling' | 'none'
 }
 
 interface ExecutionStoreActions {
@@ -28,6 +35,8 @@ interface ExecutionStoreActions {
   pollOnce: () => Promise<void>
   stopPolling: () => void
   reset: () => void
+  connectStream: (runId: string) => void
+  disconnectStream: () => void
 }
 
 type ExecutionStore = ExecutionStoreState & ExecutionStoreActions
@@ -101,6 +110,8 @@ const INITIAL_STATE: ExecutionStoreState = {
   nodeStates: {},
   cursor: null,
   pollingInterval: null,
+  eventSource: null,
+  streamingMode: 'none',
 }
 
 export const useExecutionStore = create<ExecutionStore>((set, get) => ({
@@ -156,6 +167,8 @@ export const useExecutionStore = create<ExecutionStore>((set, get) => ({
 
     const interval = setInterval(poll, 2000)
     set({ pollingInterval: interval, runId })
+
+    get().connectStream(runId)
   },
 
   pollOnce: async () => {
@@ -196,6 +209,7 @@ export const useExecutionStore = create<ExecutionStore>((set, get) => ({
       clearInterval(interval)
       set({ pollingInterval: null })
     }
+    get().disconnectStream()
   },
 
   reset: () => {
@@ -203,6 +217,125 @@ export const useExecutionStore = create<ExecutionStore>((set, get) => ({
     if (interval) {
       clearInterval(interval)
     }
-    set({ ...INITIAL_STATE })
+    get().disconnectStream()
+    set({ ...INITIAL_STATE, streamingMode: 'none' })
+  },
+
+  connectStream: (runId: string) => {
+    if (typeof EventSource === 'undefined') {
+      return
+    }
+
+    const { cursor } = get()
+    get().disconnectStream()
+
+    try {
+      const source = api.executions.stream(runId, cursor ? { cursor } : undefined)
+
+      source.addEventListener('trace', (event) => {
+        try {
+          const payload = JSON.parse((event as MessageEvent).data) as {
+            events?: ExecutionLog[]
+            cursor?: string
+          }
+          if (!payload.events || payload.events.length === 0) {
+            return
+          }
+
+          set((state) => {
+            const mergedLogs = mergeLogs(state.logs, payload.events as ExecutionLog[])
+            const nodeStates = deriveNodeStates(mergedLogs)
+            const nextCursor =
+              payload.cursor ?? payload.events![payload.events!.length - 1]?.id ?? state.cursor
+
+            return {
+              logs: mergedLogs,
+              nodeStates,
+              cursor: nextCursor ?? null,
+            }
+          })
+        } catch (error) {
+          console.error('Failed to parse trace payload from stream', error)
+        }
+      })
+
+      source.addEventListener('status', (event) => {
+        try {
+          const statusPayload = ExecutionStatusResponseSchema.parse(
+            JSON.parse((event as MessageEvent).data) as unknown,
+          )
+
+          set((state) => {
+            const lifecycle = mapStatusToLifecycle(statusPayload.status)
+            return {
+              runStatus: statusPayload,
+              status: lifecycle,
+              workflowId: state.workflowId ?? statusPayload.workflowId,
+            }
+          })
+
+          if (TERMINAL_STATUSES.includes(statusPayload.status)) {
+            get().stopPolling()
+          }
+        } catch (error) {
+          console.error('Failed to parse status update from stream', error)
+        }
+      })
+
+      source.addEventListener('ready', (event) => {
+        try {
+          const payload = JSON.parse((event as MessageEvent).data) as {
+            mode: 'realtime' | 'polling'
+            runId: string
+            interval?: number
+          }
+
+          set({ streamingMode: payload.mode })
+          console.log(`Streaming connected in ${payload.mode} mode for run ${payload.runId}`)
+
+          // If we're in polling mode, we already have the interval set up
+          // If we're in realtime mode, we can reduce polling frequency as backup
+          if (payload.mode === 'realtime' && get().pollingInterval) {
+            // Keep a very light poll as backup for status updates
+            const existingInterval = get().pollingInterval
+            if (existingInterval) {
+              clearInterval(existingInterval)
+            }
+            const backupPoll = setInterval(async () => {
+              const state = get()
+              if (state.runStatus && TERMINAL_STATUSES.includes(state.runStatus.status)) {
+                return
+              }
+              await get().pollOnce()
+            }, 5000) // Every 5 seconds as backup only
+            set({ pollingInterval: backupPoll })
+          }
+        } catch (error) {
+          console.error('Failed to parse ready event from stream', error)
+        }
+      })
+
+      source.addEventListener('complete', () => {
+        get().stopPolling()
+      })
+
+      source.onerror = (event) => {
+        console.warn('Execution stream error', event)
+        source.close()
+        set({ eventSource: null, streamingMode: 'none' })
+      }
+
+      set({ eventSource: source, streamingMode: 'connecting' })
+    } catch (error) {
+      console.error('Failed to open execution stream', error)
+    }
+  },
+
+  disconnectStream: () => {
+    const existing = get().eventSource
+    if (existing) {
+      existing.close()
+    }
+    set({ eventSource: null, streamingMode: 'none' })
   },
 }))

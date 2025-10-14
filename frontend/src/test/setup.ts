@@ -13,3 +13,36 @@ if (typeof window !== 'undefined' && window.HTMLElement) {
     configurable: true,
   })
 }
+
+if (typeof globalThis.EventSource === 'undefined') {
+  class MockEventSource {
+    public url: string
+    public readyState = 0
+    public onopen: ((this: EventSource, ev: Event) => any) | null = null
+    public onmessage: ((this: EventSource, ev: MessageEvent) => any) | null = null
+    public.onerror: ((this: EventSource, ev: Event) => any) | null = null
+
+    constructor(url: string) {
+      this.url = url
+      setTimeout(() => {
+        this.readyState = 1
+        this.onopen?.call(this as any, new Event('open'))
+      }, 0)
+    }
+
+    addEventListener() {
+      /* no-op */
+    }
+
+    removeEventListener() {
+      /* no-op */
+    }
+
+    close() {
+      this.readyState = 2
+    }
+  }
+
+  // @ts-expect-error mock assignment for tests
+  globalThis.EventSource = MockEventSource
+}

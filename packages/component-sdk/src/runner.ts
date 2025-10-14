@@ -63,27 +63,48 @@ async function runComponentInDocker<I, O>(
     proc.stdout.on('data', (data) => {
       const chunk = data.toString();
       stdout += chunk;
-      context.logCollector?.({
+      const logEntry = {
         runId: context.runId,
         nodeRef: context.componentRef,
-        stream: 'stdout',
-        level: 'info',
+        stream: 'stdout' as const,
+        level: 'info' as const,
         message: chunk,
         timestamp: new Date().toISOString(),
+      };
+
+      // Send to log collector for Loki storage
+      context.logCollector?.(logEntry);
+
+      // Stream immediately via emitProgress for real-time UI updates
+      context.emitProgress({
+        message: chunk.trim(),
+        level: 'info',
+        data: { stream: 'stdout', origin: 'docker' }
       });
     });
 
     proc.stderr.on('data', (data) => {
       const chunk = data.toString();
       stderr += chunk;
-      context.logCollector?.({
+      const logEntry = {
         runId: context.runId,
         nodeRef: context.componentRef,
-        stream: 'stderr',
-        level: 'error',
+        stream: 'stderr' as const,
+        level: 'error' as const,
         message: chunk,
         timestamp: new Date().toISOString(),
+      };
+
+      // Send to log collector for Loki storage
+      context.logCollector?.(logEntry);
+
+      // Stream immediately via emitProgress for real-time UI updates
+      context.emitProgress({
+        message: chunk.trim(),
+        level: 'error',
+        data: { stream: 'stderr', origin: 'docker' }
       });
+
       console.error(`[${context.componentRef}] [Docker] stderr: ${chunk.trim()}`);
     });
 

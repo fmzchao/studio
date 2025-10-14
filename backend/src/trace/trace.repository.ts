@@ -1,5 +1,5 @@
-import { Inject, Injectable } from '@nestjs/common';
-import { eq, and } from 'drizzle-orm';
+import { Inject, Injectable, OnModuleDestroy } from '@nestjs/common';
+import { eq, and, gt } from 'drizzle-orm';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
 import {
@@ -9,6 +9,7 @@ import {
 import { DRIZZLE_TOKEN } from '../database/database.module';
 import type { TraceEventType } from './types';
 import { sql } from 'drizzle-orm';
+import { Pool } from 'pg';
 
 export interface PersistedTraceEvent {
   runId: string;
@@ -25,14 +26,77 @@ export interface PersistedTraceEvent {
 }
 
 @Injectable()
-export class TraceRepository {
+export class TraceRepository implements OnModuleDestroy {
+  private pool: Pool;
+
   constructor(
     @Inject(DRIZZLE_TOKEN)
     private readonly db: NodePgDatabase,
-  ) {}
+  ) {
+    // Create a separate pool for LISTEN/NOTIFY to avoid conflicts
+    this.pool = new Pool({
+      connectionString: process.env.DATABASE_URL,
+    });
+  }
+
+  async onModuleDestroy() {
+    await this.pool.end();
+  }
+
+  /**
+   * Subscribe to real-time trace events for a specific run ID using Postgres LISTEN/NOTIFY
+   */
+  async subscribeToRun(runId: string, callback: (payload: string) => void): Promise<() => Promise<void>> {
+    const client = await this.pool.connect();
+    const channel = `trace_events_${runId}`;
+
+    try {
+      await client.query(`LISTEN ${channel}`);
+
+      client.on('notification', (msg) => {
+        if (msg.channel === channel && msg.payload) {
+          callback(msg.payload);
+        }
+      });
+
+      // Return unsubscribe function
+      return async () => {
+        try {
+          await client.query(`UNLISTEN ${channel}`);
+        } finally {
+          client.release();
+        }
+      };
+    } catch (error) {
+      client.release();
+      throw error;
+    }
+  }
+
+  /**
+   * Notify subscribers of new trace events
+   */
+  async notifyRun(runId: string, payload: string): Promise<void> {
+    const channel = `trace_events_${runId}`;
+    await this.pool.query(`NOTIFY ${channel}, $1`, [payload]);
+  }
 
   async append(event: PersistedTraceEvent): Promise<void> {
     await this.db.insert(workflowTracesTable).values(this.mapToInsert(event));
+
+    // Notify subscribers of the new trace event
+    try {
+      const payload = JSON.stringify({
+        sequence: event.sequence,
+        type: event.type,
+        nodeRef: event.nodeRef,
+        timestamp: event.timestamp,
+      });
+      await this.notifyRun(event.runId, payload);
+    } catch (error) {
+      // Log error but don't fail the append operation
+      console.error('Failed to notify trace subscribers:', error);
+    }
   }
 
   async appendMany(events: PersistedTraceEvent[]): Promise<void> {
@@ -50,6 +114,19 @@ export class TraceRepository {
       .select()
       .from(workflowTracesTable)
       .where(eq(workflowTracesTable.runId, runId))
+      .orderBy(workflowTracesTable.sequence);
+  }
+
+  async listAfterSequence(runId: string, sequence: number): Promise<WorkflowTraceRecord[]> {
+    return this.db
+      .select()
+      .from(workflowTracesTable)
+      .where(
+        and(
+          eq(workflowTracesTable.runId, runId),
+          gt(workflowTracesTable.sequence, sequence),
+        ),
+      )
       .orderBy(workflowTracesTable.sequence);
   }
 

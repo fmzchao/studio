@@ -19,6 +19,20 @@ export class TraceService {
     return { events, cursor };
   }
 
+  async listSince(
+    runId: string,
+    afterSequence?: number,
+  ): Promise<{ events: TraceEventPayload[]; cursor?: string }> {
+    if (!afterSequence || afterSequence <= 0) {
+      return this.list(runId);
+    }
+
+    const records = await this.repository.listAfterSequence(runId, afterSequence);
+    const events = records.map((record) => this.mapRecordToEvent(record));
+    const cursor = events.length > 0 ? events[events.length - 1].id : undefined;
+    return { events, cursor };
+  }
+
   private mapRecordToEvent(record: {
     runId: string;
     nodeRef: string;

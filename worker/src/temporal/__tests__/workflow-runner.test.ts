@@ -86,8 +86,12 @@ describe('executeWorkflow', () => {
 
     expect(result.success).toBe(true);
     await Promise.resolve();
-    expect(events).toHaveLength(7);
-    expect(events.map((event) => event.type)).toEqual([
+
+    const logEvents = events.filter((event) => (event.data as any)?.origin === 'log');
+    const executionEvents = events.filter((event) => (event.data as any)?.origin !== 'log');
+
+    expect(executionEvents).toHaveLength(7);
+    expect(executionEvents.map((event) => event.type)).toEqual([
       'NODE_STARTED',
       'NODE_PROGRESS',
       'NODE_COMPLETED',
@@ -97,7 +101,7 @@ describe('executeWorkflow', () => {
       'NODE_COMPLETED',
     ]);
 
-    const warnProgress = events[4];
+    const warnProgress = executionEvents[4];
     expect(warnProgress.type).toBe('NODE_PROGRESS');
     expect(warnProgress.level).toBe('warn');
     expect(warnProgress.message).toContain("Input 'label'");
@@ -107,15 +111,16 @@ describe('executeWorkflow', () => {
       sourceHandle: 'missing',
     });
 
-    const failureEvents = events.filter((event) => event.level === 'error');
+    const failureEvents = executionEvents.filter((event) => event.level === 'error');
     expect(failureEvents).toHaveLength(0);
 
-    const startedEvents = events.filter((event) => event.type === 'NODE_STARTED');
+    const startedEvents = executionEvents.filter((event) => event.type === 'NODE_STARTED');
     startedEvents.forEach((event) => {
       expect(event.level).toBe('info');
     });
 
     expect(logEntries.length).toBeGreaterThan(0);
+    expect(logEvents.length).toBe(logEntries.length);
     expect(logEntries.some((entry) => entry.message.includes('[Console Log]'))).toBe(true);
   });
 });

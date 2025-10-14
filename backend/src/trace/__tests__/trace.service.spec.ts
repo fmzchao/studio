@@ -11,6 +11,12 @@ class FakeTraceRepository {
       .filter((event) => event.runId === runId)
       .sort((a, b) => a.sequence - b.sequence);
   }
+
+  async listAfterSequence(runId: string, sequence: number): Promise<WorkflowTraceRecord[]> {
+    return this.events
+      .filter((event) => event.runId === runId && event.sequence > sequence)
+      .sort((a, b) => a.sequence - b.sequence);
+  }
 }
 
 describe('TraceService', () => {
@@ -134,5 +140,10 @@ describe('TraceService', () => {
       },
     ]);
     expect(cursor).toBe('4');
+  });
+
+  it('lists events after a sequence cursor', async () => {
+    const { events } = await service.listSince(runId, 2);
+    expect(events.map((event) => event.id)).toEqual(['3', '4']);
   });
 });

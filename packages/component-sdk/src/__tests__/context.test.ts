@@ -151,6 +151,36 @@ describe('ExecutionContext', () => {
     });
   });
 
+  it('should record logger output via trace service', () => {
+    const recorded: TraceEvent[] = [];
+    const context = createExecutionContext({
+      runId: 'run-trace-log',
+      componentRef: 'log.component',
+      trace: {
+        record: (event: TraceEvent) => {
+          recorded.push(event);
+        },
+      },
+    });
+
+    context.logger.info('log message');
+    context.logger.error('log error');
+
+    expect(recorded).toHaveLength(2);
+    expect(recorded[0]).toMatchObject({
+      type: 'NODE_PROGRESS',
+      level: 'info',
+      message: 'log message',
+      data: { stream: 'stdout', origin: 'log' },
+    });
+    expect(recorded[1]).toMatchObject({
+      type: 'NODE_PROGRESS',
+      level: 'error',
+      message: 'log error',
+      data: { stream: 'stderr', origin: 'log' },
+    });
+  });
+
   it('should work without optional services', () => {
     const context = createExecutionContext({
       runId: 'test-run',

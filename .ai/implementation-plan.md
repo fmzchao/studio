@@ -2,7 +2,7 @@
 
 This plan supersedes the previous implementation playbook. It focuses on delivering end-to-end execution observability: consistent status contracts, rich trace data, live log streaming, and Loki-backed log storage. Each phase is designed for autonomous implementation by an AI agent and concludes with a human review before advancing.
 
-**Status update (2025-10-15):** Trace pipeline now emits structured levels/data end-to-end (Phase 4 ✅). Next focus: Phase 5 Loki integration to externalize stdout/stderr while keeping traces in Postgres.
+**Status update (2025-10-15):** Trace + Loki pipeline is live (Phase 5 ✅). Next focus: Phase 6 live streaming so trace/log updates reach the UI in near real time.
 
 ---
 
@@ -16,7 +16,7 @@ This plan supersedes the previous implementation playbook. It focuses on deliver
 | Phase 3 | 🟢 Completed | Frontend Schema & Store Sync |
 | Phase 4 | 🟢 Completed | Worker Trace Enhancements |
 | Phase 5 | 🟢 Completed | Loki Log Backend Integration |
-| Phase 6 | ⚪ Not Started | Live Streaming Pipeline |
+| Phase 6 | 🟢 Completed | Live Streaming Pipeline |
 | Phase 7 | ⚪ Not Started | UX Polish & Controls |
 | Phase 8 | ⚪ Not Started | Observability Metrics & Regression Suite |
 
@@ -115,13 +115,13 @@ This plan supersedes the previous implementation playbook. It focuses on deliver
 
 **Goal:** Stream stdout/stderr and trace updates to the frontend in real time.
 
-- [ ] Modify Docker runner to forward stdout/stderr chunks immediately via `emitProgress` while still capturing final output for JSON parsing.
-- [ ] Add streaming endpoint (SSE or WebSocket) relaying new trace events (via Postgres `LISTEN/NOTIFY` or incremental polling).
-- [ ] Frontend subscriber to append events live, maintain ordering, and fall back to polling if streaming unavailable.
-- [ ] UX toggles: “Follow live logs”, “Pause autoscroll”.
-- [ ] Tests:
-  - Automated test simulating streaming events (Jest + mock EventSource).
-  - Manual run demonstrating live updates end-to-end.
+- [x] Modify Docker runner to forward stdout/stderr chunks immediately via `emitProgress` while still capturing final output for JSON parsing.
+- [x] Add streaming endpoint (SSE or WebSocket) relaying new trace events (via Postgres `LISTEN/NOTIFY` or incremental polling).
+- [x] Frontend subscriber to append events live, maintain ordering, and fall back to polling if streaming unavailable.
+- [x] UX toggles: "Follow live logs", "Pause autoscroll".
+- [x] Tests:
+  - [x] Automated test simulating streaming events (Jest + mock EventSource).
+  - [x] Manual run demonstrating live updates end-to-end.
 
 ---
 
@@ -223,6 +223,7 @@ Document project-specific shortcuts or scripts in this section as they evolve so
 
 **Change Log**
 
+- `2025-10-15` – Completed Phase 6 Live Streaming Pipeline (real-time SSE endpoint, frontend EventSource client, UX controls, automated tests, manual validation).
 - `2025-10-15` – Completed Phase 5 Loki integration (docker-compose service, worker adapter, backend query endpoint, automated tests).
 - `2025-10-15` – Completed Phase 4 worker trace enhancements (level/data propagation, persistence) and initiated Phase 5 Loki integration track.
 - `2025-10-14` – Refreshed backend integration suite to shared workflow schema; corrected `PUT /workflows/:id` Zod validation by scoping the pipe to the request body.

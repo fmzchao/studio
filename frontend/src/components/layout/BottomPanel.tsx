@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { ChevronUp, ChevronDown, Terminal, X } from 'lucide-react'
+import { ChevronUp, ChevronDown, Terminal, X, ArrowDown, Pause, Play } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { useExecutionStore } from '@/store/executionStore'
@@ -7,15 +7,31 @@ import { useExecutionStore } from '@/store/executionStore'
 export function BottomPanel() {
   const [isExpanded, setIsExpanded] = useState(false)
   const [activeTab, setActiveTab] = useState<'logs' | 'results' | 'history'>('logs')
-  const { logs, status } = useExecutionStore()
+  const [autoScroll, setAutoScroll] = useState(true)
+  const { logs, status, streamingMode } = useExecutionStore()
   const logsEndRef = useRef<HTMLDivElement>(null)
+  const logsContainerRef = useRef<HTMLDivElement>(null)
 
-  // Auto-scroll to bottom when new logs arrive
+  // Auto-scroll to bottom when new logs arrive (if enabled)
   useEffect(() => {
-    if (isExpanded && activeTab === 'logs') {
+    if (isExpanded && activeTab === 'logs' && autoScroll) {
       logsEndRef.current?.scrollIntoView({ behavior: 'smooth' })
     }
-  }, [logs, isExpanded, activeTab])
+  }, [logs, isExpanded, activeTab, autoScroll])
+
+  // Disable auto-scroll when user manually scrolls up
+  const handleScroll = () => {
+    if (!logsContainerRef.current) return
+
+    const { scrollTop, scrollHeight, clientHeight } = logsContainerRef.current
+    const isAtBottom = scrollHeight - scrollTop <= clientHeight + 10 // 10px tolerance
+
+    if (!isAtBottom && autoScroll) {
+      setAutoScroll(false)
+    } else if (isAtBottom && !autoScroll) {
+      setAutoScroll(true)
+    }
+  }
 
   // Auto-expand when execution starts
   useEffect(() => {
@@ -57,6 +73,24 @@ export function BottomPanel() {
 
   const clearLogs = () => {
     useExecutionStore.setState({ logs: [] })
+  }
+
+  const scrollToBottom = () => {
+    logsEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    setAutoScroll(true)
+  }
+
+  const getStreamingModeBadge = () => {
+    switch (streamingMode) {
+      case 'realtime':
+        return { text: 'LIVE', variant: 'default' as const, color: 'text-green-500' }
+      case 'polling':
+        return { text: 'POLLING', variant: 'secondary' as const, color: 'text-yellow-500' }
+      case 'connecting':
+        return { text: 'CONNECTING', variant: 'secondary' as const, color: 'text-blue-500' }
+      default:
+        return { text: 'OFFLINE', variant: 'secondary' as const, color: 'text-gray-500' }
+    }
   }
 
   return (
@@ -104,6 +138,48 @@ export function BottomPanel() {
         </div>
 
         <div className="flex items-center gap-2 ml-auto">
+          {/* Streaming mode indicator */}
+          {status === 'running' && (
+            <Badge variant={getStreamingModeBadge().variant} className="text-xs px-1.5">
+              <span className={getStreamingModeBadge().color}>
+                {getStreamingModeBadge().text}
+              </span>
+            </Badge>
+          )}
+
+          {/* Log scroll controls */}
+          {isExpanded && activeTab === 'logs' && logs.length > 0 && (
+            <>
+              {!autoScroll && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={scrollToBottom}
+                  title="Follow live logs"
+                >
+                  <ArrowDown className="h-3 w-3 mr-1" />
+                  Follow
+                </Button>
+              )}
+
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs"
+                onClick={() => setAutoScroll(!autoScroll)}
+                title={autoScroll ? "Pause autoscroll" : "Resume autoscroll"}
+              >
+                {autoScroll ? (
+                  <Pause className="h-3 w-3 mr-1" />
+                ) : (
+                  <Play className="h-3 w-3 mr-1" />
+                )}
+                {autoScroll ? 'Pause' : 'Resume'}
+              </Button>
+            </>
+          )}
+
           {logs.length > 0 && (
             <Button
               variant="ghost"
@@ -115,6 +191,7 @@ export function BottomPanel() {
               Clear
             </Button>
           )}
+
           <Button
             variant="ghost"
             size="icon"
@@ -131,7 +208,11 @@ export function BottomPanel() {
       </div>
 
       {isExpanded && (
-        <div className="h-[260px] overflow-y-auto p-4">
+        <div
+          ref={logsContainerRef}
+          className="h-[260px] overflow-y-auto p-4"
+          onScroll={handleScroll}
+        >
           {activeTab === 'logs' && (
             <div className="space-y-2 font-mono text-sm">
               {logs.length === 0 ? (

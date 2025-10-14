@@ -7,6 +7,8 @@ import {
   Post,
   Put,
   Query,
+  Req,
+  Res,
   UsePipes,
 } from '@nestjs/common';
 import {
@@ -25,6 +27,7 @@ import {
 import { TraceService } from '../trace/trace.service';
 import { WorkflowsService } from './workflows.service';
 import { LogStreamService } from '../trace/log-stream.service';
+import type { Request, Response } from 'express';
 
 @ApiTags('workflows')
 @Controller('workflows')
@@ -208,6 +211,167 @@ export class WorkflowsController {
   async trace(@Param('runId') runId: string) {
     const { events, cursor } = await this.traceService.list(runId);
     return { runId, events, cursor };
+  }
+
+  @Get('/runs/:runId/stream')
+  @ApiOkResponse({ description: 'Server-sent events stream for workflow run updates' })
+  async stream(
+    @Param('runId') runId: string,
+    @Query('temporalRunId') temporalRunId: string | undefined,
+    @Query('cursor') cursorParam: string | undefined,
+    @Res() res: Response,
+    @Req() req: Request,
+  ): Promise<void> {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    if (typeof (res as any).flushHeaders === 'function') {
+      (res as any).flushHeaders();
+    }
+
+    let lastSequence = Number.parseInt(cursorParam ?? '0', 10);
+    if (Number.isNaN(lastSequence) || lastSequence < 0) {
+      lastSequence = 0;
+    }
+
+    const terminalStatuses = new Set([
+      'COMPLETED',
+      'FAILED',
+      'CANCELLED',
+      'TERMINATED',
+      'TIMED_OUT',
+    ]);
+
+    let active = true;
+    let lastStatusSignature: string | null = null;
+    let intervalId: NodeJS.Timeout | undefined;
+    let heartbeatId: NodeJS.Timeout | undefined;
+
+    const send = (event: string, payload: unknown) => {
+      if (!active) {
+        return;
+      }
+      res.write(`event: ${event}\n`);
+      res.write(`data: ${JSON.stringify(payload)}\n\n`);
+    };
+
+    const cleanup = async () => {
+      if (!active) {
+        return;
+      }
+      active = false;
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+      if (heartbeatId) {
+        clearInterval(heartbeatId);
+      }
+      if (unsubscribe) {
+        try {
+          await unsubscribe();
+        } catch (error) {
+          console.error('Error unsubscribing from trace events:', error);
+        }
+      }
+      res.end();
+    };
+
+    const pump = async () => {
+      if (!active) {
+        return;
+      }
+
+      try {
+        const { events, cursor } = await this.traceService.listSince(runId, lastSequence);
+        if (events.length > 0) {
+          const lastId = events[events.length - 1]?.id;
+          if (lastId) {
+            const parsed = Number.parseInt(lastId, 10);
+            if (!Number.isNaN(parsed)) {
+              lastSequence = parsed;
+            }
+          }
+          send('trace', { events, cursor: cursor ?? lastSequence.toString() });
+        }
+      } catch (error) {
+        send('error', { message: 'trace_fetch_failed', detail: String(error) });
+      }
+
+      try {
+        const status = await this.workflowsService.getRunStatus(runId, temporalRunId);
+        const signature = JSON.stringify(status);
+        if (signature !== lastStatusSignature) {
+          lastStatusSignature = signature;
+          send('status', status);
+          if (terminalStatuses.has(status.status)) {
+            send('complete', { runId, status: status.status });
+            cleanup();
+          }
+        }
+      } catch (error) {
+        send('error', { message: 'status_fetch_failed', detail: String(error) });
+      }
+    };
+
+    // Try to set up real-time LISTEN/NOTIFY subscription
+    let unsubscribe: (() => Promise<void>) | undefined;
+
+    try {
+      const traceRepo = (this.traceService as any).repository;
+      if (traceRepo && typeof traceRepo.subscribeToRun === 'function') {
+        unsubscribe = await traceRepo.subscribeToRun(runId, async (payload) => {
+          if (!active) return;
+
+          try {
+            const notification = JSON.parse(payload);
+            if (notification.sequence > lastSequence) {
+              const { events } = await this.traceService.listSince(runId, lastSequence);
+              if (events.length > 0) {
+                const lastId = events[events.length - 1]?.id;
+                if (lastId) {
+                  const parsed = Number.parseInt(lastId, 10);
+                  if (!Number.isNaN(parsed)) {
+                    lastSequence = parsed;
+                  }
+                }
+                send('trace', { events, cursor: lastSequence.toString() });
+              }
+            }
+          } catch (error) {
+            send('error', { message: 'notification_parse_failed', detail: String(error) });
+          }
+        });
+
+        send('ready', { mode: 'realtime', runId });
+      } else {
+        throw new Error('Repository does not support LISTEN/NOTIFY');
+      }
+    } catch (error) {
+      // Fallback to polling mode if LISTEN/NOTIFY fails
+      console.warn('Failed to set up LISTEN/NOTIFY, falling back to polling:', error);
+      send('ready', { mode: 'polling', runId, interval: 1000 });
+      intervalId = setInterval(() => {
+        void pump();
+      }, 1000);
+    }
+
+    await pump();
+
+    // Only set up polling if not using realtime mode
+    if (!unsubscribe) {
+      intervalId = setInterval(() => {
+        void pump();
+      }, 1000);
+    }
+
+    heartbeatId = setInterval(() => {
+      if (!active) {
+        return;
+      }
+      res.write(': keepalive\n\n');
+    }, 15000);
+
+    req.on('close', cleanup);
   }
 
   @Get('/runs/:runId/logs')
