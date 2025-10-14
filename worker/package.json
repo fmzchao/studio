@@ -18,12 +18,14 @@
     "test": "bun test"
   },
   "dependencies": {
+    "@ai-sdk/openai": "^0.0.40",
     "@shipsec/component-sdk": "*",
     "@grpc/grpc-js": "^1.14.0",
     "@shipsec/shared": "*",
     "@temporalio/client": "^1.11.3",
     "@temporalio/worker": "^1.11.3",
     "@temporalio/workflow": "^1.11.3",
+    "ai": "^3.2.37",
     "dotenv": "^17.2.3",
     "drizzle-orm": "^0.44.6",
     "long": "^5.3.2",
@@ -35,7 +37,6 @@
     "@types/node": "^20.16.11",
     "@types/pg": "^8.15.5",
     "@types/minio": "^7.1.1",
-    "bun-types": "^1.2.23",
     "tsx": "^4.20.6",
     "typescript": "^5.6.3"
   }

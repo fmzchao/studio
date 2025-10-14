@@ -10,6 +10,7 @@ import './core/webhook';
 import './core/text-splitter';
 import './core/console-log';
 import './core/secret-fetch';
+import './core/openai-chat';
 
 // Security components
 import './security/subfinder';
