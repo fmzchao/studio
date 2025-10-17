@@ -29,7 +29,7 @@ curl -f http://localhost:8081/health || echo "Temporal UI not ready yet"
 The `pm2.config.cjs` file registers the backend API and Temporal worker processes.
 
 ```bash
-pm2 start
+pm2 start pm2.config.cjs
 pm2 status
 
 # Inspect logs without getting stuck in follow mode
