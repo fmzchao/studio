@@ -1,15 +1,18 @@
 import { useParams, useNavigate } from 'react-router-dom'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import { ReactFlowProvider, useReactFlow } from 'reactflow'
 import { TopBar } from '@/components/layout/TopBar'
 import { Sidebar } from '@/components/layout/Sidebar'
-import { BottomPanel } from '@/components/layout/BottomPanel'
 import { Canvas } from '@/components/workflow/Canvas'
+import { ReviewInspector } from '@/components/timeline/ReviewInspector'
+import { ReviewRunBanner } from '@/components/timeline/ReviewRunBanner'
 import { RunWorkflowDialog } from '@/components/workflow/RunWorkflowDialog'
 import { useExecutionStore } from '@/store/executionStore'
 import { useWorkflowStore } from '@/store/workflowStore'
 import { useComponentStore } from '@/store/componentStore'
+import { useWorkflowUiStore } from '@/store/workflowUiStore'
 import { api, API_BASE_URL } from '@/services/api'
+import { cn } from '@/lib/utils'
 import {
   serializeWorkflowForCreate,
   serializeWorkflowForUpdate,
@@ -27,6 +30,9 @@ function WorkflowBuilderContent() {
   const [isLoading, setIsLoading] = useState(false)
   const [runDialogOpen, setRunDialogOpen] = useState(false)
   const [runtimeInputs, setRuntimeInputs] = useState<any[]>([])
+  const { mode, libraryOpen, inspectorWidth, setInspectorWidth } = useWorkflowUiStore()
+  const layoutRef = useRef<HTMLDivElement | null>(null)
+  const inspectorResizingRef = useRef(false)
 
   // Load workflow on mount (if not new)
   useEffect(() => {
@@ -222,6 +228,46 @@ function WorkflowBuilderContent() {
     }
   }
 
+  const handleInspectorResizeStart = useCallback((event: React.MouseEvent) => {
+    if (mode !== 'review') {
+      return
+    }
+    inspectorResizingRef.current = true
+    document.body.classList.add('select-none')
+    event.preventDefault()
+  }, [mode])
+
+  useEffect(() => {
+    const handleMouseMove = (event: MouseEvent) => {
+      if (!inspectorResizingRef.current || mode !== 'review') {
+        return
+      }
+      const container = layoutRef.current
+      if (!container) return
+      const rect = container.getBoundingClientRect()
+      const newWidth = rect.right - event.clientX
+      setInspectorWidth(newWidth)
+    }
+
+    const stopResizing = () => {
+      if (inspectorResizingRef.current) {
+        inspectorResizingRef.current = false
+        document.body.classList.remove('select-none')
+      }
+    }
+
+    window.addEventListener('mousemove', handleMouseMove)
+    window.addEventListener('mouseup', stopResizing)
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove)
+      window.removeEventListener('mouseup', stopResizing)
+    }
+  }, [mode, setInspectorWidth])
+
+  const isLibraryVisible = libraryOpen && mode === 'design'
+  const isInspectorVisible = mode === 'review'
+
   if (isLoading) {
     return (
       <div className="h-screen flex items-center justify-center bg-background">
@@ -242,15 +288,44 @@ function WorkflowBuilderContent() {
         onSave={handleSave}
       />
 
-      <div className="flex flex-1 overflow-hidden">
-        <Sidebar />
+      <div ref={layoutRef} className="flex flex-1 overflow-hidden">
+        <aside
+          className={cn(
+            'relative h-full transition-[width] duration-200 ease-in-out bg-background',
+            isLibraryVisible ? 'border-r w-[320px]' : 'border-r-0 w-0'
+          )}
+        >
+          <div
+            className={cn(
+              'absolute inset-0 transition-opacity duration-150',
+              isLibraryVisible ? 'opacity-100' : 'opacity-0 pointer-events-none select-none'
+            )}
+          >
+            <Sidebar />
+          </div>
+        </aside>
 
-        <main className="flex-1 relative">
-          <Canvas className="absolute inset-0" />
+        <main className="flex-1 relative flex">
+          <ReviewRunBanner />
+          <Canvas className="flex-1 h-full relative" />
+          {isInspectorVisible && (
+            <aside
+              className="relative h-full border-l bg-background"
+              style={{ width: inspectorWidth }}
+            >
+              <div
+                className="absolute top-0 left-0 h-full w-2 cursor-col-resize border-l border-transparent hover:border-primary/40"
+                onMouseDown={handleInspectorResizeStart}
+              />
+              <div className="h-full pl-2">
+                <ReviewInspector />
+              </div>
+            </aside>
+          )}
         </main>
       </div>
 
-      <BottomPanel />
+      {/* Bottom panel removed in favor of contextual inspectors */}
 
       <RunWorkflowDialog
         open={runDialogOpen}

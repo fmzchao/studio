@@ -2,9 +2,10 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { ArrowLeft, Save, Play, StopCircle } from 'lucide-react'
+import { ArrowLeft, Save, Play, StopCircle, PencilLine, MonitorPlay, PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 import { useExecutionStore } from '@/store/executionStore'
 import { useWorkflowStore } from '@/store/workflowStore'
+import { useWorkflowUiStore } from '@/store/workflowUiStore'
 
 interface TopBarProps {
   workflowId?: string
@@ -20,6 +21,7 @@ export function TopBar({ onRun, onSave }: TopBarProps) {
   const { metadata, isDirty, setWorkflowName } = useWorkflowStore()
   const { status, runStatus, reset } = useExecutionStore()
   const isRunning = status === 'running' || status === 'queued'
+  const { mode, setMode, libraryOpen, toggleLibrary } = useWorkflowUiStore()
 
   const handleSave = async () => {
     if (onSave) {
@@ -66,69 +68,114 @@ export function TopBar({ onRun, onSave }: TopBarProps) {
         />
       </div>
 
-      <div className="flex gap-2 ml-auto">
-        {isDirty && (
-          <span className="text-xs text-muted-foreground self-center">
-            Unsaved changes
-          </span>
-        )}
+      <div className="flex items-center gap-3 ml-auto">
         <Button
-          onClick={handleSave}
-          disabled={isSaving || isRunning}
-          variant="outline"
-          className="gap-2"
+          variant="ghost"
+          size="icon"
+          className="inline-flex"
+          onClick={toggleLibrary}
+          aria-label={libraryOpen ? 'Hide component library' : 'Show component library'}
         >
-          <Save className="h-4 w-4" />
-          {isSaving ? 'Saving...' : 'Save'}
+          {libraryOpen ? (
+            <PanelLeftClose className="h-5 w-5" />
+          ) : (
+            <PanelLeftOpen className="h-5 w-5" />
+          )}
         </Button>
 
-        {isRunning ? (
+        <div className="flex rounded-lg border bg-muted/40 overflow-hidden text-xs font-medium shadow-sm">
           <Button
-            onClick={handleStop}
-            variant="destructive"
+            variant={mode === 'design' ? 'default' : 'ghost'}
+            size="sm"
+            className="h-9 px-3 gap-2 rounded-none"
+            onClick={() => setMode('design')}
+            aria-pressed={mode === 'design'}
+            >
+            <PencilLine className="h-4 w-4" />
+            <span className="flex flex-col leading-tight text-left">
+              <span className="text-xs font-semibold">Design</span>
+              <span className="text-[10px] text-muted-foreground">Edit workflow</span>
+            </span>
+          </Button>
+          <Button
+            variant={mode === 'review' ? 'default' : 'ghost'}
+            size="sm"
+            className="h-9 px-3 gap-2 rounded-none border-l border-border/50"
+            onClick={() => setMode('review')}
+            aria-pressed={mode === 'review'}
+            >
+            <MonitorPlay className="h-4 w-4" />
+            <span className="flex flex-col leading-tight text-left">
+              <span className="text-xs font-semibold">Review</span>
+              <span className="text-[10px] text-muted-foreground">Inspect executions</span>
+            </span>
+          </Button>
+        </div>
+
+        <div className="flex gap-2">
+          {isDirty && (
+            <span className="text-xs text-muted-foreground self-center">
+              Unsaved changes
+            </span>
+          )}
+          <Button
+            onClick={handleSave}
+            disabled={isSaving || isRunning}
+            variant="outline"
             className="gap-2"
           >
-            <StopCircle className="h-4 w-4" />
-            Stop
+            <Save className="h-4 w-4" />
+            {isSaving ? 'Saving...' : 'Save'}
           </Button>
-        ) : (
-          <Button
-            onClick={handleRun}
-            className="gap-2"
-          >
-            <Play className="h-4 w-4" />
-            Run
-          </Button>
-        )}
 
-        {status === 'queued' && (
-          <span className="text-sm text-muted-foreground font-medium">
-            Queued…
-          </span>
-        )}
+          {isRunning ? (
+            <Button
+              onClick={handleStop}
+              variant="destructive"
+              className="gap-2"
+            >
+              <StopCircle className="h-4 w-4" />
+              Stop
+            </Button>
+          ) : (
+            <Button
+              onClick={handleRun}
+              className="gap-2"
+            >
+              <Play className="h-4 w-4" />
+              Run
+            </Button>
+          )}
 
-        {runStatus?.progress && (
-          <span className="text-sm text-muted-foreground font-medium">
-            {runStatus.progress.completedActions}/{runStatus.progress.totalActions} actions
-          </span>
-        )}
+          {status === 'queued' && (
+            <span className="text-sm text-muted-foreground font-medium">
+              Queued…
+            </span>
+          )}
 
-        {status === 'completed' && (
-          <span className="text-sm text-green-600 font-medium">
-            ✓ Completed
-          </span>
-        )}
+          {runStatus?.progress && (
+            <span className="text-sm text-muted-foreground font-medium">
+              {runStatus.progress.completedActions}/{runStatus.progress.totalActions} actions
+            </span>
+          )}
 
-        {status === 'failed' && (
-          <span className="text-sm text-red-600 font-medium">
-            ✗ Failed
-          </span>
-        )}
-        {status === 'failed' && runStatus?.failure?.reason && (
-          <span className="text-sm text-red-600">
-            {runStatus.failure.reason}
-          </span>
-        )}
+          {status === 'completed' && (
+            <span className="text-sm text-green-600 font-medium">
+              ✓ Completed
+            </span>
+          )}
+
+          {status === 'failed' && (
+            <span className="text-sm text-red-600 font-medium">
+              ✗ Failed
+            </span>
+          )}
+          {status === 'failed' && runStatus?.failure?.reason && (
+            <span className="text-sm text-red-600">
+              {runStatus.failure.reason}
+            </span>
+          )}
+        </div>
       </div>
     </div>
   )

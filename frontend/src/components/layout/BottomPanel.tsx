@@ -241,49 +241,44 @@ export function BottomPanel() {
       {isExpanded && (
         <div className="h-[360px]">
           {activeTab === 'logs' && (
-            <div className="h-full flex flex-col">
-              <div className="flex-shrink-0 border-b px-4 py-3">
-                <RunSelector />
-              </div>
-              <div
-                ref={logsContainerRef}
-                className="flex-1 overflow-y-auto p-4"
-                onScroll={handleScroll}
-              >
-                <div className="space-y-2 font-mono text-sm">
-                  {displayLogs.length === 0 ? (
-                    <div className="text-muted-foreground text-center py-8">
-                      {hasSelectedRun
-                        ? 'No logs recorded for this run.'
-                        : 'No logs yet. Run a workflow or select a past run to view execution logs.'}
-                    </div>
-                  ) : (
-                    <>
-                      {displayLogs.map((log) => (
-                        <div key={log.id} className="flex items-start gap-3">
-                          <span className="text-muted-foreground text-xs whitespace-nowrap">
-                            {formatTime(log.timestamp)}
+            <div
+              ref={logsContainerRef}
+              className="h-full overflow-y-auto p-4"
+              onScroll={handleScroll}
+            >
+              <div className="space-y-2 font-mono text-sm">
+                {displayLogs.length === 0 ? (
+                  <div className="text-muted-foreground text-center py-8">
+                    {hasSelectedRun
+                      ? 'No logs recorded for this run.'
+                      : 'No logs yet. Run a workflow or select a past run to view execution logs.'}
+                  </div>
+                ) : (
+                  <>
+                    {displayLogs.map((log) => (
+                      <div key={log.id} className="flex items-start gap-3">
+                        <span className="text-muted-foreground text-xs whitespace-nowrap">
+                          {formatTime(log.timestamp)}
+                        </span>
+                        <Badge
+                          variant={getLevelBadgeVariant(log.level)}
+                          className="text-xs px-1.5 py-0 whitespace-nowrap"
+                        >
+                          {log.level.toUpperCase()}
+                        </Badge>
+                        {log.nodeId && (
+                          <span className="text-xs text-muted-foreground font-mono whitespace-nowrap">
+                            [{log.nodeId}]
                           </span>
-                          <Badge
-                            variant={getLevelBadgeVariant(log.level)}
-                            className="text-xs px-1.5 py-0 whitespace-nowrap"
-                          >
-                            {log.level.toUpperCase()}
-                          </Badge>
-                          {log.nodeId && (
-                            <span className="text-xs text-muted-foreground font-mono whitespace-nowrap">
-                              [{log.nodeId}]
-                            </span>
-                          )}
-                          <span className={getLevelColor(log.level)}>
-                            {log.message ?? log.error?.message ?? log.type}
-                          </span>
-                        </div>
-                      ))}
-                      <div ref={logsEndRef} />
-                    </>
-                  )}
-                </div>
+                        )}
+                        <span className={getLevelColor(log.level)}>
+                          {log.message ?? log.error?.message ?? log.type}
+                        </span>
+                      </div>
+                    ))}
+                    <div ref={logsEndRef} />
+                  </>
+                )}
               </div>
             </div>
           )}

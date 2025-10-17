@@ -22,6 +22,7 @@ import { useComponentStore } from '@/store/componentStore'
 import { useExecutionStore } from '@/store/executionStore'
 import { useWorkflowStore } from '@/store/workflowStore'
 import { useExecutionTimelineStore } from '@/store/executionTimelineStore'
+import { useWorkflowUiStore } from '@/store/workflowUiStore'
 import type { NodeData } from '@/schemas/node'
 
 const nodeTypes = {
@@ -49,10 +50,25 @@ export function Canvas({ className }: CanvasProps) {
   const { nodeStates } = useExecutionStore()
   const { markDirty } = useWorkflowStore()
   const { selectedRunId, dataFlows, selectedNodeId, selectNode, selectEvent } = useExecutionTimelineStore()
+  const { mode } = useWorkflowUiStore()
+
+  useEffect(() => {
+    if (mode === 'review') {
+      setSelectedNode(null)
+    }
+    if (mode === 'design') {
+      useExecutionTimelineStore.setState({ selectedNodeId: null, selectedEventId: null })
+    }
+  }, [mode])
 
   // Enhanced edge change handler that also updates input mappings
   const onEdgesChange = useCallback((changes: any[]) => {
     // Handle edge removals by cleaning up input mappings
+    if (mode !== 'design') {
+      originalOnEdgesChange(changes)
+      return
+    }
+
     const removedEdges = changes
       .filter(change => change.type === 'remove')
       .map(change => edges.find(edge => edge.id === change.id))
@@ -80,7 +96,7 @@ export function Canvas({ className }: CanvasProps) {
 
     // Apply the original edge changes
     originalOnEdgesChange(changes)
-  }, [edges, setNodes, originalOnEdgesChange])
+  }, [edges, setNodes, originalOnEdgesChange, mode])
 
   // Sync execution node states to canvas nodes
   useEffect(() => {
@@ -103,6 +119,9 @@ export function Canvas({ className }: CanvasProps) {
 
   const onConnect: OnConnect = useCallback(
     (params) => {
+      if (mode !== 'design') {
+        return
+      }
       const validation = validateConnection(params, nodes, edges, getComponent)
 
       if (!validation.isValid) {
@@ -151,17 +170,20 @@ export function Canvas({ className }: CanvasProps) {
       // Mark workflow as dirty
       markDirty()
     },
-    [setEdges, setNodes, nodes, edges, getComponent, markDirty]
+    [setEdges, setNodes, nodes, edges, getComponent, markDirty, mode]
   )
 
   const onDragOver = useCallback((event: React.DragEvent) => {
+    if (mode !== 'design') return
     event.preventDefault()
     event.dataTransfer.dropEffect = 'move'
-  }, [])
+  }, [mode])
 
   const onDrop = useCallback(
     (event: React.DragEvent) => {
       event.preventDefault()
+
+      if (mode !== 'design') return
 
       const componentId = event.dataTransfer.getData('application/reactflow')
 
@@ -205,13 +227,13 @@ export function Canvas({ className }: CanvasProps) {
       // Mark workflow as dirty
       markDirty()
     },
-    [reactFlowInstance, setNodes, getComponent, markDirty]
+    [reactFlowInstance, setNodes, getComponent, markDirty, mode]
   )
 
 
   // Handle node click for config panel
   const onNodeClick: NodeMouseHandler = useCallback((event, node) => {
-    if (selectedRunId) {
+    if (mode === 'review') {
       event.preventDefault()
       event.stopPropagation()
 
@@ -232,7 +254,7 @@ export function Canvas({ className }: CanvasProps) {
     }
 
     setSelectedNode(node as Node<NodeData>)
-  }, [selectedRunId, selectNode, selectEvent])
+  }, [mode, selectNode, selectEvent])
 
   // Handle pane click to deselect
   const onPaneClick = useCallback(() => {
@@ -287,6 +309,9 @@ export function Canvas({ className }: CanvasProps) {
   // Handle keyboard shortcuts
   useEffect(() => {
     const handleKeyPress = (event: KeyboardEvent) => {
+      if (mode !== 'design') {
+        return
+      }
       // Close config panel on Escape
       if (event.key === 'Escape') {
         setSelectedNode(null)
@@ -317,7 +342,7 @@ export function Canvas({ className }: CanvasProps) {
 
     document.addEventListener('keydown', handleKeyPress)
     return () => document.removeEventListener('keydown', handleKeyPress)
-  }, [nodes, edges, setNodes, setEdges, markDirty])
+  }, [nodes, edges, setNodes, setEdges, markDirty, mode])
 
   return (
     <div className={className}>
@@ -337,6 +362,9 @@ export function Canvas({ className }: CanvasProps) {
             nodeTypes={nodeTypes}
             edgeTypes={edgeTypes}
             attributionPosition="bottom-left"
+            nodesDraggable={mode === 'design'}
+            nodesConnectable={mode === 'design'}
+            elementsSelectable
           >
             {/* SVG markers for edges */}
             <svg style={{ position: 'absolute', width: 0, height: 0 }}>
@@ -378,7 +406,7 @@ export function Canvas({ className }: CanvasProps) {
         </div>
 
         {/* Config Panel */}
-        {selectedNode && (
+        {mode === 'design' && selectedNode && (
           <ConfigPanel
             selectedNode={selectedNode}
             onClose={() => setSelectedNode(null)}

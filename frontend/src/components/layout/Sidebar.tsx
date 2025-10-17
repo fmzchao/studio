@@ -98,7 +98,7 @@ export function Sidebar() {
   }
 
   return (
-    <div className="w-[320px] border-r bg-background overflow-y-auto flex flex-col">
+    <div className="w-full max-w-[320px] border-r bg-background overflow-y-auto flex flex-col">
       <div className="p-4 flex-1">
         <div className="mb-6">
           <h2 className="text-lg font-semibold">Components</h2>

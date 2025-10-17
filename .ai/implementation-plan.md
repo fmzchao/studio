@@ -174,6 +174,11 @@ This plan supersedes the previous implementation playbook. It focuses on deliver
 - [ ] Keyboard shortcuts for playback controls
 - [ ] Responsive timeline for mobile/desktop
 - [ ] Performance optimization for large executions
+- [ ] Mode-aware layout: dedicated Build vs Replay shells with clear visual affordances
+- [ ] Right-docked inspector with Events / Logs / Data tabs tied to node selection
+- [ ] Timeline overlay with cinematic playback controls anchored above the canvas
+- [ ] Contextual run summary banner (status, duration, warnings) when in Replay mode
+- [ ] Empty-state copy and call-to-actions for logs/timeline when no run is selected
 
 - [ ] Tests: timeline scrubbing accuracy, animation smoothness, event inspector correctness.
 

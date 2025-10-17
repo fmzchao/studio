@@ -8,6 +8,7 @@ import { useExecutionTimelineStore, type NodeVisualState } from '@/store/executi
 import { ComponentInfoButton } from './ComponentBadge'
 import { getNodeStyle, getTypeBorderColor } from './nodeStyles'
 import type { NodeData } from '@/schemas/node'
+import { useWorkflowUiStore } from '@/store/workflowUiStore'
 
 const STATUS_ICONS = {
   running: Loader2,
@@ -24,6 +25,7 @@ export const WorkflowNode = memo(({ data, selected, id }: NodeProps<NodeData>) =
   const { getComponent, loading } = useComponentStore()
   const { getNodes, getEdges } = useReactFlow()
   const { nodeStates, selectedRunId, selectNode } = useExecutionTimelineStore()
+  const { mode } = useWorkflowUiStore()
   const [isHovered, setIsHovered] = useState(false)
 
   // Cast to access extended frontend fields (componentId, componentSlug, status, etc.)
@@ -67,7 +69,9 @@ export const WorkflowNode = memo(({ data, selected, id }: NodeProps<NodeData>) =
   const IconComponent = LucideIcons[iconName as keyof typeof LucideIcons] as React.ComponentType<{ className?: string }>
 
   // Get styling based on visual state (prioritize timeline over node data)
-  const effectiveStatus = selectedRunId ? visualState.status : (nodeData.status || 'idle')
+  const effectiveStatus = mode === 'review' && selectedRunId
+    ? visualState.status
+    : (nodeData.status || 'idle')
   const nodeStyle = getNodeStyle(effectiveStatus)
   const typeBorderColor = getTypeBorderColor(component.type)
 
@@ -75,7 +79,7 @@ export const WorkflowNode = memo(({ data, selected, id }: NodeProps<NodeData>) =
   const StatusIcon = STATUS_ICONS[effectiveStatus as keyof typeof STATUS_ICONS]
 
   // Enhanced styling for timeline visualization
-  const isTimelineActive = selectedRunId && visualState.status !== 'idle'
+  const isTimelineActive = mode === 'review' && selectedRunId && visualState.status !== 'idle'
   const shouldShowProgress = isTimelineActive && visualState.status === 'running' && visualState.progress > 0
   const hasEvents = visualState.eventCount > 0
 

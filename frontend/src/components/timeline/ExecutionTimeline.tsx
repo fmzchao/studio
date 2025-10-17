@@ -252,7 +252,7 @@ export function ExecutionTimeline() {
                   LIVE
                 </>
               ) : (
-                'REPLAY'
+                'REVIEW'
               )}
             </Badge>
           </div>
