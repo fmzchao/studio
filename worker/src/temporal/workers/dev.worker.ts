@@ -8,7 +8,12 @@ import { status as grpcStatus } from '@grpc/grpc-js';
 import Long from 'long';
 import { isGrpcServiceError } from '@temporalio/client';
 import { config } from 'dotenv';
-import { runWorkflowActivity, initializeActivityServices } from '../activities/run-workflow.activity';
+import {
+  runComponentActivity,
+  setRunMetadataActivity,
+  finalizeRunActivity,
+  initializeComponentActivityServices,
+} from '../activities/run-component.activity';
 import {
   FileStorageAdapter,
   LokiLogAdapter,
@@ -88,7 +93,11 @@ async function main() {
   }
 
   // Initialize global services for activities
-  initializeActivityServices(storageAdapter, traceAdapter, logAdapter);
+  initializeComponentActivityServices({
+    storage: storageAdapter,
+    trace: traceAdapter,
+    logs: logAdapter,
+  });
 
   console.log(`✅ Service adapters initialized`);
 
@@ -98,7 +107,9 @@ async function main() {
     taskQueue,
     workflowsPath,
     activities: {
-      runWorkflowActivity,
+      runComponentActivity,
+      setRunMetadataActivity,
+      finalizeRunActivity,
     },
   });
 

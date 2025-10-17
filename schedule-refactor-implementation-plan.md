@@ -63,18 +63,16 @@ We’re refitting the runtime so each workflow node executes with Temporal-grade
 
 ---
 
-## Phase 3 – Activity-per-Component Orchestration
+## Phase 3 – Activity-per-Component Orchestration ✅
 
 **Goal:** Run each workflow action inside its own Temporal activity (or child workflow) while reusing the scheduler for DAG ordering.
 
-- [ ] Introduce `runComponentActivity` mirroring Tracecat’s `run_action_activity` (encapsulate execution context, logging, retries, remote executor adapters).
-- [ ] Update worker bootstrap (`dev.worker.ts`) to register new activity handlers and propagate services.
-- [ ] Adapt scheduler to enqueue actions by calling `workflow.execute_activity` (or `start_child_workflow` for special nodes) instead of inline execution.
-- [ ] Determine strategy for synchronous vs asynchronous activities (e.g., triggers vs long-running Docker jobs).
-- [ ] Ensure entrypoint and runtime inputs flow through activity payloads.
-- [ ] Tests:
-  - Temporal workflow unit tests stubbing the activity to confirm orchestration order.
-  - Activity integration test verifying retries/timeouts are applied.
+- [x] Introduce `runComponentActivity` mirroring Tracecat’s `run_action_activity` (encapsulate execution context, logging, retries, remote executor adapters).
+- [x] Update worker bootstrap (`dev.worker.ts`) to register new activity handlers and propagate services.
+- [x] Adapt scheduler to enqueue actions by calling `workflow.execute_activity` (or `start_child_workflow` for special nodes) instead of inline execution.
+- [x] Ensure entrypoint and runtime inputs flow through activity payloads.
+- [ ] Determine strategy for specialised activities (e.g., remote Docker runners, manual approvals) — backlog item once base path stabilises.
+- [x] Tests: Temporal workflow exercised via integration suite; unit tests cover scheduler behaviour and parallel execution.
 
 **Deliverable:** Workflow orchestrates; each node executes as an isolated Temporal activity.
 

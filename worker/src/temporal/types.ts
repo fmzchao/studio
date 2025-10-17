@@ -48,8 +48,27 @@ export interface WorkflowDefinition {
   actions: WorkflowAction[];
   config: {
     environment: string;
-    timeoutSeconds: number;
+  timeoutSeconds: number;
   };
+}
+
+export interface RunComponentActivityInput {
+  runId: string;
+  workflowId: string;
+  action: {
+    ref: string;
+    componentId: string;
+  };
+  params: Record<string, unknown>;
+  warnings?: Array<{
+    target: string;
+    sourceRef: string;
+    sourceHandle: string;
+  }>;
+}
+
+export interface RunComponentActivityOutput {
+  output: unknown;
 }
 
 export interface WorkflowRunRequest {

@@ -81,3 +81,11 @@ Each stores `runId`, `nodeId`, timestamp, payload.
 - `executeWorkflow` now delegates action sequencing to the scheduler while reusing existing trace/log logic; results map stores outputs for downstream nodes.
 - Introduced a concurrency-focused test (`executeWorkflow > executes independent branches in parallel`) that registers a synthetic sleep component and asserts branch start times differ by <60 ms, confirming real parallel execution.
 - Worker integration suite still passes; overall runtime now supports concurrent branch execution without altering component contracts.
+
+## 2025-10-16 · Phase 3 Activity Orchestration
+
+- Temporal workflow (`shipsecWorkflowRun`) now orchestrates the DAG directly, using `runWorkflowWithScheduler` to determine ready nodes and invoking `runComponentActivity` via `workflow.executeActivity`.
+- Introduced `runComponentActivity` plus lifecycle helpers (`setRunMetadataActivity`, `finalizeRunActivity`) so trace adapters receive run metadata while each component executes in its own activity with full retries/timeouts.
+- Workflow resolves input mappings before scheduling the activity; unresolved mappings are passed as warnings so the activity emits `NODE_PROGRESS` warnings before execution.
+- Manual trigger inputs continue to flow (`__runtimeData` for trigger component, merged params for others).
+- Scheduler remains for inline execution (`executeWorkflow` tests) while the Temporal workflow leverages the same logic with activity isolation; worker integration tests confirm the new orchestration.

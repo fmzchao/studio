@@ -15,6 +15,7 @@ import type {
   WorkflowLogSink,
 } from './types';
 import { runWorkflowWithScheduler } from './workflow-scheduler';
+import { buildActionParams } from './input-resolver';
 
 export interface ExecuteWorkflowOptions {
   runId?: string;
@@ -80,29 +81,18 @@ export async function executeWorkflow(
         level: 'info',
       });
 
-      // Merge params with inputs for entrypoint
-      const params = { ...action.params } as Record<string, unknown>;
-      for (const [targetKey, mapping] of Object.entries(action.inputMappings ?? {})) {
-        const sourceOutput = results.get(mapping.sourceRef);
-        const resolved = resolveInputValue(sourceOutput, mapping.sourceHandle);
+      const { params, warnings } = buildActionParams(action, results);
 
-        if (resolved !== undefined) {
-          params[targetKey] = resolved;
-        } else {
-          options.trace?.record({
-            type: 'NODE_PROGRESS',
-            runId,
-            nodeRef: action.ref,
-            timestamp: new Date().toISOString(),
-            message: `Input '${targetKey}' mapped from ${mapping.sourceRef}.${mapping.sourceHandle} was undefined`,
-            level: 'warn',
-            data: {
-              target: targetKey,
-              sourceRef: mapping.sourceRef,
-              sourceHandle: mapping.sourceHandle,
-            },
-          });
-        }
+      for (const warning of warnings) {
+        options.trace?.record({
+          type: 'NODE_PROGRESS',
+          runId,
+          nodeRef: action.ref,
+          timestamp: new Date().toISOString(),
+          message: `Input '${warning.target}' mapped from ${warning.sourceRef}.${warning.sourceHandle} was undefined`,
+          level: 'warn',
+          data: warning,
+        });
       }
 
       if (definition.entrypoint.ref === action.ref && request.inputs) {
@@ -171,23 +161,4 @@ export async function executeWorkflow(
       error: error instanceof Error ? error.message : String(error),
     };
   }
-}
-
-function resolveInputValue(sourceOutput: unknown, sourceHandle: string): unknown {
-  if (sourceOutput === null || sourceOutput === undefined) {
-    return undefined;
-  }
-
-  if (sourceHandle === '__self__') {
-    return sourceOutput;
-  }
-
-  if (typeof sourceOutput === 'object') {
-    const record = sourceOutput as Record<string, unknown>;
-    if (Object.prototype.hasOwnProperty.call(record, sourceHandle)) {
-      return record[sourceHandle];
-    }
-  }
-
-  return undefined;
 }
