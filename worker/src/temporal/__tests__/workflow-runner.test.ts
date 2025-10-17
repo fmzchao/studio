@@ -123,4 +123,107 @@ describe('executeWorkflow', () => {
     expect(logEvents.length).toBe(logEntries.length);
     expect(logEntries.some((entry) => entry.message.includes('[Console Log]'))).toBe(true);
   });
+  it('executes independent branches in parallel', async () => {
+    const timeline: Array<{ ref: string; event: 'start' | 'end'; at: number }> = [];
+    let baseTime = 0;
+    const record = (ref: string, event: 'start' | 'end') => {
+      timeline.push({ ref, event, at: Date.now() - baseTime });
+    };
+
+    if (!componentRegistry.has('test.sleep.parallel')) {
+      const sleepComponent: ComponentDefinition<{ delay: number; label: string }, { label: string }> = {
+        id: 'test.sleep.parallel',
+        label: 'Parallel Sleep',
+        category: 'transform',
+        runner: { kind: 'inline' },
+        inputSchema: z.object({
+          delay: z.number(),
+          label: z.string(),
+        }),
+        outputSchema: z.object({
+          label: z.string(),
+        }),
+        async execute(params, context) {
+          record(context.componentRef, 'start');
+          await new Promise<void>((resolve) => setTimeout(resolve, params.delay));
+          record(context.componentRef, 'end');
+          return { label: params.label };
+        },
+      };
+
+      componentRegistry.register(sleepComponent);
+    }
+
+    const definition: WorkflowDefinition = {
+      title: 'Parallel branches',
+      description: 'Two branches should execute concurrently',
+      entrypoint: { ref: 'start' },
+      config: {
+        environment: 'test',
+        timeoutSeconds: 30,
+      },
+      nodes: {},
+      edges: [],
+      dependencyCounts: {
+        start: 0,
+        branchA: 1,
+        branchB: 1,
+        merge: 2,
+      },
+      actions: [
+        {
+          ref: 'start',
+          componentId: 'test.sleep.parallel',
+          params: { delay: 50, label: 'start' },
+          dependsOn: [],
+          inputMappings: {},
+        },
+        {
+          ref: 'branchA',
+          componentId: 'test.sleep.parallel',
+          params: { delay: 200, label: 'branchA' },
+          dependsOn: ['start'],
+          inputMappings: {},
+        },
+        {
+          ref: 'branchB',
+          componentId: 'test.sleep.parallel',
+          params: { delay: 200, label: 'branchB' },
+          dependsOn: ['start'],
+          inputMappings: {},
+        },
+        {
+          ref: 'merge',
+          componentId: 'test.sleep.parallel',
+          params: { delay: 0, label: 'merge' },
+          dependsOn: ['branchA', 'branchB'],
+          inputMappings: {},
+        },
+      ],
+    };
+
+    baseTime = Date.now();
+    const result = await executeWorkflow(definition);
+    expect(result.success).toBe(true);
+
+    const branchAStart = timeline.find(
+      (entry) => entry.ref === 'branchA' && entry.event === 'start',
+    );
+    const branchBStart = timeline.find(
+      (entry) => entry.ref === 'branchB' && entry.event === 'start',
+    );
+    const mergeEnd = timeline.find(
+      (entry) => entry.ref === 'merge' && entry.event === 'end',
+    );
+
+    expect(branchAStart).toBeDefined();
+    expect(branchBStart).toBeDefined();
+    expect(mergeEnd).toBeDefined();
+
+    const delta = Math.abs((branchAStart?.at ?? 0) - (branchBStart?.at ?? 0));
+    expect(delta).toBeLessThan(60);
+
+    const totalElapsed = mergeEnd?.at ?? Number.POSITIVE_INFINITY;
+    expect(totalElapsed).toBeLessThan(400);
+  });
 });

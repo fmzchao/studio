@@ -14,6 +14,7 @@ import type {
   WorkflowRunResult,
   WorkflowLogSink,
 } from './types';
+import { runWorkflowWithScheduler } from './workflow-scheduler';
 
 export interface ExecuteWorkflowOptions {
   runId?: string;
@@ -35,6 +36,9 @@ export async function executeWorkflow(
 ): Promise<WorkflowRunResult> {
   const runId = options.runId ?? randomUUID();
   const results = new Map<string, unknown>();
+  const actionsByRef = new Map<string, typeof definition.actions[number]>(
+    definition.actions.map((action) => [action.ref, action]),
+  );
 
   const forwardLog: ((entry: LogEventInput) => void) | undefined = options.logs
     ? (entry) => {
@@ -56,7 +60,12 @@ export async function executeWorkflow(
     : undefined;
 
   try {
-    for (const action of definition.actions) {
+    const runAction = async (actionRef: string): Promise<void> => {
+      const action = actionsByRef.get(actionRef);
+      if (!action) {
+        throw new Error(`Action not found: ${actionRef}`);
+      }
+
       const component = componentRegistry.get(action.componentId);
       if (!component) {
         throw new Error(`Component not registered: ${action.componentId}`);
@@ -143,7 +152,11 @@ export async function executeWorkflow(
         });
         throw error;
       }
-    }
+    };
+
+    await runWorkflowWithScheduler(definition, {
+      run: runAction,
+    });
 
     const outputsObject: Record<string, unknown> = {};
     results.forEach((value, key) => {

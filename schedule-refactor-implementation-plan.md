@@ -61,14 +61,14 @@ This document lays out the refactor required to bring our workflow runtime on pa
 
 **Goal:** Replace the sequential loop with an indegree-driven scheduler that executes ready nodes concurrently.
 
-- [ ] Introduce a `WorkflowScheduler` module in the worker:
+- [x] Introduce a `WorkflowScheduler` module in the worker:
   - Maintain `pendingDeps`, `dependents`, `readyQueue`, and per-node status.
   - Dequeue zero-incoming nodes, execute batches via `Promise.allSettled`.
   - Update downstream indegrees as parents finish.
-- [ ] Build `Deferred`/`ResultHandle` so each node’s output is stored as a promise that dependents can await.
+- [x] Build `Deferred`/`ResultHandle` so each node’s output is stored as a promise that dependents can await.
 - [ ] Respect per-node concurrency caps (from component metadata or runner config).
-- [ ] Ensure entrypoint nodes consume runtime inputs without blocking others.
-- [ ] Tests:
+- [x] Ensure entrypoint nodes consume runtime inputs without blocking others.
+- [x] Tests:
   - Unit tests for the scheduler with synthetic components (sleep/deterministic output).
   - Validate parallel timing (e.g., two 500 ms sleeps complete in ~500 ms).
 

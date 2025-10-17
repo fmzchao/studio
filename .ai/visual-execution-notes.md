@@ -74,3 +74,10 @@ Each stores `runId`, `nodeId`, timestamp, payload.
 - Compiler now emits the enriched structure while preserving action order; labels flow into node metadata and dependency counts capture indegree (default edge kind `success`).
 - Worker definition types mirror the new schema (`worker/src/temporal/types.ts`), preparing the runtime for a graph-driven scheduler.
 - Added compiler unit test covering a diamond graph to verify dependency counts and edge metadata; backend test suite passes with the new schema.
+
+## 2025-10-15 · Phase 2 Scheduler Core
+
+- Added `runWorkflowWithScheduler` (worker/src/temporal/workflow-scheduler.ts) implementing an indegree-driven ready queue; batches of ready nodes execute via Promise.all and unlock dependents.
+- `executeWorkflow` now delegates action sequencing to the scheduler while reusing existing trace/log logic; results map stores outputs for downstream nodes.
+- Introduced a concurrency-focused test (`executeWorkflow > executes independent branches in parallel`) that registers a synthetic sleep component and asserts branch start times differ by <60 ms, confirming real parallel execution.
+- Worker integration suite still passes; overall runtime now supports concurrent branch execution without altering component contracts.
