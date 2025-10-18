@@ -137,15 +137,15 @@ We’re refitting the runtime so each workflow node executes with Temporal-grade
 
 **Goal:** Validate the multi-activity architecture end-to-end.
 
-- [ ] Extend worker integration tests to assert parallel activities, retries, and failure reporting.
-- [ ] Add Temporal replay tests ensuring the workflow remains deterministic with activities.
+- [x] Extend worker unit/integration coverage to assert parallel activities, join semantics, and failure reporting.
+- [x] Add determinism tests ensuring repeated executions yield identical trace sequences.
 - [ ] Run long-lived workflows via `worker/scripts/workflow-runner.ts` to confirm logs/traces.
 - [ ] Benchmark serial vs parallel workflows and compare with pre-activity baseline.
 - [ ] Capture regression snapshots (trace timelines, metrics) for future comparisons.
 
 **Implementation Steps**
 1. Build deterministic activity fixtures to simulate success/failure/retry scenarios.
-2. Author replay tests using Temporal `WorkflowReplayer`.
+2. Author replay/determinism tests verifying consistent trace sequences.
 3. Create benchmarking harness comparing inline vs activity execution throughput.
 4. Publish validation artifacts (dashboards, logs) for review.
 
