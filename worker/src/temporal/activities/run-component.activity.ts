@@ -105,6 +105,11 @@ export async function runComponentActivity(
     });
   }
 
+  if (warnings.length > 0) {
+    const missing = warnings.map((warning) => `'${warning.target}'`).join(', ');
+    throw new Error(`Missing required inputs for ${action.ref}: ${missing}`);
+  }
+
   const parsedParams = component.inputSchema.parse(params);
 
   const context = createExecutionContext({

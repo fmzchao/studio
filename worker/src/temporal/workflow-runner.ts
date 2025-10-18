@@ -14,7 +14,11 @@ import type {
   WorkflowRunResult,
   WorkflowLogSink,
 } from './types';
-import { runWorkflowWithScheduler, type WorkflowSchedulerRunContext } from './workflow-scheduler';
+import {
+  runWorkflowWithScheduler,
+  type WorkflowSchedulerRunContext,
+  WorkflowSchedulerError,
+} from './workflow-scheduler';
 import { buildActionParams } from './input-resolver';
 
 export interface ExecuteWorkflowOptions {
@@ -116,6 +120,13 @@ export async function executeWorkflow(
             triggeredBy,
           },
         });
+      }
+
+      if (warnings.length > 0) {
+        const missing = warnings.map((warning) => `'${warning.target}'`).join(', ');
+        throw new WorkflowSchedulerError(
+          `Missing required inputs for ${action.ref}: ${missing}`,
+        );
       }
 
       if (definition.entrypoint.ref === action.ref && request.inputs) {

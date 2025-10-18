@@ -109,15 +109,15 @@ We’re refitting the runtime so each workflow node executes with Temporal-grade
 
 **Goal:** Define deterministic behaviour for merges, failures, and cancellation in the multi-activity world.
 
-- [ ] Implement join strategies (`all`, `any`, `first`, future `quorum`) in the scheduler; ensure activity results feed into join logic.
-- [ ] On activity failure, propagate according to policy (fail workflow, skip dependents, route to error edges).
-- [ ] Add cancellation hooks so upstream cancellation can short-circuit queued activities.
-- [ ] Ensure undefined inputs throw deterministic errors (no silent `warn` + continue).
+- [x] Implement join strategies (`all`, `any`, `first`, future `quorum`) in the scheduler; ensure activity results feed into join logic.
+- [x] On activity failure, propagate according to policy (fail workflow, skip dependents, route to error edges).
+- [x] Add cancellation hooks so upstream cancellation can short-circuit queued activities.
+- [x] Ensure undefined inputs throw deterministic errors (no silent `warn` + continue).
 - [ ] Document per-node retry policy merge rules (component default vs workflow override).
-- [ ] Tests:
-  - Unit tests for join strategies with mocked activity outcomes.
-  - Failure propagation tests (diamonds, scatter/gather) using activity stubs.
-  - Cancellation contract test ensuring downstream activities never start after upstream cancel.
+- [x] Tests:
+  - [x] Unit tests for join strategies with mocked activity outcomes.
+  - [x] Failure propagation tests (diamonds, scatter/gather) using activity stubs.
+  - [x] Cancellation contract test ensuring downstream activities never start after upstream cancel.
 
 **Implementation Steps**
 1. Extend scheduler graph model with join metadata and failure policies.

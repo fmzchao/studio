@@ -18,8 +18,10 @@ export interface WorkflowSchedulerOptions {
 
 interface NodeState {
   strategy: WorkflowJoinStrategy | 'all';
-  remaining: number;
-  triggered: boolean;
+  successParents: Set<string>;
+  failureParents: Set<string>;
+  triggeredBySuccess: boolean;
+  failureTriggered: boolean;
 }
 
 interface ReadyItem {
@@ -32,86 +34,229 @@ export async function runWorkflowWithScheduler(
   options: WorkflowSchedulerOptions,
 ): Promise<void> {
   const { run } = options;
-  const dependents = new Map<string, string[]>();
+
+  const successDependents = new Map<string, string[]>();
+  const failureDependents = new Map<string, string[]>();
+  const successParentsMap = new Map<string, Set<string>>();
+  const failureParentsMap = new Map<string, Set<string>>();
+
+  for (const edge of definition.edges ?? []) {
+    if (edge.kind === 'error') {
+      const children = failureDependents.get(edge.sourceRef) ?? [];
+      children.push(edge.targetRef);
+      failureDependents.set(edge.sourceRef, children);
+
+      const parents = failureParentsMap.get(edge.targetRef) ?? new Set<string>();
+      parents.add(edge.sourceRef);
+      failureParentsMap.set(edge.targetRef, parents);
+    } else {
+      const children = successDependents.get(edge.sourceRef) ?? [];
+      children.push(edge.targetRef);
+      successDependents.set(edge.sourceRef, children);
+
+      const parents = successParentsMap.get(edge.targetRef) ?? new Set<string>();
+      parents.add(edge.sourceRef);
+      successParentsMap.set(edge.targetRef, parents);
+    }
+  }
+
   const nodeStates = new Map<string, NodeState>();
+  const readyQueue: ReadyItem[] = [];
+  const pending = new Set<string>();
 
   for (const action of definition.actions) {
-    const parents = action.dependsOn ?? [];
-    for (const parent of parents) {
-      const list = dependents.get(parent) ?? [];
-      list.push(action.ref);
-      dependents.set(parent, list);
-    }
+    pending.add(action.ref);
+
+    const successParents = new Set(successParentsMap.get(action.ref) ?? []);
+    const failureParents = new Set(failureParentsMap.get(action.ref) ?? []);
 
     const metadata = definition.nodes?.[action.ref];
-    const joinStrategy = metadata?.joinStrategy ?? 'all';
-    const initialRemaining =
-      parents.length === 0
-        ? 0
-        : joinStrategy === 'all'
-        ? parents.length
-        : 1;
+    const strategy: WorkflowJoinStrategy | 'all' = metadata?.joinStrategy ?? 'all';
 
-    nodeStates.set(action.ref, {
-      strategy: joinStrategy,
-      remaining: initialRemaining,
-      triggered: parents.length === 0,
-    });
-  }
+    const state: NodeState = {
+      strategy,
+      successParents,
+      failureParents,
+      triggeredBySuccess: successParents.size === 0,
+      failureTriggered: false,
+    };
 
-  const readyQueue: ReadyItem[] = [];
+    nodeStates.set(action.ref, state);
 
-  for (const [ref, state] of nodeStates.entries()) {
-    if (state.remaining === 0) {
-      readyQueue.push({ ref, context: { joinStrategy: state.strategy } });
+    if (successParents.size === 0 && failureParents.size === 0) {
+      readyQueue.push({ ref: action.ref, context: { joinStrategy: strategy } });
     }
   }
 
-  const totalActions = definition.actions.length;
-  let completedActions = 0;
+  const failedErrors = new Map<string, unknown>();
 
-  while (completedActions < totalActions) {
-    const batch = readyQueue.splice(0);
-    if (batch.length === 0) {
+  while (pending.size > 0) {
+    if (readyQueue.length === 0) {
       throw new WorkflowSchedulerError(
         'Workflow scheduler deadlock: no ready actions while workflow still incomplete',
       );
     }
 
-    const finishedRefs = await Promise.all(
-      batch.map(async ({ ref, context }) => {
-        await run(ref, context);
-        return ref;
-      }),
+    const batch = readyQueue.splice(0);
+    const executions: Array<{ ref: string; context: WorkflowSchedulerRunContext }> = [];
+
+    for (const item of batch) {
+      if (!pending.has(item.ref)) {
+        continue;
+      }
+      pending.delete(item.ref);
+      executions.push(item);
+    }
+
+    if (executions.length === 0) {
+      continue;
+    }
+
+    const settled = await Promise.all(
+      executions.map(({ ref, context }) =>
+        run(ref, context)
+          .then(() => ({
+            ref,
+            context,
+            status: 'fulfilled' as const,
+            completedAt: Date.now(),
+          }))
+          .catch((reason) => ({
+            ref,
+            context,
+            status: 'rejected' as const,
+            reason,
+            completedAt: Date.now(),
+          })),
+      ),
     );
 
-    for (const ref of finishedRefs) {
-      completedActions += 1;
-      const downstream = dependents.get(ref) ?? [];
+    settled.sort((a, b) => a.completedAt - b.completedAt);
 
-      for (const dependent of downstream) {
-        const state = nodeStates.get(dependent);
-        if (!state) {
-          continue;
-        }
+    for (const outcome of settled) {
+      const { ref, context } = outcome;
 
-        if (state.strategy === 'all') {
-          state.remaining = Math.max(0, state.remaining - 1);
-          if (state.remaining === 0) {
-            readyQueue.push({
-              ref: dependent,
-              context: { joinStrategy: state.strategy },
-            });
-          }
-        } else if (!state.triggered) {
-          state.triggered = true;
-          state.remaining = 0;
-          readyQueue.push({
-            ref: dependent,
-            context: { joinStrategy: state.strategy, triggeredBy: ref },
-          });
-        }
+      if (outcome.status === 'fulfilled') {
+        handleSuccess(
+          ref,
+          readyQueue,
+          pending,
+          nodeStates,
+          successDependents,
+          definition.nodes ?? {},
+        );
+      } else {
+        failedErrors.set(ref, outcome.reason);
+        handleFailure(
+          ref,
+          context.triggeredBy ?? ref,
+          readyQueue,
+          pending,
+          nodeStates,
+          successDependents,
+          failureDependents,
+          failedErrors,
+          definition.nodes ?? {},
+        );
       }
+    }
+  }
+
+  if (failedErrors.size > 0) {
+    const aggregate = new WorkflowSchedulerError('One or more workflow actions failed');
+    (aggregate as any).causes = failedErrors;
+    throw aggregate;
+  }
+}
+
+function handleSuccess(
+  ref: string,
+  readyQueue: ReadyItem[],
+  pending: Set<string>,
+  nodeStates: Map<string, NodeState>,
+  successDependents: Map<string, string[]>,
+  nodeMetadata: WorkflowDefinition['nodes'],
+) {
+  const children = successDependents.get(ref) ?? [];
+  for (const child of children) {
+    if (!pending.has(child)) {
+      continue;
+    }
+
+    const state = nodeStates.get(child);
+    if (!state || state.failureTriggered) {
+      continue;
+    }
+
+    state.successParents.delete(ref);
+
+    if (state.strategy === 'all') {
+      if (!state.triggeredBySuccess && state.successParents.size === 0) {
+        state.triggeredBySuccess = true;
+        readyQueue.push({ ref: child, context: { joinStrategy: state.strategy } });
+      }
+    } else if (!state.triggeredBySuccess) {
+      state.triggeredBySuccess = true;
+      readyQueue.push({
+        ref: child,
+        context: { joinStrategy: state.strategy, triggeredBy: ref },
+      });
+    }
+  }
+}
+
+function handleFailure(
+  ref: string,
+  triggerSource: string,
+  readyQueue: ReadyItem[],
+  pending: Set<string>,
+  nodeStates: Map<string, NodeState>,
+  successDependents: Map<string, string[]>,
+  failureDependents: Map<string, string[]>,
+  failedErrors: Map<string, unknown>,
+  nodeMetadata: WorkflowDefinition['nodes'],
+) {
+  const queue: Array<{ ref: string; source: string }> = [{ ref, source: triggerSource }];
+  const seen = new Set<string>();
+
+  while (queue.length > 0) {
+    const { ref: current, source } = queue.shift()!;
+    if (seen.has(current)) {
+      continue;
+    }
+    seen.add(current);
+
+    const state = nodeStates.get(current);
+    if (state) {
+      state.failureTriggered = true;
+    }
+
+    // Schedule failure dependents (error edges)
+    const failureChildren = failureDependents.get(current) ?? [];
+    for (const child of failureChildren) {
+      const childState = nodeStates.get(child);
+      if (!childState || childState.failureTriggered) {
+        continue;
+      }
+      childState.failureTriggered = true;
+      readyQueue.push({
+        ref: child,
+        context: { joinStrategy: childState.strategy, triggeredBy: current },
+      });
+    }
+
+    // Cancel success dependents and propagate failure downstream
+    const successChildren = successDependents.get(current) ?? [];
+    for (const child of successChildren) {
+      if (!pending.has(child)) {
+        continue;
+      }
+      pending.delete(child);
+      failedErrors.set(
+        child,
+        new WorkflowSchedulerError(`Cancelled due to upstream failure at ${current}`),
+      );
+      queue.push({ ref: child, source: current });
     }
   }
 }
