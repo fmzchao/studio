@@ -18,6 +18,7 @@ import {
   FileStorageAdapter,
   LokiLogAdapter,
   LokiLogClient,
+  SecretsAdapter,
   TraceAdapter,
 } from '../../adapters';
 import * as schema from '../../adapters/schema';
@@ -72,6 +73,7 @@ async function main() {
   // Create service adapters (implementing SDK interfaces)
   const storageAdapter = new FileStorageAdapter(minioClient, db, minioBucketName);
   const traceAdapter = new TraceAdapter(db);
+  const secretsAdapter = new SecretsAdapter();
 
   const lokiUrl = process.env.LOKI_URL;
   let logAdapter: LokiLogAdapter | undefined;
@@ -97,6 +99,7 @@ async function main() {
     storage: storageAdapter,
     trace: traceAdapter,
     logs: logAdapter,
+    secrets: secretsAdapter,
   });
 
   console.log(`✅ Service adapters initialized`);
