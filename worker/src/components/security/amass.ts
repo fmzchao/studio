@@ -364,7 +364,7 @@ printf '{"subdomains":%s,"rawOutput":"%s","domainCount":%d,"subdomainCount":%d,"
     },
     isLatest: true,
     deprecated: false,
-    example: 'Run `amass enum -d example.com -brute -alts` to aggressively enumerate subdomains with brute force and alteration engines enabled.',
+    example: '`amass enum -d example.com -brute -alts` - Aggressively enumerates subdomains with brute force and alteration engines enabled.',
     inputs: [
       {
         id: 'domains',
