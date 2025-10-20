@@ -108,3 +108,17 @@
 - Suggest concrete follow-ups (information needed, commands to rerun, potential fixes).
 - CORE-enabled agents: store the blocker in CORE Memory.  
   Non-CORE agents: record the blocker in a shared doc or ticket so the next teammate can resume quickly.
+
+## MDFiler
+
+### DNSX Resolver Component (`worker/src/components/security/dnsx.ts`)
+- Container: docker runner locks to `projectdiscovery/dnsx:latest` with `sh -c` entrypoint, `bridge` networking, and an explicit `$HOME` to keep dnsx happy in ephemeral containers.
+- Input marshaling: the shell stub reads the JSON payload from stdin, extracts `domains`, `recordTypes`, `resolvers`, `retryCount`, and `rateLimit` via `sed`, and materialises them into temp files. Record types default to `A`, resolver lines are written to a file only when provided, and every temp file is cleaned with `trap`.
+- Runtime flags: record type switches are mapped manually (`A` → `-a`, `AAAA` → `-aaaa`, etc.), retry and rate limit parameters are appended when they are ≥1, and dnsx is always invoked with `-json -resp -silent` so we get NDJSON back for parsing.
+- Error surfacing: non-zero dnsx exits funnel stderr into a JSON object with `__error__` flag so the TypeScript layer can bubble the message without crashing the workflow.
+- Raw output handling: `execute` always awaits `runComponentWithRunner`; if the runner hands back an object (the docker helper occasionally serialises JSON), we stringify it before parsing and coerce `undefined/null` to an empty string.
+- Parsing + normalisation: NDJSON lines are validated with `dnsxLineSchema`. We derive a canonical `answers` map per record, coerce TTLs that arrive as strings, and dedupe record types/resolvers by combining requested values with what dnsx actually returned.
+- Fallback path: when the output is not valid JSON, we emit synthetic result rows keyed by the raw line, attach the raw output, and report a friendly parse error so downstream steps can still show “something” instead of silently failing.
+- Runner contract: `workflow-runner.ts` must call `component.execute` (not `runComponentWithRunner` directly) so this normalisation logic always runs; calling the runner directly bypasses the parsing guardrails and breaks downstream consumers.
+- Telemetry: we log the domain counts up front, emit progress events (`Running dnsx for … domains`), and propagate any parse errors through the `errors` array for Loki/search indexing.
+- Validation: unit tests mock the runner to cover structured JSON, raw fallback, and runner metadata; the integration test executes dnsx in Docker with a 180s timeout, so keep the daemon available when running locally.
