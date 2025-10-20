@@ -6,6 +6,7 @@ import { ArrowLeft, Save, Play, StopCircle, PencilLine, MonitorPlay, PanelLeftCl
 import { useExecutionStore } from '@/store/executionStore'
 import { useWorkflowStore } from '@/store/workflowStore'
 import { useWorkflowUiStore } from '@/store/workflowUiStore'
+import { cn } from '@/lib/utils'
 
 interface TopBarProps {
   workflowId?: string
@@ -90,11 +91,18 @@ export function TopBar({ onRun, onSave }: TopBarProps) {
             className="h-9 px-3 gap-2 rounded-none"
             onClick={() => setMode('design')}
             aria-pressed={mode === 'design'}
-            >
+          >
             <PencilLine className="h-4 w-4" />
             <span className="flex flex-col leading-tight text-left">
               <span className="text-xs font-semibold">Design</span>
-              <span className="text-[10px] text-muted-foreground">Edit workflow</span>
+              <span
+                className={cn(
+                  'text-[10px]',
+                  mode === 'design' ? 'text-primary-foreground/80' : 'text-muted-foreground'
+                )}
+              >
+                Edit workflow
+              </span>
             </span>
           </Button>
           <Button
@@ -103,11 +111,18 @@ export function TopBar({ onRun, onSave }: TopBarProps) {
             className="h-9 px-3 gap-2 rounded-none border-l border-border/50"
             onClick={() => setMode('review')}
             aria-pressed={mode === 'review'}
-            >
+          >
             <MonitorPlay className="h-4 w-4" />
             <span className="flex flex-col leading-tight text-left">
               <span className="text-xs font-semibold">Review</span>
-              <span className="text-[10px] text-muted-foreground">Inspect executions</span>
+              <span
+                className={cn(
+                  'text-[10px]',
+                  mode === 'review' ? 'text-primary-foreground/80' : 'text-muted-foreground'
+                )}
+              >
+                Inspect executions
+              </span>
             </span>
           </Button>
         </div>
