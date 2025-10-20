@@ -1,6 +1,8 @@
 import { useMemo } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { useExecutionTimelineStore } from '@/store/executionTimelineStore'
+import { useWorkflowUiStore } from '@/store/workflowUiStore'
+import { useWorkflowStore } from '@/store/workflowStore'
 import { cn } from '@/lib/utils'
 
 const STATUS_VARIANT: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
@@ -29,12 +31,26 @@ export function ReviewRunBanner() {
     playbackMode,
     isPlaying,
   } = useExecutionTimelineStore()
+  const { mode } = useWorkflowUiStore()
+  const { metadata } = useWorkflowStore()
 
   const selectedRun = useMemo(() => (
     availableRuns.find(run => run.id === selectedRunId)
   ), [availableRuns, selectedRunId])
 
+  if (mode !== 'review') {
+    return null
+  }
+
   if (!selectedRun) {
+    return null
+  }
+
+  if (!metadata.id) {
+    return null
+  }
+
+  if (selectedRun.workflowId && selectedRun.workflowId !== metadata.id) {
     return null
   }
 
@@ -70,4 +86,3 @@ export function ReviewRunBanner() {
     </div>
   )
 }
-
