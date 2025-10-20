@@ -71,13 +71,48 @@ export function RunWorkflowDialog({
     }
   }
 
-  const handleInputChange = (inputId: string, value: unknown, type: string) => {
+  const handleInputChange = (
+    inputId: string,
+    value: unknown,
+    type: RuntimeInputDefinition['type']
+  ) => {
     setErrors(prev => ({ ...prev, [inputId]: '' }))
     
     // Parse based on type
     let parsedValue = value
     if (type === 'number') {
       parsedValue = value ? parseFloat(value as string) : undefined
+    } else if (type === 'array') {
+      const textValue = typeof value === 'string' ? value : ''
+      const trimmedValue = textValue.trim()
+
+      if (trimmedValue === '') {
+        parsedValue = undefined
+      } else {
+        try {
+          const parsed = JSON.parse(trimmedValue)
+          if (Array.isArray(parsed)) {
+            parsedValue = parsed
+          } else {
+            throw new Error('Value is not an array')
+          }
+        } catch {
+          const fallback = textValue
+            .split(',')
+            .map(item => item.trim())
+            .filter(item => item.length > 0)
+
+          if (fallback.length === 0) {
+            setErrors(prev => ({
+              ...prev,
+              [inputId]: 'Enter comma-separated values or a JSON array',
+            }))
+            return
+          }
+
+          parsedValue = fallback
+        }
+      }
     } else if (type === 'json') {
       try {
         parsedValue = value ? JSON.parse(value as string) : undefined
@@ -175,6 +210,32 @@ export function RunWorkflowDialog({
           </div>
         )
 
+      case 'array':
+        return (
+          <div className="space-y-2">
+            <Label htmlFor={input.id}>
+              {input.label}
+              {input.required && <span className="text-red-500 ml-1">*</span>}
+            </Label>
+            <Textarea
+              id={input.id}
+              placeholder='value1, value2 or ["value1", "value2"]'
+              onChange={(e) => handleInputChange(input.id, e.target.value, input.type)}
+              className={hasError ? 'border-red-500 font-mono' : 'font-mono'}
+              rows={3}
+            />
+            <p className="text-xs text-muted-foreground">
+              Enter comma-separated values or provide a JSON array to pass structured data.
+            </p>
+            {input.description && (
+              <p className="text-xs text-muted-foreground">{input.description}</p>
+            )}
+            {hasError && (
+              <p className="text-xs text-red-500">{errors[input.id]}</p>
+            )}
+          </div>
+        )
+
       case 'number':
         return (
           <div className="space-y-2">
@@ -257,4 +318,3 @@ export function RunWorkflowDialog({
     </Dialog>
   )
 }
-
