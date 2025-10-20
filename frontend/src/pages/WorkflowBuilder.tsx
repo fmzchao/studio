@@ -153,8 +153,12 @@ function WorkflowBuilderContent() {
             : runtimeInputsParam
 
           if (Array.isArray(parsedInputs) && parsedInputs.length > 0) {
+            const normalizedInputs = parsedInputs.map((input: any) => ({
+              ...input,
+              type: input.type === 'string' ? 'text' : input.type,
+            }))
             // Show dialog to collect runtime inputs
-            setRuntimeInputs(parsedInputs)
+            setRuntimeInputs(normalizedInputs)
             setRunDialogOpen(true)
             return
           }
@@ -409,7 +413,6 @@ function WorkflowBuilderContent() {
       <RunWorkflowDialog
         open={runDialogOpen}
         onOpenChange={setRunDialogOpen}
-        workflowId={metadata.id || ''}
         runtimeInputs={runtimeInputs}
         onRun={executeWorkflow}
       />

@@ -14,10 +14,17 @@ import { Textarea } from '@/components/ui/textarea'
 import { Play, Loader2 } from 'lucide-react'
 import { api } from '@/services/api'
 
+type RuntimeInputType = 'file' | 'text' | 'number' | 'json' | 'array' | 'string'
+type NormalizedRuntimeInputType = Exclude<RuntimeInputType, 'string'>
+
+const normalizeRuntimeInputType = (
+  type: RuntimeInputType,
+): NormalizedRuntimeInputType => (type === 'string' ? 'text' : type)
+
 interface RuntimeInputDefinition {
   id: string
   label: string
-  type: 'file' | 'text' | 'number' | 'json' | 'array'
+  type: RuntimeInputType
   required: boolean
   description?: string
 }
@@ -25,7 +32,6 @@ interface RuntimeInputDefinition {
 interface RunWorkflowDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  workflowId: string
   runtimeInputs: RuntimeInputDefinition[]
   onRun: (inputs: Record<string, unknown>) => void
 }
@@ -33,7 +39,6 @@ interface RunWorkflowDialogProps {
 export function RunWorkflowDialog({
   open,
   onOpenChange,
-  workflowId: _workflowId,
   runtimeInputs,
   onRun,
 }: RunWorkflowDialogProps) {
@@ -74,15 +79,16 @@ export function RunWorkflowDialog({
   const handleInputChange = (
     inputId: string,
     value: unknown,
-    type: RuntimeInputDefinition['type']
+    type: RuntimeInputType,
   ) => {
     setErrors(prev => ({ ...prev, [inputId]: '' }))
+    const normalizedType = normalizeRuntimeInputType(type)
     
     // Parse based on type
     let parsedValue = value
-    if (type === 'number') {
+    if (normalizedType === 'number') {
       parsedValue = value ? parseFloat(value as string) : undefined
-    } else if (type === 'array') {
+    } else if (normalizedType === 'array') {
       const textValue = typeof value === 'string' ? value : ''
       const trimmedValue = textValue.trim()
 
@@ -113,7 +119,7 @@ export function RunWorkflowDialog({
           parsedValue = fallback
         }
       }
-    } else if (type === 'json') {
+    } else if (normalizedType === 'json') {
       try {
         parsedValue = value ? JSON.parse(value as string) : undefined
       } catch (error) {
@@ -149,8 +155,9 @@ export function RunWorkflowDialog({
   const renderInput = (input: RuntimeInputDefinition) => {
     const hasError = !!errors[input.id]
     const isUploading = uploading[input.id]
+    const inputType = normalizeRuntimeInputType(input.type)
 
-    switch (input.type) {
+    switch (inputType) {
       case 'file':
         return (
           <div className="space-y-2">
@@ -197,7 +204,7 @@ export function RunWorkflowDialog({
             <Textarea
               id={input.id}
               placeholder='{"key": "value"}'
-              onChange={(e) => handleInputChange(input.id, e.target.value, input.type)}
+              onChange={(e) => handleInputChange(input.id, e.target.value, inputType)}
               className={hasError ? 'border-red-500' : ''}
               rows={4}
             />
@@ -247,7 +254,7 @@ export function RunWorkflowDialog({
               id={input.id}
               type="number"
               placeholder="Enter a number"
-              onChange={(e) => handleInputChange(input.id, e.target.value, input.type)}
+              onChange={(e) => handleInputChange(input.id, e.target.value, inputType)}
               className={hasError ? 'border-red-500' : ''}
             />
             {input.description && (
@@ -271,7 +278,7 @@ export function RunWorkflowDialog({
               id={input.id}
               type="text"
               placeholder="Enter text"
-              onChange={(e) => handleInputChange(input.id, e.target.value, input.type)}
+              onChange={(e) => handleInputChange(input.id, e.target.value, inputType)}
               className={hasError ? 'border-red-500' : ''}
             />
             {input.description && (

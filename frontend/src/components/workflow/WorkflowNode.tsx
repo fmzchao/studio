@@ -101,12 +101,19 @@ export const WorkflowNode = memo(({ data, selected, id }: NodeProps<NodeData>) =
         : nodeData.parameters.runtimeInputs
 
       if (Array.isArray(runtimeInputs) && runtimeInputs.length > 0) {
-        effectiveOutputs = runtimeInputs.map((input: any) => ({
-          id: input.id,
-          label: input.label,
-          type: input.type === 'file' ? 'string' : input.type,
-          description: input.description || `Runtime input: ${input.label}`,
-        }))
+        effectiveOutputs = runtimeInputs.map((input: any) => {
+          const normalizedType = input.type === 'string' ? 'text' : input.type
+          const outputType =
+            normalizedType === 'file' || normalizedType === 'text'
+              ? 'string'
+              : normalizedType
+          return {
+            id: input.id,
+            label: input.label,
+            type: outputType,
+            description: input.description || `Runtime input: ${input.label}`,
+          }
+        })
       }
     } catch (error) {
       console.error('Failed to parse runtimeInputs:', error)

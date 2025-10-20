@@ -113,12 +113,19 @@ export function validateConnection(
           : runtimeInputsParam
         
         if (Array.isArray(runtimeInputs) && runtimeInputs.length > 0) {
-          sourceOutputs = runtimeInputs.map((input: any) => ({
-            id: input.id,
-            label: input.label,
-            type: input.type === 'file' ? 'string' : input.type,
-            description: input.description || `Runtime input: ${input.label}`,
-          }))
+          sourceOutputs = runtimeInputs.map((input: any) => {
+            const normalizedType = input.type === 'string' ? 'text' : input.type
+            const outputType =
+              normalizedType === 'file' || normalizedType === 'text'
+                ? 'string'
+                : normalizedType
+            return {
+              id: input.id,
+              label: input.label,
+              type: outputType,
+              description: input.description || `Runtime input: ${input.label}`,
+            }
+          })
         }
       } catch (error) {
         console.error('Failed to parse runtimeInputs for validation:', error)

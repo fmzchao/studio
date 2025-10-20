@@ -41,6 +41,10 @@ const inputSchema = z.object({
     .string()
     .default(DEFAULT_BASE_URL)
     .describe('Optional override for the OpenAI-compatible API base URL.'),
+  apiKey: z
+    .string()
+    .optional()
+    .describe('Explicit API key override for the OpenAI-compatible provider. Leave blank to use environment configuration.'),
 });
 
 type Input = z.infer<typeof inputSchema>;
@@ -130,6 +134,16 @@ const definition: ComponentDefinition<Input, Output> = {
         ],
       },
       {
+        id: 'apiKey',
+        label: 'API Key Override',
+        type: 'text',
+        required: false,
+        default: '',
+        placeholder: 'sk-...',
+        description: 'Optional API key to use for this invocation.',
+        helpText: 'Leave blank to use the worker-level OPENAI_API_KEY environment variable.',
+      },
+      {
         id: 'temperature',
         label: 'Temperature',
         type: 'number',
@@ -152,7 +166,7 @@ const definition: ComponentDefinition<Input, Output> = {
       {
         id: 'apiBaseUrl',
         label: 'API Base URL',
-        type: 'string',
+        type: 'text',
         required: false,
         default: DEFAULT_BASE_URL,
         description:
@@ -161,17 +175,22 @@ const definition: ComponentDefinition<Input, Output> = {
     ],
   },
   async execute(params, context) {
-    const { systemPrompt, userPrompt, model, temperature, maxTokens, apiBaseUrl } = params;
+  const { systemPrompt, userPrompt, model, temperature, maxTokens, apiBaseUrl, apiKey } = params;
 
-    if (!OPENAI_API_KEY || OPENAI_API_KEY === HARDCODED_API_KEY) {
-      throw new Error('OpenAI API key is not configured. Update OPENAI_API_KEY or HARDCODED_API_KEY.');
-    }
+  const overrideApiKey = apiKey?.trim() ?? '';
+  const effectiveApiKey = overrideApiKey.length > 0 ? overrideApiKey : OPENAI_API_KEY;
 
-    const baseURL = apiBaseUrl?.trim() ? apiBaseUrl.trim() : process.env.OPENAI_BASE_URL;
-    const client = createOpenAI({
-      apiKey: OPENAI_API_KEY,
-      ...(baseURL ? { baseURL } : {}),
-    });
+  if (!effectiveApiKey || effectiveApiKey === HARDCODED_API_KEY) {
+    throw new Error(
+      'OpenAI API key is not configured. Supply one via the API Key Override parameter or set OPENAI_API_KEY.',
+    );
+  }
+
+  const baseURL = apiBaseUrl?.trim() ? apiBaseUrl.trim() : process.env.OPENAI_BASE_URL;
+  const client = createOpenAI({
+    apiKey: effectiveApiKey,
+    ...(baseURL ? { baseURL } : {}),
+  });
 
     context.logger.info(`[OpenAIChat] Calling model ${model}`);
     context.emitProgress('Contacting OpenAI-compatible chat completion endpoint...');

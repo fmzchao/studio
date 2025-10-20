@@ -2,13 +2,24 @@ import { z } from 'zod';
 import { componentRegistry, ComponentDefinition } from '@shipsec/component-sdk';
 
 // Runtime input definition schema
-const runtimeInputDefinitionSchema = z.object({
+const runtimeInputDefinitionSchema = z.preprocess((value) => {
+  if (typeof value === 'object' && value !== null && 'type' in value) {
+    const typed = value as Record<string, unknown>;
+    if (typed.type === 'string') {
+      return {
+        ...typed,
+        type: 'text',
+      };
+    }
+  }
+  return value;
+}, z.object({
   id: z.string().describe('Unique identifier for this input'),
   label: z.string().describe('Display label for the input field'),
   type: z.enum(['file', 'text', 'number', 'json', 'array']).describe('Type of input data'),
   required: z.boolean().default(true).describe('Whether this input is required'),
   description: z.string().optional().describe('Help text for the input'),
-});
+}));
 
 const inputSchema = z.object({
   runtimeInputs: z.array(runtimeInputDefinitionSchema).default([]).describe('Define inputs to collect when workflow is triggered'),

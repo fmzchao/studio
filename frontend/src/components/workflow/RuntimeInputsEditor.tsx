@@ -1,3 +1,4 @@
+import { useEffect, useMemo } from 'react'
 import { Plus, Trash2, GripVertical } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -11,10 +12,16 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 
+type RuntimeInputType = 'file' | 'text' | 'number' | 'json' | 'array' | 'string'
+type NormalizedRuntimeInputType = Exclude<RuntimeInputType, 'string'>
+
+const normalizeRuntimeInputType = (type: RuntimeInputType): NormalizedRuntimeInputType =>
+  type === 'string' ? 'text' : type
+
 interface RuntimeInput {
   id: string
   label: string
-  type: 'file' | 'text' | 'number' | 'json' | 'array'
+  type: RuntimeInputType
   required: boolean
   description?: string
 }
@@ -25,7 +32,27 @@ interface RuntimeInputsEditorProps {
 }
 
 export function RuntimeInputsEditor({ value, onChange }: RuntimeInputsEditorProps) {
-  const inputs = Array.isArray(value) ? value : []
+  const rawInputs = Array.isArray(value) ? value : []
+  const normalizedInputs = useMemo(
+    () => rawInputs.map(input => ({
+      ...input,
+      type: normalizeRuntimeInputType(input.type),
+    })),
+    [rawInputs],
+  )
+
+  const hasLegacyType = useMemo(
+    () => rawInputs.some(input => input.type === 'string'),
+    [rawInputs],
+  )
+
+  useEffect(() => {
+    if (hasLegacyType) {
+      onChange(normalizedInputs)
+    }
+  }, [hasLegacyType, normalizedInputs, onChange])
+
+  const inputs = normalizedInputs
 
   const addInput = () => {
     const newInput: RuntimeInput = {
