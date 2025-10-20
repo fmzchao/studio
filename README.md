@@ -24,6 +24,14 @@ curl -f http://localhost:8081/health || echo "Temporal UI not ready yet"
 ## Install bun
 `bun install`
 
+## Apply Database Migrations
+
+```bash
+bun run migrate
+```
+
+This wraps `bun --cwd backend x drizzle-kit push` so you do not have to `cd` into the backend. The backend dev server now runs this automatically (`bun run dev:backend`, `pm2 start pm2.config.cjs`, and `bun --cwd backend run dev` all invoke the migration step first), but running it manually is a quick sanity check after pulling schema changes.
+
 ## Start API & Worker with PM2
 
 The `pm2.config.cjs` file registers the backend API and Temporal worker processes.
@@ -72,6 +80,7 @@ docker volume ls -q | grep shipsec | xargs -r docker volume rm
 
 - **Temporal not reachable**: ensure Docker Desktop is running and `docker compose ps` shows the `temporal` service as `healthy`.
 - **PM2 processes crash immediately**: confirm environment variables match the Docker services (Postgres password, Temporal namespace).
+- **Backend exits with “Database schema incomplete”**: the new migration guard detected missing tables. Run `bun run migrate` to apply Drizzle migrations and restart the backend.
 - **Logs required for debugging**: use `timeout` with `pm2 logs` so you can bail out automatically in CI scripts.
 - **Clean rebuild**: `docker compose down --volumes` followed by `docker compose up -d` gives a pristine Temporal/Postgres cluster.
 
