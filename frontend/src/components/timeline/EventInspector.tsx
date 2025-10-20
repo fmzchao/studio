@@ -126,7 +126,7 @@ export function EventInspector({ className }: EventInspectorProps) {
       hour: '2-digit',
       minute: '2-digit',
       second: '2-digit',
-      fractionalSecondDigits: 3
+      fractionalSecondDigits: 3,
     })
   }
 
@@ -146,7 +146,7 @@ export function EventInspector({ className }: EventInspectorProps) {
   }
 
   return (
-    <div className={cn('flex h-full flex-col', className)}>
+    <div className={cn('flex h-full min-h-0 flex-col', className)}>
       <div className="border-b px-4 py-3">
         <h3 className="text-sm font-semibold">Event Inspector</h3>
         <p className="mt-1 text-xs text-muted-foreground">
@@ -162,7 +162,7 @@ export function EventInspector({ className }: EventInspectorProps) {
         </p>
       </div>
 
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto [scrollbar-width:thin] [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-muted-foreground/40">
         {displayEvents.length === 0 ? (
           <div className="px-4 py-8 text-xs text-muted-foreground">
             No events available.

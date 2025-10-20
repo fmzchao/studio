@@ -317,7 +317,7 @@ function WorkflowBuilderContent() {
                 className="absolute top-0 left-0 h-full w-2 cursor-col-resize border-l border-transparent hover:border-primary/40"
                 onMouseDown={handleInspectorResizeStart}
               />
-              <div className="h-full pl-2">
+              <div className="flex h-full min-h-0 pl-2 overflow-hidden">
                 <ReviewInspector />
               </div>
             </aside>

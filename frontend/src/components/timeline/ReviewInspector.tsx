@@ -41,7 +41,7 @@ export function ReviewInspector() {
   ) : null
 
   return (
-    <aside className="w-[360px] border-l bg-muted/30 backdrop-blur flex flex-col">
+    <aside className="flex h-full min-h-0 w-full min-w-[320px] flex-col overflow-hidden border-l bg-muted/30 backdrop-blur">
       <div className="border-b p-3 space-y-3 bg-background/70">
         <div className="flex items-center justify-between">
           <RunSelector />
@@ -100,11 +100,11 @@ export function ReviewInspector() {
 
       <div className="flex-1 min-h-0">
         {inspectorTab === 'events' && (
-          <div className="flex flex-col h-full">
+          <div className="flex flex-col h-full min-h-0">
             <div className="flex-shrink-0 border-b bg-background/60">
               <ExecutionTimeline />
             </div>
-            <div className="flex-1 overflow-hidden">
+            <div className="flex-1 min-h-0">
               <EventInspector className="h-full" />
             </div>
           </div>
