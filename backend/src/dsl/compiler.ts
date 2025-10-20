@@ -1,5 +1,6 @@
 import { WorkflowGraph } from '../workflows/dto/workflow-graph.dto';
-// Import component registry from worker package
+// Ensure all worker components are registered before accessing the registry
+import '../../../worker/src/components';
 import { componentRegistry } from '@shipsec/component-sdk';
 import { WorkflowAction, WorkflowDefinition, WorkflowDefinitionSchema } from './types';
 
