@@ -4,54 +4,119 @@ This repository powers ShipSec Studio: a Temporal-backed, component-driven workf
 
 ## Prerequisites
 
-- Docker (minimum 8 GB RAM allocated to Docker Desktop or your runtime).
-- [Bun](https://bun.sh) and `pm2` installed globally (`npm install -g pm2`).
-- `.env` created from `.env.example` with credentials for Temporal, Postgres, MinIO, and Loki.
-- Node modules installed: `bun install` at the repo root.
+Before starting, ensure you have:
 
-## Bring Up Core Infrastructure
+- **Docker** (minimum 8 GB RAM allocated to Docker Desktop)
+- **Bun** runtime ([install here](https://bun.sh))
+- **PM2** process manager: `npm install -g pm2`
+- Ports `5433`, `7233`, `8081`, `9000`, `9001`, and `3100` available
 
-Temporal, Postgres, MinIO, and Loki live in the root `docker-compose.yml`.
+## Initial Setup (First Time Only)
+
+Follow these steps in order when setting up the project for the first time:
+
+### 1. Install Dependencies
 
 ```bash
-docker compose up -d
-
-# Quick health checks
-docker compose ps
-curl -f http://localhost:8081/health || echo "Temporal UI not ready yet"
+bun install
 ```
 
-## Install bun
-`bun install`
+### 2. Configure Environment Variables
 
-## Apply Database Migrations
+Create `.env` files from examples:
+
+```bash
+# Backend environment
+cp backend/.env.example backend/.env
+
+# Worker environment
+cp worker/.env.example worker/.env
+
+# Frontend environment
+cp frontend/.env.example frontend/.env
+```
+
+Adjust values in the `.env` files if needed (defaults work for local development).
+
+### 3. Start Docker Infrastructure
+
+```bash
+# Start Postgres, Temporal, MinIO, and Loki
+docker compose up -d
+
+# Verify all services are healthy
+docker compose ps
+```
+
+### 4. Create Temporal Namespace
+
+This is a **one-time setup** step. Run this only:
+- On first setup
+- After `docker compose down --volumes` (which deletes the database)
+
+```bash
+docker compose --profile setup up -d
+```
+
+This creates the `shipsec-dev` namespace in Temporal. Verify it worked:
+
+```bash
+docker logs shipsec-temporal-setup
+```
+
+### 5. Apply Database Migrations
 
 ```bash
 bun run migrate
 ```
 
-This wraps `bun --cwd backend x drizzle-kit push` so you do not have to `cd` into the backend. The backend dev server now runs this automatically (`bun run dev:backend`, `pm2 start pm2.config.cjs`, and `bun --cwd backend run dev` all invoke the migration step first), but running it manually is a quick sanity check after pulling schema changes.
+This creates the required Postgres schema for the backend.
 
-## Start API & Worker with PM2
+> **Note**: The migration command uses the `DATABASE_URL` from `backend/.env`, which is automatically loaded by the migration script.
 
-The `pm2.config.cjs` file registers the backend API and Temporal worker processes.
+---
+
+## Daily Development
+
+For regular development after initial setup:
+
+### 1. Start Docker Services
+
+```bash
+# Start infrastructure (without setup profile)
+docker compose up -d
+
+# Verify services are running
+docker compose ps
+```
+
+### 2. Start Backend & Worker
 
 ```bash
 pm2 start pm2.config.cjs
 pm2 status
 
-# Inspect logs without getting stuck in follow mode
+# Check logs (use timeout to avoid hanging)
 timeout 5s pm2 logs backend --lines 50 || true
 timeout 5s pm2 logs worker --lines 50 || true
 ```
 
-> Always wrap `pm2 logs` with `timeout` (or use `--nostream`) so scripts do not hang when tailing output.
+> **Note**: The backend automatically runs migrations on startup, but you can run `bun run migrate` manually after pulling schema changes.
 
-To start the frontend :
-```sh
+### 3. Start Frontend
+
+```bash
 cd frontend
 bun run dev
 ```
+
+The application will be available at:
+- **Frontend**: http://localhost:5173
+- **Backend API**: http://localhost:3001
+- **Temporal UI**: http://localhost:8081
+- **MinIO Console**: http://localhost:9001
+
+---
 
 ## Running Tests and Quality Gates
 
@@ -59,33 +124,95 @@ bun run dev
 # Full monorepo tests
 bun run test
 
-# Optional targeted suites
+# Targeted test suites
 bun run --filter backend test
+bun run --filter worker test
+
+# Code quality checks
 bun run lint
 bun run typecheck
+
 # Migration smoke test (runs migrations inside a rollback transaction)
 bun --cwd backend run migration:smoke
 ```
 
+---
+
 ## Shutting Down
 
 ```bash
+# Stop application processes
 pm2 stop all
+
+# Stop Docker services
 docker compose down
-# Optional: remove persistent volumes for a clean slate
-docker volume ls -q | grep shipsec | xargs -r docker volume rm
+
+# Optional: Remove persistent volumes for a clean slate
+docker compose down --volumes
 ```
+
+> **Note**: After `docker compose down --volumes`, you'll need to re-run the Temporal namespace setup (step 4 in Initial Setup).
+
+---
 
 ## Troubleshooting Tips
 
-- **Temporal not reachable**: ensure Docker Desktop is running and `docker compose ps` shows the `temporal` service as `healthy`.
-- **PM2 processes crash immediately**: confirm environment variables match the Docker services (Postgres password, Temporal namespace).
-- **Backend exits with “Database schema incomplete”**: the new migration guard detected missing tables. Run `bun run migrate` to apply Drizzle migrations and restart the backend.
-- **Logs required for debugging**: use `timeout` with `pm2 logs` so you can bail out automatically in CI scripts.
-- **Clean rebuild**: `docker compose down --volumes` followed by `docker compose up -d` gives a pristine Temporal/Postgres cluster.
+### Temporal Namespace Not Found Error
 
-## Execution Contract
+If you see `Namespace shipsec-dev is not found`:
 
-Formal schemas for workflow run status and trace events live in [`docs/execution-contract.md`](docs/execution-contract.md) and are exported via the `@shipsec/shared` package (`packages/shared`). Backend and frontend code should consume the shared Zod schemas instead of redefining enums locally.
+```bash
+# Re-run the one-time setup
+docker compose --profile setup up -d
+```
 
-For deeper architectural context, see `ARCHITECTURE.md`, `.ai/implementation-plan.md`, and the docs in the `.ai/` folder.
+### Temporal Not Reachable
+
+Ensure Docker is running and Temporal is healthy:
+
+```bash
+docker compose ps
+# Look for "healthy" status on the temporal service
+```
+
+### PM2 Processes Crash Immediately
+
+1. Check environment variables match Docker services (Postgres password, Temporal namespace)
+2. Ensure Temporal namespace exists: `docker logs shipsec-temporal-setup`
+3. Verify migrations have run: `bun run migrate`
+
+### Database Schema Incomplete
+
+The migration guard detected missing tables:
+
+```bash
+bun run migrate
+pm2 restart all
+```
+
+### Clean Rebuild
+
+For a completely fresh start:
+
+```bash
+# Stop everything
+pm2 stop all
+docker compose down --volumes
+
+# Remove all ShipSec volumes
+docker volume ls -q | grep shipsec | xargs -r docker volume rm
+
+# Start from scratch
+docker compose up -d
+docker compose --profile setup up -d
+bun run migrate
+pm2 start pm2.config.cjs
+```
+
+---
+
+## Additional Resources
+
+- **Execution Contract**: Formal schemas for workflow run status and trace events live in [`docs/execution-contract.md`](docs/execution-contract.md)
+- **Shared Types**: The `@shipsec/shared` package (`packages/shared`) exports Zod schemas used by backend and frontend
+- **Architecture**: See `ARCHITECTURE.md`, `.ai/implementation-plan.md`, and docs in the `.ai/` folder for deeper context
