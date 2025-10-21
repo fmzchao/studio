@@ -6,6 +6,7 @@ import {
   pgTable,
   text,
   timestamp,
+  uniqueIndex,
 } from 'drizzle-orm/pg-core';
 
 export const workflowLogStreamsTable = pgTable(
@@ -25,7 +26,7 @@ export const workflowLogStreamsTable = pgTable(
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => ({
-    runNodeStreamIdx: index('workflow_log_streams_run_node_stream_idx').on(
+    runNodeStreamIdx: uniqueIndex('workflow_log_streams_run_node_stream_idx').on(
       table.runId,
       table.nodeRef,
       table.stream,
