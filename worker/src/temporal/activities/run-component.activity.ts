@@ -62,6 +62,7 @@ export async function runComponentActivity(
   const streamId = nodeMetadata.streamId ?? nodeMetadata.groupId ?? action.ref;
   const joinStrategy = nodeMetadata.joinStrategy;
   const triggeredBy = nodeMetadata.triggeredBy;
+  const failure = nodeMetadata.failure;
   const correlationId = `${input.runId}:${action.ref}:${activityInfo.activityId}`;
 
   const trace = globalTrace;
@@ -80,6 +81,7 @@ export async function runComponentActivity(
       streamId,
       joinStrategy,
       triggeredBy,
+      failure,
     },
   });
 
@@ -101,6 +103,7 @@ export async function runComponentActivity(
         streamId,
         joinStrategy,
         triggeredBy,
+        failure,
       },
     });
   }
@@ -122,6 +125,7 @@ export async function runComponentActivity(
       streamId,
       joinStrategy,
       triggeredBy,
+      failure,
     },
     storage: globalStorage,
     secrets: globalSecrets,
@@ -166,12 +170,13 @@ export async function runComponentActivity(
         componentRef: action.ref,
         activityId: activityInfo.activityId,
         attempt: activityInfo.attempt,
-        correlationId,
-        streamId,
-        joinStrategy,
-        triggeredBy,
-      },
-    });
+      correlationId,
+      streamId,
+      joinStrategy,
+      triggeredBy,
+      failure,
+    },
+  });
 
     return { output };
   } catch (error) {
@@ -188,12 +193,13 @@ export async function runComponentActivity(
         componentRef: action.ref,
         activityId: activityInfo.activityId,
         attempt: activityInfo.attempt,
-        correlationId,
-        streamId,
-        joinStrategy,
-        triggeredBy,
-      },
-    });
+      correlationId,
+      streamId,
+      joinStrategy,
+      triggeredBy,
+      failure,
+    },
+  });
     throw error;
   } finally {
     // Do not finalize run here; lifecycle is managed by workflow orchestration.

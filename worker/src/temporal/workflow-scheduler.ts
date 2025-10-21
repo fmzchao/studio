@@ -7,9 +7,18 @@ export class WorkflowSchedulerError extends Error {
   }
 }
 
+export interface SchedulerFailureDetails {
+  message: string;
+  name?: string;
+}
+
 export interface WorkflowSchedulerRunContext {
   joinStrategy: WorkflowJoinStrategy | 'all';
   triggeredBy?: string;
+  failure?: {
+    at: string;
+    reason: SchedulerFailureDetails;
+  };
 }
 
 export interface WorkflowSchedulerOptions {
@@ -137,14 +146,7 @@ export async function runWorkflowWithScheduler(
       const { ref, context } = outcome;
 
       if (outcome.status === 'fulfilled') {
-        handleSuccess(
-          ref,
-          readyQueue,
-          pending,
-          nodeStates,
-          successDependents,
-          definition.nodes ?? {},
-        );
+        handleSuccess(ref, readyQueue, pending, nodeStates, successDependents);
       } else {
         failedErrors.set(ref, outcome.reason);
         handleFailure(
@@ -156,7 +158,6 @@ export async function runWorkflowWithScheduler(
           successDependents,
           failureDependents,
           failedErrors,
-          definition.nodes ?? {},
         );
       }
     }
@@ -175,7 +176,6 @@ function handleSuccess(
   pending: Set<string>,
   nodeStates: Map<string, NodeState>,
   successDependents: Map<string, string[]>,
-  nodeMetadata: WorkflowDefinition['nodes'],
 ) {
   const children = successDependents.get(ref) ?? [];
   for (const child of children) {
@@ -214,7 +214,6 @@ function handleFailure(
   successDependents: Map<string, string[]>,
   failureDependents: Map<string, string[]>,
   failedErrors: Map<string, unknown>,
-  nodeMetadata: WorkflowDefinition['nodes'],
 ) {
   const queue: Array<{ ref: string; source: string }> = [{ ref, source: triggerSource }];
   const seen = new Set<string>();
@@ -233,6 +232,7 @@ function handleFailure(
 
     // Schedule failure dependents (error edges)
     const failureChildren = failureDependents.get(current) ?? [];
+    const failureReason = normalizeFailureReason(failedErrors.get(current));
     for (const child of failureChildren) {
       const childState = nodeStates.get(child);
       if (!childState || childState.failureTriggered) {
@@ -241,17 +241,44 @@ function handleFailure(
       childState.failureTriggered = true;
       readyQueue.push({
         ref: child,
-        context: { joinStrategy: childState.strategy, triggeredBy: current },
+        context: {
+          joinStrategy: childState.strategy,
+          triggeredBy: current,
+          failure: failureReason
+            ? {
+                at: current,
+                reason: failureReason,
+              }
+            : undefined,
+        },
       });
     }
 
     // Cancel success dependents and propagate failure downstream
     const successChildren = successDependents.get(current) ?? [];
     for (const child of successChildren) {
+      const childState = nodeStates.get(child);
+      if (!childState || childState.failureTriggered) {
+        continue;
+      }
+
+      childState.successParents.delete(current);
+
       if (!pending.has(child)) {
         continue;
       }
+
+      const remainingParents = childState.successParents.size;
+      const shouldCancel =
+        childState.strategy === 'all' ||
+        (remainingParents === 0 && !childState.triggeredBySuccess);
+
+      if (!shouldCancel) {
+        continue;
+      }
+
       pending.delete(child);
+      childState.failureTriggered = true;
       failedErrors.set(
         child,
         new WorkflowSchedulerError(`Cancelled due to upstream failure at ${current}`),
@@ -259,4 +286,31 @@ function handleFailure(
       queue.push({ ref: child, source: current });
     }
   }
+}
+
+function normalizeFailureReason(reason: unknown): SchedulerFailureDetails | undefined {
+  if (reason instanceof Error) {
+    return {
+      message: reason.message,
+      name: reason.name && reason.name !== 'Error' ? reason.name : undefined,
+    };
+  }
+
+  if (reason === undefined || reason === null) {
+    return { message: 'Unknown failure' };
+  }
+
+  if (typeof reason === 'string') {
+    return { message: reason };
+  }
+
+  if (typeof reason === 'object') {
+    try {
+      return { message: JSON.stringify(reason) };
+    } catch {
+      return { message: String(reason) };
+    }
+  }
+
+  return { message: String(reason) };
 }

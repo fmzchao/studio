@@ -55,6 +55,7 @@ export async function shipsecWorkflowRun(
         const nodeMetadata = input.definition.nodes?.[action.ref];
         const streamId = nodeMetadata?.streamId ?? nodeMetadata?.groupId ?? action.ref;
         const joinStrategy = nodeMetadata?.joinStrategy ?? schedulerContext.joinStrategy;
+        const { triggeredBy, failure } = schedulerContext;
 
         const activityInput: RunComponentActivityInput = {
           runId: input.runId,
@@ -69,7 +70,8 @@ export async function shipsecWorkflowRun(
             streamId,
             joinStrategy,
             groupId: nodeMetadata?.groupId,
-            triggeredBy: schedulerContext.triggeredBy,
+            triggeredBy,
+            failure,
           },
         };
 

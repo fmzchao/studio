@@ -76,6 +76,14 @@ export interface ITraceService {
 
 export type TraceEventLevel = 'debug' | 'info' | 'warn' | 'error';
 
+export interface ExecutionFailureMetadata {
+  at: string;
+  reason: {
+    message: string;
+    name?: string;
+  };
+}
+
 export interface ExecutionContextMetadata {
   runId: string;
   componentRef: string;
@@ -85,6 +93,7 @@ export interface ExecutionContextMetadata {
   streamId?: string;
   joinStrategy?: 'all' | 'any' | 'first';
   triggeredBy?: string;
+  failure?: ExecutionFailureMetadata;
 }
 
 export interface TraceEvent {

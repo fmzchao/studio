@@ -38,6 +38,14 @@ export interface WorkflowNodeMetadata {
   streamId?: string;
 }
 
+export interface WorkflowFailureMetadata {
+  at: string;
+  reason: {
+    message: string;
+    name?: string;
+  };
+}
+
 export interface WorkflowDefinition {
   version: number;
   title: string;
@@ -71,6 +79,7 @@ export interface RunComponentActivityInput {
     joinStrategy?: WorkflowJoinStrategy;
     groupId?: string;
     triggeredBy?: string;
+    failure?: WorkflowFailureMetadata;
   };
 }
 
@@ -115,6 +124,7 @@ export interface WorkflowLogMetadata {
   streamId?: string;
   joinStrategy?: WorkflowJoinStrategy;
   triggeredBy?: string;
+  failure?: WorkflowFailureMetadata;
 }
 
 export interface WorkflowLogEntry {

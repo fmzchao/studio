@@ -3,6 +3,7 @@ import { z } from 'zod';
 import {
   componentRegistry,
   type ComponentDefinition,
+  type ExecutionContext,
   type TraceEvent,
 } from '@shipsec/component-sdk';
 
@@ -487,5 +488,95 @@ describe('executeWorkflow', () => {
     expect(result.success).toBe(false);
     expect(result.error).toContain('One or more workflow actions failed');
     expect(executionOrder).toEqual(['errorHandler']);
+  });
+
+  it('injects failure metadata into error-edge components', async () => {
+    if (!componentRegistry.has('test.fail.always')) {
+      const failComponent: ComponentDefinition<{ message: string }, never> = {
+        id: 'test.fail.always',
+        label: 'Always Fail',
+        category: 'transform',
+        runner: { kind: 'inline' },
+        inputSchema: z.object({ message: z.string() }),
+        outputSchema: z.never(),
+        async execute(params) {
+          throw new Error(params.message);
+        },
+      };
+      componentRegistry.register(failComponent);
+    }
+
+    const failureMetadata: Array<ExecutionContext['metadata']['failure']> = [];
+
+    if (!componentRegistry.has('test.capture.failure-metadata')) {
+      const captureComponent: ComponentDefinition<{ label: string }, { label: string }> = {
+        id: 'test.capture.failure-metadata',
+        label: 'Capture Failure Metadata',
+        category: 'transform',
+        runner: { kind: 'inline' },
+        inputSchema: z.object({ label: z.string() }),
+        outputSchema: z.object({ label: z.string() }),
+        async execute(params, context) {
+          failureMetadata.push(context.metadata.failure);
+          return { label: params.label };
+        },
+      };
+      componentRegistry.register(captureComponent);
+    }
+
+    const definition: WorkflowDefinition = {
+      version: 1,
+      title: 'Failure metadata propagation',
+      entrypoint: { ref: 'start' },
+      config: {
+        environment: 'test',
+        timeoutSeconds: 30,
+      },
+      nodes: {
+        start: { ref: 'start' },
+        fail: { ref: 'fail' },
+        errorHandler: { ref: 'errorHandler' },
+      },
+      edges: [
+        { id: 'start->fail', sourceRef: 'start', targetRef: 'fail', kind: 'success' as const },
+        { id: 'fail->error', sourceRef: 'fail', targetRef: 'errorHandler', kind: 'error' as const },
+      ],
+      dependencyCounts: {
+        start: 0,
+        fail: 1,
+        errorHandler: 1,
+      },
+      actions: [
+        {
+          ref: 'start',
+          componentId: 'core.trigger.manual',
+          params: {},
+          dependsOn: [],
+          inputMappings: {},
+        },
+        {
+          ref: 'fail',
+          componentId: 'test.fail.always',
+          params: { message: 'boom' },
+          dependsOn: ['start'],
+          inputMappings: {},
+        },
+        {
+          ref: 'errorHandler',
+          componentId: 'test.capture.failure-metadata',
+          params: { label: 'handled' },
+          dependsOn: ['fail'],
+          inputMappings: {},
+        },
+      ],
+    };
+
+    const result = await executeWorkflow(definition);
+
+    expect(result.success).toBe(false);
+    expect(failureMetadata).toHaveLength(1);
+    expect(failureMetadata[0]).toBeDefined();
+    expect(failureMetadata[0]?.at).toBe('fail');
+    expect(failureMetadata[0]?.reason.message).toBe('boom');
   });
 });

@@ -131,6 +131,7 @@ function createMetadata(
     streamId: metadata?.streamId,
     joinStrategy: metadata?.joinStrategy,
     triggeredBy: metadata?.triggeredBy,
+    failure: metadata?.failure,
   };
 
   return Object.freeze(scoped);

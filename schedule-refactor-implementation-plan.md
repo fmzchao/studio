@@ -11,9 +11,9 @@ We’re refitting the runtime so each workflow node executes with Temporal-grade
 | Phase 0 | ✅ Completed | Baseline Audit & Gap Analysis |
 | Phase 1 | ✅ Completed | DSL & Schema Enrichment |
 | Phase 2 | ✅ Completed | Scheduler Core (in-activity parallelism) |
-| Phase 3 | ⚪ Not Started | Activity-per-Component Orchestration |
-| Phase 4 | ⚪ Not Started | Context, Services & Tracing Hardening |
-| Phase 5 | ⚪ Not Started | Error Handling & Join Semantics |
+| Phase 3 | ✅ Completed | Activity-per-Component Orchestration |
+| Phase 4 | ✅ Completed | Context, Services & Tracing Hardening |
+| Phase 5 | ✅ Completed | Error Handling & Join Semantics |
 | Phase 6 | ⚪ Not Started | Integration Tests & Temporal Validation |
 | Phase 7 | ⚪ Not Started | Frontend & API Alignment |
 | Phase 8 | ⚪ Not Started | Guardrails, Concurrency Caps & Rollout |
@@ -113,7 +113,16 @@ We’re refitting the runtime so each workflow node executes with Temporal-grade
 - [x] On activity failure, propagate according to policy (fail workflow, skip dependents, route to error edges).
 - [x] Add cancellation hooks so upstream cancellation can short-circuit queued activities.
 - [x] Ensure undefined inputs throw deterministic errors (no silent `warn` + continue).
-- [ ] Document per-node retry policy merge rules (component default vs workflow override).
+- [x] Document per-node retry policy merge rules (component default vs workflow override).
+  - Planned merge order:
+    1. **Platform baseline** – start from the worker-level defaults we register alongside `shipsecWorkflowRun` (`maxAttempts=3`, `initialIntervalSeconds=2s`, `maximumIntervalSeconds=60s`, `backoffCoefficient=2.0`, `nonRetryableErrorTypes=[]`).
+    2. **Component defaults** – when a component manifest exposes `execution.retryPolicy`, copy only the defined fields onto the baseline.
+    3. **Workflow-level override** – if the DSL emits `definition.config.retryPolicy`, overlay those fields so every node inherits the same policy unless explicitly overridden.
+    4. **Node-level override** – apply `definition.nodes[ref].retryPolicy` last; defined fields replace the inherited value. Supplying `nonRetryableErrorTypes` replaces the list, and setting `maxAttempts: 1` disables retries. Omit a property to inherit the prior layer.
+  - Implementation notes:
+    - Extend `WorkflowNodeMetadata` and shared DTOs with `retryPolicy?: { maxAttempts?: number; initialIntervalSeconds?: number; maximumIntervalSeconds?: number; backoffCoefficient?: number; nonRetryableErrorTypes?: string[] }`.
+    - Surface the merged policy on `RunComponentActivityInput.metadata.retryPolicy` so activities/log adapters can include attempt budgets and retry context.
+    - Pass the merged policy to `workflow.execute_activity` options to honour overrides at runtime while preserving Temporal’s non-retryable error behaviour.
 - [x] Tests:
   - [x] Unit tests for join strategies with mocked activity outcomes.
   - [x] Failure propagation tests (diamonds, scatter/gather) using activity stubs.
@@ -137,11 +146,11 @@ We’re refitting the runtime so each workflow node executes with Temporal-grade
 
 **Goal:** Validate the multi-activity architecture end-to-end.
 
-- [x] Extend worker unit/integration coverage to assert parallel activities, join semantics, and failure reporting.
-- [x] Add determinism tests ensuring repeated executions yield identical trace sequences.
-- [x] Run long-lived workflows via `worker/scripts/run-long-lived-workflow.ts` to confirm logs/traces and persist snapshots.
-- [x] Benchmark serial vs parallel workflows and compare with pre-activity baseline (`worker/scripts/benchmark-scheduler.ts`).
-- [x] Capture regression snapshots (trace timelines, metrics) for future comparisons.
+- [ ] Extend worker unit/integration coverage to assert parallel activities, join semantics, and failure reporting.
+- [ ] Add determinism tests ensuring repeated executions yield identical trace sequences.
+- [ ] Run long-lived workflows via `worker/scripts/run-long-lived-workflow.ts` to confirm logs/traces and persist snapshots.
+- [ ] Benchmark serial vs parallel workflows and compare with pre-activity baseline (`worker/scripts/benchmark-scheduler.ts`).
+- [ ] Capture regression snapshots (trace timelines, metrics) for future comparisons.
 
 **Implementation Steps**
 1. Build deterministic activity fixtures to simulate success/failure/retry scenarios.
@@ -224,5 +233,7 @@ We’re refitting the runtime so each workflow node executes with Temporal-grade
 
 ### Change Log
 
+- `2025-10-17` – Propagated failure metadata through the scheduler so error-edge activities receive upstream failure context and added regression coverage for the runtime + plan updated accordingly.
+- `2025-10-16` – Hardened scheduler join-any failure handling to keep downstream nodes eligible when sibling parents fail; added regression coverage.
 - `2025-10-15` – Plan updated to adopt activity-per-component orchestration following Tracecat semantics; Phases 0–2 marked completed.
 - `2025-10-15` – Initial plan drafted.

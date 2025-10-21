@@ -74,7 +74,7 @@ export async function executeWorkflow(
         throw new Error(`Action not found: ${actionRef}`);
       }
 
-      const { triggeredBy } = schedulerContext;
+      const { triggeredBy, failure } = schedulerContext;
 
       const component = componentRegistry.get(action.componentId);
       if (!component) {
@@ -98,6 +98,7 @@ export async function executeWorkflow(
           streamId,
           joinStrategy,
           triggeredBy,
+          failure,
         },
       });
 
@@ -118,6 +119,7 @@ export async function executeWorkflow(
             streamId,
             joinStrategy,
             triggeredBy,
+            failure,
           },
         });
       }
@@ -150,6 +152,7 @@ export async function executeWorkflow(
           joinStrategy,
           correlationId: `${runId}:${action.ref}`,
           triggeredBy,
+          failure,
         },
         storage: options.storage,
         secrets: options.secrets,
@@ -175,6 +178,7 @@ export async function executeWorkflow(
             streamId,
             joinStrategy,
             triggeredBy,
+            failure,
           },
         });
       } catch (error) {
@@ -192,6 +196,7 @@ export async function executeWorkflow(
             streamId,
             joinStrategy,
             triggeredBy,
+            failure,
           },
         });
         throw error;
