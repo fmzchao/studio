@@ -404,10 +404,114 @@ describe('Worker Integration Tests', () => {
       // Verify all steps executed
       expect(result.success).toBe(true);
       const outputs = result.outputs as any;
-    expect(outputs.trigger).toEqual({});
-    expect(outputs.step2).toEqual({});
-    expect(outputs.step3).toEqual({});
-  }, 60000);
+      expect(outputs.trigger).toEqual({});
+      expect(outputs.step2).toEqual({});
+      expect(outputs.step3).toEqual({});
+    }, 60000);
+
+    it('should route error edges when an activity fails', async () => {
+      const { shipsecWorkflowRun } = await import('../temporal/workflows');
+
+      const missingFileId = randomUUID();
+
+      const workflowDSL = {
+        version: 1,
+        title: 'Error Edge Workflow',
+        description: 'Failure should schedule error handler',
+        config: {
+          environment: 'test',
+          timeoutSeconds: 30,
+        },
+        entrypoint: {
+          ref: 'trigger',
+        },
+        nodes: {
+          trigger: { ref: 'trigger' },
+          willFail: { ref: 'willFail' },
+          errorHandler: { ref: 'errorHandler' },
+        },
+        edges: [
+          {
+            id: 'trigger->willFail',
+            sourceRef: 'trigger',
+            targetRef: 'willFail',
+            kind: 'success' as const,
+          },
+          {
+            id: 'willFail->errorHandler',
+            sourceRef: 'willFail',
+            targetRef: 'errorHandler',
+            kind: 'error' as const,
+          },
+        ],
+        dependencyCounts: {
+          trigger: 0,
+          willFail: 1,
+          errorHandler: 0,
+        },
+        actions: [
+          {
+            ref: 'trigger',
+            componentId: 'core.trigger.manual',
+            params: {},
+            dependsOn: [],
+            inputMappings: {},
+          },
+          {
+            ref: 'willFail',
+            componentId: 'core.file.loader',
+            params: { fileId: missingFileId },
+            dependsOn: ['trigger'],
+            inputMappings: {},
+          },
+          {
+            ref: 'errorHandler',
+            componentId: 'core.console.log',
+            params: {
+              data: 'handled upstream failure',
+              label: 'error-handler',
+            },
+            dependsOn: [],
+            inputMappings: {},
+          },
+        ],
+      };
+
+      const workflowId = `error-edge-workflow-${randomUUID()}`;
+      const runId = `error-edge-run-${randomUUID()}`;
+
+      const handle = await temporalClient.workflow.start(shipsecWorkflowRun, {
+        taskQueue,
+        workflowId,
+        args: [
+          {
+            runId,
+            workflowId,
+            definition: workflowDSL,
+            inputs: {},
+          },
+        ],
+      });
+
+      const result = await handle.result();
+      expect(result.success).toBe(false);
+      expect(result.error).toBeDefined();
+
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      const traces = await db
+        .select()
+        .from(schema.workflowTraces)
+        .where(eq(schema.workflowTraces.runId, runId))
+        .orderBy(schema.workflowTraces.sequence);
+
+      const failureEvent = traces.find(
+        (trace) => trace.nodeRef === 'willFail' && trace.type === 'NODE_FAILED',
+      );
+
+      expect(failureEvent).toBeDefined();
+      expect(failureEvent?.error ?? '').toMatch(/not found|does not exist|NotFound/i);
+    }, 60000);
 
   it('should persist ordered traces for parallel branches', async () => {
     const { shipsecWorkflowRun } = await import('../temporal/workflows');

@@ -8,6 +8,7 @@ import { Connection, Client } from '@temporalio/client';
 
 import type { WorkflowDefinition } from '../src/temporal/types';
 import { shipsecWorkflowRun } from '../src/temporal/workflows';
+import { executeWorkflow } from '../src/temporal/workflow-runner';
 import '../src/components';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -18,8 +19,12 @@ const TEMPORAL_NAMESPACE = process.env.TEMPORAL_NAMESPACE ?? 'shipsec-dev';
 const TEMPORAL_TASK_QUEUE = process.env.TEMPORAL_TASK_QUEUE ?? 'shipsec-default';
 const OUTPUT_DIR = join(__dirname, '..', 'benchmarks');
 
+type BenchmarkMode = 'serial' | 'parallel';
+type BenchmarkEngine = 'inline' | 'temporal';
+
 interface BenchmarkResult {
-  mode: 'serial' | 'parallel';
+  engine: BenchmarkEngine;
+  mode: BenchmarkMode;
   runs: number;
   durations: number[];
   averageMs: number;
@@ -94,7 +99,12 @@ const parallelDefinition: WorkflowDefinition = {
   ],
 };
 
-async function runBenchmark(client: Client, definition: WorkflowDefinition, iterations: number, label: 'serial' | 'parallel'): Promise<BenchmarkResult> {
+async function runTemporalBenchmark(
+  client: Client,
+  definition: WorkflowDefinition,
+  iterations: number,
+  label: BenchmarkMode,
+): Promise<BenchmarkResult> {
   const durations: number[] = [];
 
   for (let i = 0; i < iterations; i += 1) {
@@ -121,6 +131,7 @@ async function runBenchmark(client: Client, definition: WorkflowDefinition, iter
   const averageMs = durations.reduce((sum, value) => sum + value, 0) / durations.length;
 
   return {
+    engine: 'temporal',
     mode: label,
     runs: iterations,
     durations,
@@ -132,6 +143,36 @@ async function ensureOutputDir() {
   await fs.mkdir(OUTPUT_DIR, { recursive: true });
 }
 
+async function runInlineBenchmark(
+  definition: WorkflowDefinition,
+  iterations: number,
+  label: BenchmarkMode,
+): Promise<BenchmarkResult> {
+  const durations: number[] = [];
+
+  for (let i = 0; i < iterations; i += 1) {
+    const runId = `${label}-inline-${randomUUID()}`;
+    const start = Date.now();
+
+    const result = await executeWorkflow(definition, {}, { runId });
+    if (!result.success) {
+      throw new Error(`Inline benchmark ${label} failed: ${result.error}`);
+    }
+
+    durations.push(Date.now() - start);
+  }
+
+  const averageMs = durations.reduce((sum, value) => sum + value, 0) / durations.length;
+
+  return {
+    engine: 'inline',
+    mode: label,
+    runs: iterations,
+    durations,
+    averageMs,
+  };
+}
+
 async function main() {
   const iterations = Number.parseInt(process.env.BENCHMARK_ITERATIONS ?? '3', 10);
 
@@ -140,13 +181,27 @@ async function main() {
 
   try {
     console.log(`Running benchmark with ${iterations} iteration(s) per mode...`);
-    const serial = await runBenchmark(client, serialDefinition, iterations, 'serial');
-    const parallel = await runBenchmark(client, parallelDefinition, iterations, 'parallel');
 
-    console.table([
-      { Mode: 'Serial', Runs: serial.runs, 'Average (ms)': serial.averageMs.toFixed(2) },
-      { Mode: 'Parallel', Runs: parallel.runs, 'Average (ms)': parallel.averageMs.toFixed(2) },
-    ]);
+    const inlineSerial = await runInlineBenchmark(serialDefinition, iterations, 'serial');
+    const inlineParallel = await runInlineBenchmark(parallelDefinition, iterations, 'parallel');
+    const temporalSerial = await runTemporalBenchmark(client, serialDefinition, iterations, 'serial');
+    const temporalParallel = await runTemporalBenchmark(
+      client,
+      parallelDefinition,
+      iterations,
+      'parallel',
+    );
+
+    const summaryRows = [inlineSerial, inlineParallel, temporalSerial, temporalParallel].map(
+      (result) => ({
+        Engine: result.engine,
+        Mode: result.mode,
+        Runs: result.runs,
+        'Average (ms)': result.averageMs.toFixed(2),
+      }),
+    );
+
+    console.table(summaryRows);
 
     await ensureOutputDir();
     const snapshotPath = join(
@@ -155,7 +210,21 @@ async function main() {
     );
     await fs.writeFile(
       snapshotPath,
-      JSON.stringify({ iterations, serial, parallel }, null, 2),
+      JSON.stringify(
+        {
+          iterations,
+          inline: {
+            serial: inlineSerial,
+            parallel: inlineParallel,
+          },
+          temporal: {
+            serial: temporalSerial,
+            parallel: temporalParallel,
+          },
+        },
+        null,
+        2,
+      ),
       'utf8',
     );
     console.log(`Benchmark snapshot written to ${snapshotPath}`);

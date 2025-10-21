@@ -146,17 +146,24 @@ We’re refitting the runtime so each workflow node executes with Temporal-grade
 
 **Goal:** Validate the multi-activity architecture end-to-end.
 
-- [ ] Extend worker unit/integration coverage to assert parallel activities, join semantics, and failure reporting.
-- [ ] Add determinism tests ensuring repeated executions yield identical trace sequences.
-- [ ] Run long-lived workflows via `worker/scripts/run-long-lived-workflow.ts` to confirm logs/traces and persist snapshots.
-- [ ] Benchmark serial vs parallel workflows and compare with pre-activity baseline (`worker/scripts/benchmark-scheduler.ts`).
-- [ ] Capture regression snapshots (trace timelines, metrics) for future comparisons.
+- [x] Extend worker unit/integration coverage to assert parallel activities, join semantics, and failure reporting.
+  - Added Temporal integration regression that executes an error-edge workflow and asserts persisted failure traces (`worker/src/__tests__/worker-integration.test.ts`).
+- [x] Add determinism tests ensuring repeated executions yield identical trace sequences.
+  - Added `executeWorkflow` regression capturing full trace ordering across repeated runs (`worker/src/temporal/__tests__/workflow-runner.test.ts`).
+- [x] Run long-lived workflows via `worker/scripts/run-long-lived-workflow.ts` to confirm logs/traces and persist snapshots.
+  - Script now materialises trace snapshots under `worker/benchmarks/long-lived-trace-*.json` for post-run inspection.
+- [x] Benchmark serial vs parallel workflows and compare with pre-activity baseline (`worker/scripts/benchmark-scheduler.ts`).
+  - Harness records inline vs Temporal activity timings for serial/parallel DAGs and stores structured snapshots per run.
+- [x] Capture regression snapshots (trace timelines, metrics) for future comparisons.
+  - Benchmarks and long-lived workflows emit timestamped JSON artifacts to `worker/benchmarks/`, giving repeatable baselines.
 
 **Implementation Steps**
 1. Build deterministic activity fixtures to simulate success/failure/retry scenarios.
 2. Author replay/determinism tests verifying consistent trace sequences.
 3. Create benchmarking harness comparing inline vs activity execution throughput.
 4. Publish validation artifacts (dashboards, logs) for review.
+
+*Status:* Testfixture `test.sleep.parallel` is now part of the component bundle, the replay suite covers determinism, and the benchmarking/long-lived scripts persist artifacts for review.
 
 **Dependencies:** Requires Phases 4–5 features behind toggles; schedule to run in staging Temporal namespace.
 
@@ -233,6 +240,7 @@ We’re refitting the runtime so each workflow node executes with Temporal-grade
 
 ### Change Log
 
+- `2025-10-18` – Phase 6 validation assets landed (error-edge integration regression, deterministic trace suite, inline vs Temporal benchmarking, long-lived workflow snapshots).
 - `2025-10-17` – Propagated failure metadata through the scheduler so error-edge activities receive upstream failure context and added regression coverage for the runtime + plan updated accordingly.
 - `2025-10-16` – Hardened scheduler join-any failure handling to keep downstream nodes eligible when sibling parents fail; added regression coverage.
 - `2025-10-15` – Plan updated to adopt activity-per-component orchestration following Tracecat semantics; Phases 0–2 marked completed.

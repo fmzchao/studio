@@ -139,36 +139,6 @@ describe('executeWorkflow', () => {
     expect(logEntries.some((entry) => entry.message.includes('[first]'))).toBe(true);
   });
   it('executes independent branches in parallel', async () => {
-    const timeline: Array<{ ref: string; event: 'start' | 'end'; at: number }> = [];
-    let baseTime = 0;
-    const record = (ref: string, event: 'start' | 'end') => {
-      timeline.push({ ref, event, at: Date.now() - baseTime });
-    };
-
-    if (!componentRegistry.has('test.sleep.parallel')) {
-      const sleepComponent: ComponentDefinition<{ delay: number; label: string }, { label: string }> = {
-        id: 'test.sleep.parallel',
-        label: 'Parallel Sleep',
-        category: 'transform',
-        runner: { kind: 'inline' },
-        inputSchema: z.object({
-          delay: z.number(),
-          label: z.string(),
-        }),
-        outputSchema: z.object({
-          label: z.string(),
-        }),
-        async execute(params, context) {
-          record(context.componentRef, 'start');
-          await new Promise<void>((resolve) => setTimeout(resolve, params.delay));
-          record(context.componentRef, 'end');
-          return { label: params.label };
-        },
-      };
-
-      componentRegistry.register(sleepComponent);
-    }
-
     const definition: WorkflowDefinition = {
       version: 1,
       title: 'Parallel branches',
@@ -228,29 +198,135 @@ describe('executeWorkflow', () => {
       ],
     };
 
-    baseTime = Date.now();
     const result = await executeWorkflow(definition);
     expect(result.success).toBe(true);
 
-    const branchAStart = timeline.find(
-      (entry) => entry.ref === 'branchA' && entry.event === 'start',
-    );
-    const branchBStart = timeline.find(
-      (entry) => entry.ref === 'branchB' && entry.event === 'start',
-    );
-    const mergeEnd = timeline.find(
-      (entry) => entry.ref === 'merge' && entry.event === 'end',
-    );
+    const outputs = result.outputs as Record<
+      string,
+      { startedAt: number; endedAt: number; label: string }
+    >;
 
-    expect(branchAStart).toBeDefined();
-    expect(branchBStart).toBeDefined();
-    expect(mergeEnd).toBeDefined();
+    const start = outputs.start;
+    const branchA = outputs.branchA;
+    const branchB = outputs.branchB;
+    const merge = outputs.merge;
 
-    const delta = Math.abs((branchAStart?.at ?? 0) - (branchBStart?.at ?? 0));
-    expect(delta).toBeLessThan(60);
+    expect(start).toBeDefined();
+    expect(branchA).toBeDefined();
+    expect(branchB).toBeDefined();
+    expect(merge).toBeDefined();
 
-    const totalElapsed = mergeEnd?.at ?? Number.POSITIVE_INFINITY;
-    expect(totalElapsed).toBeLessThan(400);
+    const branchStartDelta = Math.abs(branchA.startedAt - branchB.startedAt);
+    expect(branchStartDelta).toBeLessThan(75);
+
+    const branchAElapsed = branchA.endedAt - branchA.startedAt;
+    const branchBElapsed = branchB.endedAt - branchB.startedAt;
+    expect(branchAElapsed).toBeGreaterThanOrEqual(190);
+    expect(branchBElapsed).toBeGreaterThanOrEqual(190);
+
+    const totalElapsed = merge.endedAt - start.startedAt;
+    expect(totalElapsed).toBeLessThan(350);
+  });
+
+  it('produces a deterministic trace sequence across repeated runs', async () => {
+    const definition: WorkflowDefinition = {
+      version: 1,
+      title: 'Deterministic Trace',
+      description: 'Parallel branches should yield the same trace ordering on every run',
+      entrypoint: { ref: 'start' },
+      config: {
+        environment: 'test',
+        timeoutSeconds: 30,
+      },
+      nodes: {
+        start: { ref: 'start', streamId: 'trace-start', joinStrategy: 'all' },
+        branchLeft: { ref: 'branchLeft', streamId: 'trace-left', joinStrategy: 'all' },
+        branchRight: { ref: 'branchRight', streamId: 'trace-right', joinStrategy: 'all' },
+        merge: { ref: 'merge', streamId: 'trace-merge', joinStrategy: 'all' },
+      },
+      edges: [
+        { id: 'start->branchLeft', sourceRef: 'start', targetRef: 'branchLeft', kind: 'success' as const },
+        { id: 'start->branchRight', sourceRef: 'start', targetRef: 'branchRight', kind: 'success' as const },
+        { id: 'branchLeft->merge', sourceRef: 'branchLeft', targetRef: 'merge', kind: 'success' as const },
+        { id: 'branchRight->merge', sourceRef: 'branchRight', targetRef: 'merge', kind: 'success' as const },
+      ],
+      dependencyCounts: {
+        start: 0,
+        branchLeft: 1,
+        branchRight: 1,
+        merge: 2,
+      },
+      actions: [
+        {
+          ref: 'start',
+          componentId: 'core.trigger.manual',
+          params: {},
+          dependsOn: [],
+          inputMappings: {},
+        },
+        {
+          ref: 'branchLeft',
+          componentId: 'test.sleep.parallel',
+          params: { delay: 40, label: 'left' },
+          dependsOn: ['start'],
+          inputMappings: {},
+        },
+        {
+          ref: 'branchRight',
+          componentId: 'test.sleep.parallel',
+          params: { delay: 20, label: 'right' },
+          dependsOn: ['start'],
+          inputMappings: {},
+        },
+        {
+          ref: 'merge',
+          componentId: 'core.console.log',
+          params: { data: 'merge-complete' },
+          dependsOn: ['branchLeft', 'branchRight'],
+          inputMappings: {},
+        },
+      ],
+    };
+
+    const normalizeEvent = (event: TraceEvent) => ({
+      type: event.type,
+      nodeRef: event.nodeRef,
+      level: event.level,
+      context: event.context
+        ? {
+            streamId: event.context.streamId,
+            joinStrategy: event.context.joinStrategy,
+            triggeredBy: event.context.triggeredBy,
+            failure: event.context.failure,
+          }
+        : undefined,
+    });
+
+    const runWithTrace = async (runId: string) => {
+      const events: TraceEvent[] = [];
+      const trace = {
+        record: (event: TraceEvent) => {
+          events.push(event);
+        },
+      };
+
+      const result = await executeWorkflow(
+        definition,
+        {},
+        {
+          runId,
+          trace,
+        },
+      );
+
+      expect(result.success).toBe(true);
+      return events.map(normalizeEvent);
+    };
+
+    const firstSequence = await runWithTrace('determinism-run-1');
+    const secondSequence = await runWithTrace('determinism-run-2');
+
+    expect(secondSequence).toEqual(firstSequence);
   });
 
   it('triggers downstream when join strategy is any', async () => {
