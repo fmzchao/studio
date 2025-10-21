@@ -16,6 +16,7 @@ import './security/amass';
 import './security/naabu';
 import './security/dnsx';
 import './security/httpx';
+import './security/notify';
 
 // Export registry for external use
 export { componentRegistry } from '@shipsec/component-sdk';
