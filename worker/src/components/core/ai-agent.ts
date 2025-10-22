@@ -1,6 +1,6 @@
 import { randomUUID } from 'crypto';
 import { z } from 'zod';
-import { CoreMessage, generateText, tool } from 'ai';
+import { generateText, tool } from 'ai';
 import { createOpenAI } from '@ai-sdk/openai';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { componentRegistry, ComponentDefinition } from '@shipsec/component-sdk';
@@ -21,12 +21,17 @@ const DEFAULT_MAX_TOKENS = 1024;
 const DEFAULT_MEMORY_SIZE = 8;
 const DEFAULT_STEP_LIMIT = 4;
 
-type AgentMessage = CoreMessage;
-
 const agentMessageSchema = z.object({
   role: z.enum(['system', 'user', 'assistant', 'tool']),
   content: z.unknown(),
 });
+
+type AgentMessage = z.infer<typeof agentMessageSchema>;
+
+type CoreMessage = {
+  role: 'system' | 'user' | 'assistant' | 'tool';
+  content: string;
+};
 
 const toolInvocationSchema = z.object({
   id: z.string(),
@@ -252,7 +257,7 @@ function trimConversation(history: AgentMessage[], memorySize: number): AgentMes
 const definition: ComponentDefinition<Input, Output> = {
   id: 'core.ai.agent',
   label: 'AI SDK Agent',
-  category: 'process',
+  category: 'transform',
   runner: { kind: 'inline' },
   inputSchema,
   outputSchema,
@@ -394,7 +399,22 @@ Loop the Conversation State output back into the next agent invocation to keep m
       stepLimit,
     } = params;
 
+    const debugLog = (...args: unknown[]) => console.log('[AI Agent Debug]', ...args);
+
+    debugLog('Incoming params', {
+      userInput,
+      conversationState,
+      chatModel,
+      mcp,
+      systemPrompt,
+      temperature,
+      maxTokens,
+      memorySize,
+      stepLimit,
+    });
+
     const trimmedInput = userInput.trim();
+    debugLog('Trimmed input', trimmedInput);
 
     if (!trimmedInput) {
       throw new Error('AI Agent requires a non-empty user input.');
@@ -403,6 +423,12 @@ Loop the Conversation State output back into the next agent invocation to keep m
     const effectiveProvider = (chatModel?.provider ?? 'openai') as ModelProvider;
     const effectiveModel = ensureModelName(effectiveProvider, chatModel?.modelId ?? null);
     const effectiveApiKey = resolveApiKey(effectiveProvider, chatModel?.apiKey ?? null);
+    debugLog('Resolved model configuration', {
+      effectiveProvider,
+      effectiveModel,
+      hasExplicitApiKey: Boolean(chatModel?.apiKey),
+      apiKeyProvided: Boolean(effectiveApiKey),
+    });
 
     if (!effectiveApiKey || effectiveApiKey === HARDCODED_OPENAI_KEY || effectiveApiKey === HARDCODED_GEMINI_KEY) {
       throw new Error(
@@ -418,22 +444,33 @@ Loop the Conversation State output back into the next agent invocation to keep m
           ? GEMINI_BASE_URL
           : OPENAI_BASE_URL;
 
+    debugLog('Resolved base URL', { explicitBaseUrl, baseUrl });
+
     const incomingState = conversationState;
+    debugLog('Incoming conversation state', incomingState);
 
     const sessionId = incomingState?.sessionId ?? randomUUID();
     const existingMessages = Array.isArray(incomingState?.messages) ? incomingState!.messages : [];
     const existingToolHistory = Array.isArray(incomingState?.toolInvocations)
       ? incomingState!.toolInvocations
       : [];
+    debugLog('Session details', {
+      sessionId,
+      existingMessagesCount: existingMessages.length,
+      existingToolHistoryCount: existingToolHistory.length,
+    });
 
     let history: AgentMessage[] = ensureSystemMessage([...existingMessages], systemPrompt ?? '');
     history = trimConversation(history, memorySize);
+    debugLog('History after ensuring system message and trimming', history);
 
     const userMessage: AgentMessage = { role: 'user', content: trimmedInput };
     const historyWithUser = trimConversation([...history, userMessage], memorySize);
+    debugLog('History with user message', historyWithUser);
 
     const mcpEndpoint = mcp?.endpoint?.trim() ?? '';
     const mcpClient = mcpEndpoint.length > 0 ? new MCPClient(mcpEndpoint, sessionId) : null;
+    debugLog('MCP configuration', { mcpEndpoint, hasMcpClient: Boolean(mcpClient) });
 
     const callMcpTool =
       mcpClient !== null
@@ -444,8 +481,9 @@ Loop the Conversation State output back into the next agent invocation to keep m
               toolName: z.string().min(1),
               arguments: z.unknown().optional(),
             }),
-            async execute({ toolName, arguments: args }) {
+            async execute({ toolName, arguments: args }: { toolName: string; arguments?: unknown }) {
               const result = await mcpClient!.execute(toolName, args ?? {});
+              debugLog('MCP tool execution result', { toolName, args, result });
               return result;
             },
           })
@@ -453,6 +491,7 @@ Loop the Conversation State output back into the next agent invocation to keep m
 
     const toolsConfig = callMcpTool ? { call_mcp_tool: callMcpTool } : undefined;
     const availableToolsCount = callMcpTool ? 1 : 0;
+    debugLog('Tools configuration', { availableToolsCount, toolsConfigKeys: toolsConfig ? Object.keys(toolsConfig) : [] });
 
     const systemMessageEntry = historyWithUser.find((message) => message.role === 'system');
     const resolvedSystemPrompt =
@@ -463,6 +502,7 @@ Loop the Conversation State output back into the next agent invocation to keep m
           : systemMessageEntry && systemMessageEntry.content !== undefined
             ? JSON.stringify(systemMessageEntry.content)
             : '';
+    debugLog('Resolved system prompt', resolvedSystemPrompt);
 
     const messagesForModel: CoreMessage[] = historyWithUser
       .filter((message) => message.role !== 'system')
@@ -471,6 +511,7 @@ Loop the Conversation State output back into the next agent invocation to keep m
         content:
           typeof message.content === 'string' ? message.content : JSON.stringify(message.content),
       }));
+    debugLog('Messages for model', messagesForModel);
 
     const model =
       effectiveProvider === 'gemini'
@@ -482,11 +523,27 @@ Loop the Conversation State output back into the next agent invocation to keep m
             apiKey: effectiveApiKey,
             ...(baseUrl ? { baseURL: baseUrl } : {}),
           })(effectiveModel);
+    debugLog('Model factory created', {
+      provider: effectiveProvider,
+      modelId: effectiveModel,
+      baseUrl,
+      temperature,
+      maxTokens,
+      stepLimit,
+    });
 
     context.logger.info(
       `[ReActAgent] Using ${effectiveProvider} model "${effectiveModel}" with ${availableToolsCount} connected tool(s).`,
     );
     context.emitProgress('AI agent reasoning in progress...');
+    debugLog('Invoking generateText with payload', {
+      system: resolvedSystemPrompt || undefined,
+      messages: messagesForModel,
+      temperature,
+      maxTokens,
+      stepLimit,
+      toolsConfig: toolsConfig ? Object.keys(toolsConfig) : [],
+    });
 
     const generationResult = await generateText({
       model,
@@ -497,11 +554,14 @@ Loop the Conversation State output back into the next agent invocation to keep m
       maxSteps: stepLimit,
       ...(toolsConfig ? { tools: toolsConfig } : {}),
     });
+    debugLog('Generation result', generationResult);
 
     const responseText =
       typeof generationResult.text === 'string' ? generationResult.text : String(generationResult.text ?? '');
+    debugLog('Response text', responseText);
 
     const currentTimestamp = new Date().toISOString();
+    debugLog('Current timestamp', currentTimestamp);
 
     const reasoningTrace: ReasoningStep[] = Array.isArray(generationResult.steps)
       ? generationResult.steps.map((step: any, index: number) => ({
@@ -525,6 +585,7 @@ Loop the Conversation State output back into the next agent invocation to keep m
             : [],
         }))
       : [];
+    debugLog('Reasoning trace', reasoningTrace);
 
     const toolLogEntries: ToolInvocationEntry[] = Array.isArray(generationResult.toolResults)
       ? generationResult.toolResults.map((toolResult: any, index: number) => ({
@@ -535,6 +596,7 @@ Loop the Conversation State output back into the next agent invocation to keep m
           timestamp: currentTimestamp,
         }))
       : [];
+    debugLog('Tool log entries', toolLogEntries);
 
     const toolMessages: AgentMessage[] = Array.isArray(generationResult.toolResults)
       ? generationResult.toolResults.map((toolResult: any) => ({
@@ -547,24 +609,36 @@ Loop the Conversation State output back into the next agent invocation to keep m
           },
         }))
       : [];
+    debugLog('Tool messages appended to history', toolMessages);
 
     const assistantMessage: AgentMessage = {
       role: 'assistant',
       content: responseText,
     };
+    debugLog('Assistant message', assistantMessage);
 
     let updatedMessages = trimConversation([...historyWithUser, ...toolMessages], memorySize);
     updatedMessages = trimConversation([...updatedMessages, assistantMessage], memorySize);
+    debugLog('Updated messages after trimming', updatedMessages);
 
     const combinedToolHistory = [...existingToolHistory, ...toolLogEntries];
+    debugLog('Combined tool history', combinedToolHistory);
 
     const nextState: ConversationState = {
       sessionId,
       messages: updatedMessages,
       toolInvocations: combinedToolHistory,
     };
+    debugLog('Next conversation state', nextState);
 
     context.emitProgress('AI agent completed.');
+    debugLog('Final output payload', {
+      responseText,
+      conversationState: nextState,
+      toolInvocations: toolLogEntries,
+      reasoningTrace,
+      usage: generationResult.usage,
+    });
 
     return {
       responseText,

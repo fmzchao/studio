@@ -49,6 +49,7 @@
     "@radix-ui/react-slot": "^1.2.3",
     "@shipsec/backend-client": "workspace:*",
     "@shipsec/shared": "workspace:*",
+    "ai": "^5.0.76",
     "autoprefixer": "^10.4.21",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
