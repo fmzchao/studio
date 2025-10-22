@@ -49,11 +49,19 @@ const inputSchema = z.object({
 
 type Input = z.infer<typeof inputSchema>;
 
+type OpenAIChatModelConfig = {
+  provider: 'openai';
+  modelId: string;
+  apiKey?: string;
+  baseUrl?: string;
+};
+
 type Output = {
   responseText: string;
   finishReason: string | null;
   rawResponse: unknown;
   usage?: unknown;
+  chatModel: OpenAIChatModelConfig;
 };
 
 const outputSchema = z.object({
@@ -61,6 +69,12 @@ const outputSchema = z.object({
   finishReason: z.string().nullable(),
   rawResponse: z.unknown(),
   usage: z.unknown().optional(),
+  chatModel: z.object({
+    provider: z.literal('openai'),
+    modelId: z.string(),
+    apiKey: z.string().optional(),
+    baseUrl: z.string().optional(),
+  }),
 });
 
 const definition: ComponentDefinition<Input, Output> = {
@@ -117,6 +131,12 @@ const definition: ComponentDefinition<Input, Output> = {
         label: 'Token Usage',
         type: 'object',
         description: 'Token usage metadata returned by the provider, if available.',
+      },
+      {
+        id: 'chatModel',
+        label: 'Chat Model Config',
+        type: 'object',
+        description: 'Configuration object (provider, model, overrides) for wiring into downstream nodes such as the AI Agent.',
       },
     ],
     parameters: [
@@ -175,22 +195,22 @@ const definition: ComponentDefinition<Input, Output> = {
     ],
   },
   async execute(params, context) {
-  const { systemPrompt, userPrompt, model, temperature, maxTokens, apiBaseUrl, apiKey } = params;
+    const { systemPrompt, userPrompt, model, temperature, maxTokens, apiBaseUrl, apiKey } = params;
 
-  const overrideApiKey = apiKey?.trim() ?? '';
-  const effectiveApiKey = overrideApiKey.length > 0 ? overrideApiKey : OPENAI_API_KEY;
+    const overrideApiKey = apiKey?.trim() ?? '';
+    const effectiveApiKey = overrideApiKey.length > 0 ? overrideApiKey : OPENAI_API_KEY;
 
-  if (!effectiveApiKey || effectiveApiKey === HARDCODED_API_KEY) {
-    throw new Error(
-      'OpenAI API key is not configured. Supply one via the API Key Override parameter or set OPENAI_API_KEY.',
-    );
-  }
+    if (!effectiveApiKey || effectiveApiKey === HARDCODED_API_KEY) {
+      throw new Error(
+        'OpenAI API key is not configured. Supply one via the API Key Override parameter or set OPENAI_API_KEY.',
+      );
+    }
 
-  const baseURL = apiBaseUrl?.trim() ? apiBaseUrl.trim() : process.env.OPENAI_BASE_URL;
-  const client = createOpenAI({
-    apiKey: effectiveApiKey,
-    ...(baseURL ? { baseURL } : {}),
-  });
+    const baseURL = apiBaseUrl?.trim() ? apiBaseUrl.trim() : process.env.OPENAI_BASE_URL;
+    const client = createOpenAI({
+      apiKey: effectiveApiKey,
+      ...(baseURL ? { baseURL } : {}),
+    });
 
     context.logger.info(`[OpenAIChat] Calling model ${model}`);
     context.emitProgress('Contacting OpenAI-compatible chat completion endpoint...');
@@ -208,11 +228,19 @@ const definition: ComponentDefinition<Input, Output> = {
 
       context.emitProgress('Received response from OpenAI-compatible provider');
 
+      const chatModelConfig: OpenAIChatModelConfig = {
+        provider: 'openai',
+        modelId: model,
+        ...(overrideApiKey.length > 0 ? { apiKey: overrideApiKey } : {}),
+        ...(baseURL ? { baseUrl: baseURL } : {}),
+      };
+
       return {
         responseText: result.text,
         finishReason: result.finishReason ?? null,
         rawResponse: result.response,
         usage: result.usage,
+        chatModel: chatModelConfig,
       };
     } catch (error) {
       context.logger.error('[OpenAIChat] Request failed', error);
