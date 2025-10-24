@@ -79,6 +79,21 @@ export function RunSelector() {
     }
   }, [currentLiveRunId, selectedRunId, selectRun])
 
+  // Fallback to the most recent historical run when nothing is selected
+  useEffect(() => {
+    if (selectedRunId || currentLiveRunId || availableRuns.length === 0) {
+      return
+    }
+
+    const [latestRun] = [...availableRuns].sort(
+      (a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime()
+    )
+
+    if (latestRun) {
+      selectRun(latestRun.id)
+    }
+  }, [availableRuns, selectedRunId, currentLiveRunId, selectRun])
+
   const selectedRun = availableRuns.find(run => run.id === selectedRunId)
   const currentLiveRun = availableRuns.find(run => run.id === currentLiveRunId)
 

@@ -46,6 +46,31 @@ describe('trigger-manual component', () => {
     });
   });
 
+  it('should normalise legacy string runtime input types', async () => {
+    const component = componentRegistry.get('core.trigger.manual');
+    if (!component) throw new Error('Component not registered');
+
+    const context = createExecutionContext({
+      runId: 'test-run',
+      componentRef: 'trigger-test',
+    });
+
+    const params = component.inputSchema.parse({
+      runtimeInputs: [
+        { id: 'legacy', label: 'Legacy Text', type: 'string', required: true },
+      ],
+      __runtimeData: {
+        legacy: 'hello',
+      },
+    });
+
+    const result = await component.execute(params, context) as any;
+
+    expect(result).toEqual({
+      legacy: 'hello',
+    });
+  });
+
   it('should handle empty runtime input configuration', async () => {
     const component = componentRegistry.get<ManualTriggerInput, ManualTriggerOutput>('core.trigger.manual');
     if (!component) throw new Error('Component not registered');

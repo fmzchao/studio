@@ -440,7 +440,16 @@ export const useExecutionTimelineStore = create<TimelineStore>()(
     },
 
     selectRun: async (runId: string) => {
-      set({ selectedRunId: runId })
+      // Clear previous events before loading new timeline
+      set({ 
+        selectedRunId: runId,
+        events: [],
+        dataFlows: [],
+        totalDuration: 0,
+        currentTime: 0,
+        timelineStartTime: null,
+        nodeStates: {}
+      })
       await get().loadTimeline(runId)
     },
 
@@ -624,32 +633,33 @@ let unsubscribeExecutionStore: (() => void) | null = null
 export const initializeTimelineStore = () => {
   if (unsubscribeExecutionStore) {
     unsubscribeExecutionStore()
+    unsubscribeExecutionStore = null
   }
 
-  const { useExecutionStore } = require('./executionStore')
+  void import('./executionStore')
+    .then(({ useExecutionStore }) => {
+      unsubscribeExecutionStore = useExecutionStore.subscribe((state) => {
+        const { logs, runId } = state;
+        const timelineStore = useExecutionTimelineStore.getState()
+        if (timelineStore.playbackMode === 'live' && timelineStore.selectedRunId === runId) {
+          const {
+            events,
+            totalDuration,
+            timelineStartTime,
+          } = prepareTimelineEvents(logs)
+          const currentTime = totalDuration
 
-  unsubscribeExecutionStore = useExecutionStore.subscribe(
-    (state: { logs: ExecutionLog[] }) => state.logs,
-    (logs: ExecutionLog[]) => {
-      const executionState = useExecutionStore.getState()
-      const timelineStore = useExecutionTimelineStore.getState()
-      if (timelineStore.playbackMode === 'live' && timelineStore.selectedRunId === executionState.runId) {
-        // Update timeline with new logs
-        const {
-          events,
-          totalDuration,
-          timelineStartTime
-        } = prepareTimelineEvents(logs)
-        const currentTime = totalDuration
-
-        useExecutionTimelineStore.setState((state: TimelineState) => ({
-          events,
-          totalDuration,
-          timelineStartTime,
-          currentTime,
-          nodeStates: calculateNodeStates(events, state.dataFlows, currentTime, timelineStartTime)
-        }))
-      }
-    }
-  )
+          useExecutionTimelineStore.setState((state) => ({
+            events,
+            totalDuration,
+            timelineStartTime,
+            currentTime,
+            nodeStates: calculateNodeStates(events, state.dataFlows, currentTime, timelineStartTime),
+          }))
+        }
+      })
+    })
+    .catch((error) => {
+      console.error('Failed to initialize timeline store subscription', error)
+    })
 }

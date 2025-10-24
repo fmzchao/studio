@@ -46,6 +46,7 @@ docker compose up -d
 
 # Verify all services are healthy
 docker compose ps
+curl -f http://localhost:8081/health || echo "Temporal UI not ready yet"
 ```
 
 ### 4. Create Temporal Namespace
