@@ -49,7 +49,7 @@ const definition: ComponentDefinition<Input, Output> = {
     slug: 'text-splitter',
     version: '1.0.0',
     type: 'process',
-    category: 'building-block',
+    category: 'transform',
     description: 'Split text into array of strings by separator (newline, comma, etc.)',
     icon: 'SplitSquareHorizontal',
     author: {

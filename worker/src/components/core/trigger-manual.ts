@@ -37,7 +37,7 @@ const outputSchema = z.record(z.string(), z.unknown());
 const definition: ComponentDefinition<Input, Output> = {
   id: 'core.trigger.manual',
   label: 'Manual Trigger',
-  category: 'trigger',
+  category: 'input',
   runner: { kind: 'inline' },
   inputSchema,
   outputSchema,
@@ -46,7 +46,7 @@ const definition: ComponentDefinition<Input, Output> = {
     slug: 'manual-trigger',
     version: '2.0.0',
     type: 'trigger',
-    category: 'trigger',
+    category: 'input',
     description: 'Starts a workflow manually. Configure runtime inputs to collect data when triggered.',
     icon: 'Play',
     author: {

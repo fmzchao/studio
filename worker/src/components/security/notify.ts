@@ -94,7 +94,7 @@ const dockerTimeoutSeconds = (() => {
 const definition: ComponentDefinition<Input, Output> = {
   id: 'shipsec.notify.dispatch',
   label: 'ProjectDiscovery Notify',
-  category: 'output',
+  category: 'security',
   runner: {
     kind: 'docker',
     image: 'projectdiscovery/notify:latest',
@@ -184,7 +184,7 @@ cat "$MESSAGE_FILE" | "$@"
     slug: 'notify',
     version: '1.0.0',
     type: 'output',
-    category: 'security-tool',
+    category: 'security',
     description: 'Deliver security findings to Slack, Teams, and other channels using ProjectDiscovery notify.',
     documentation: 'Configure provider credentials via YAML then stream workflow output to notify for alerting.',
     documentationUrl: 'https://github.com/projectdiscovery/notify',

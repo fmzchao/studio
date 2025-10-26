@@ -269,7 +269,7 @@ function trimConversation(history: AgentMessage[], memorySize: number): AgentMes
 const definition: ComponentDefinition<Input, Output> = {
   id: 'core.ai.agent',
   label: 'AI SDK Agent',
-  category: 'transform',
+  category: 'ai',
   runner: { kind: 'inline' },
   inputSchema,
   outputSchema,
@@ -290,7 +290,7 @@ Loop the Conversation State output back into the next agent invocation to keep m
     slug: 'ai-agent',
     version: '1.0.0',
     type: 'process',
-    category: 'building-block',
+    category: 'ai',
     description: 'AI SDK agent with conversation memory, MCP tool calling, and reasoning trace output.',
     icon: 'Bot',
     author: {

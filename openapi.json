@@ -1101,7 +1101,7 @@
                       },
                       "category": {
                         "type": "string",
-                        "example": "input-output"
+                        "example": "input"
                       },
                       "description": {
                         "type": "string",

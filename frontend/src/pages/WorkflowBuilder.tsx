@@ -1,5 +1,6 @@
 import { useParams, useNavigate } from 'react-router-dom'
 import { useEffect, useState, useRef, useCallback } from 'react'
+import { useSidebar } from '@/components/layout/AppLayout'
 import {
   ReactFlowProvider,
   useNodesState,
@@ -30,6 +31,7 @@ import type { NodeData } from '@/schemas/node'
 function WorkflowBuilderContent() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const { isOpen: sidebarOpen, toggle: toggleSidebar } = useSidebar()
   const isNewWorkflow = id === 'new'
   const { metadata, setMetadata, setWorkflowId, markClean, resetWorkflow } = useWorkflowStore()
   const [nodes, setNodes, onNodesChange] = useNodesState<NodeData>([])
@@ -361,6 +363,8 @@ function WorkflowBuilderContent() {
         isNew={isNewWorkflow}
         onRun={handleRun}
         onSave={handleSave}
+        sidebarOpen={sidebarOpen}
+        onSidebarToggle={toggleSidebar}
       />
 
       <div ref={layoutRef} className="flex flex-1 overflow-hidden">

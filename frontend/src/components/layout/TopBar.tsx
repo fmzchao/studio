@@ -23,9 +23,11 @@ interface TopBarProps {
   isNew?: boolean
   onRun?: () => void
   onSave: () => Promise<void> | void
+  sidebarOpen?: boolean
+  onSidebarToggle?: () => void
 }
 
-export function TopBar({ onRun, onSave }: TopBarProps) {
+export function TopBar({ onRun, onSave, sidebarOpen, onSidebarToggle }: TopBarProps) {
   const navigate = useNavigate()
   const [isSaving, setIsSaving] = useState(false)
 
@@ -55,6 +57,23 @@ export function TopBar({ onRun, onSave }: TopBarProps) {
 
   return (
     <div className="h-[60px] border-b bg-background flex items-center px-4 gap-4">
+      {/* Sidebar toggle */}
+      {onSidebarToggle && (
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={onSidebarToggle}
+          aria-label={sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
+          className="hidden md:flex"
+        >
+          {sidebarOpen ? (
+            <PanelLeftClose className="h-5 w-5" />
+          ) : (
+            <PanelLeftOpen className="h-5 w-5" />
+          )}
+        </Button>
+      )}
+
       <Button
         variant="ghost"
         size="icon"

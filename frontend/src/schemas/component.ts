@@ -77,6 +77,18 @@ export const ComponentAuthorSchema = z.object({
 export type ComponentAuthor = z.infer<typeof ComponentAuthorSchema>
 
 /**
+ * Component category configuration
+ */
+export const ComponentCategoryConfigSchema = z.object({
+  label: z.string(),
+  color: z.string(),
+  description: z.string(),
+  emoji: z.string(),
+})
+
+export type ComponentCategoryConfig = z.infer<typeof ComponentCategoryConfigSchema>
+
+/**
  * Complete component metadata definition
  */
 export const ComponentMetadataSchema = z.object({
@@ -85,7 +97,8 @@ export const ComponentMetadataSchema = z.object({
   name: z.string().min(1),
   version: z.string().default('1.0.0'),
   type: z.enum(['trigger', 'input', 'scan', 'process', 'output']),
-  category: z.enum(['security-tool', 'building-block', 'input-output', 'trigger']),
+  category: z.enum(['input', 'transform', 'ai', 'security', 'it_ops', 'output']),
+  categoryConfig: ComponentCategoryConfigSchema,
   description: z.string().optional().default(''),
   documentation: z.string().optional().nullable(),
   documentationUrl: z.string().url().optional().nullable(),

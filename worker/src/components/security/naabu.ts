@@ -92,7 +92,7 @@ const dockerTimeoutSeconds = (() => {
 const definition: ComponentDefinition<Input, Output> = {
   id: 'shipsec.naabu.scan',
   label: 'Naabu Port Scan',
-  category: 'discovery',
+  category: 'security',
   runner: {
     kind: 'docker',
     image: 'projectdiscovery/naabu:latest',
@@ -191,7 +191,7 @@ eval "$CMD"
     slug: 'naabu',
     version: '1.0.0',
     type: 'scan',
-    category: 'security-tool',
+    category: 'security',
     description: 'Fast active port scanning using ProjectDiscovery Naabu.',
     documentation: 'ProjectDiscovery Naabu documentation covers usage, CLI flags, and configuration examples.',
     documentationUrl: 'https://github.com/projectdiscovery/naabu',

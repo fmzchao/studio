@@ -1195,7 +1195,7 @@ export interface operations {
                         version?: string;
                         /** @example input */
                         type?: string;
-                        /** @example input-output */
+                        /** @example input */
                         category?: string;
                         /** @example Load files from filesystem */
                         description?: string;

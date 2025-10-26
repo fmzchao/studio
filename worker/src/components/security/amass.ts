@@ -132,7 +132,7 @@ const dockerTimeoutSeconds = (() => {
 const definition: ComponentDefinition<Input, Output> = {
   id: 'shipsec.amass.enum',
   label: 'Amass Enumeration',
-  category: 'discovery',
+  category: 'security',
   runner: {
     kind: 'docker',
     image: 'owaspamass/amass:latest',
@@ -356,7 +356,7 @@ printf '{"subdomains":%s,"rawOutput":"%s","domainCount":%d,"subdomainCount":%d,"
     slug: 'amass',
     version: '1.0.0',
     type: 'scan',
-    category: 'security-tool',
+    category: 'security',
     description: 'OWASP Amass powered subdomain enumeration with optional brute force, alterations, and recursion controls.',
     documentation: 'OWASP Amass is a comprehensive attack surface mapping toolkit. Adjust enumeration depth, mutation behaviour, and DNS query rates to match your engagement.',
     documentationUrl: 'https://github.com/owasp-amass/amass',

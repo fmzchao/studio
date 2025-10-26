@@ -71,7 +71,7 @@ const definition: ComponentDefinition<Input, Output> = {
     slug: 'webhook',
     version: '1.0.0',
     type: 'output',
-    category: 'input-output',
+    category: 'output',
     description: 'Send JSON payloads to external HTTP endpoints with retries and timeouts.',
     icon: 'Webhook',
     author: {

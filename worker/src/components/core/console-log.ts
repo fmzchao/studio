@@ -30,7 +30,7 @@ const definition: ComponentDefinition<Input, Output> = {
     slug: 'console-log',
     version: '1.0.0',
     type: 'output',
-    category: 'input-output',
+    category: 'output',
     description: 'Output data to workflow execution logs for debugging and monitoring.',
     icon: 'Terminal',
     author: {

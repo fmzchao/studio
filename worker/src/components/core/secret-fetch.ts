@@ -44,7 +44,7 @@ const definition: ComponentDefinition<Input, Output> = {
     slug: 'secret-fetch',
     version: '1.0.0',
     type: 'input',
-    category: 'building-block',
+    category: 'input',
     description: 'Resolve a stored secret and provide it as masked output for other components.',
     icon: 'KeyRound',
     inputs: [

@@ -84,7 +84,7 @@ const outputSchema = z.object({
 const definition: ComponentDefinition<Input, Output> = {
   id: 'core.gemini.chat',
   label: 'Gemini Chat Completion',
-  category: 'transform',
+  category: 'ai',
   runner: { kind: 'inline' },
   inputSchema,
   outputSchema,
@@ -93,7 +93,7 @@ const definition: ComponentDefinition<Input, Output> = {
     slug: 'gemini-chat-completion',
     version: '1.0.0',
     type: 'process',
-    category: 'building-block',
+    category: 'ai',
     description: 'Send a system + user prompt to a Gemini chat completion API and return the response.',
     icon: 'MessageCircle',
     author: {

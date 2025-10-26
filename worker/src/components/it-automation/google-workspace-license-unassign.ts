@@ -139,7 +139,7 @@ async function deleteUser(
 const definition: ComponentDefinition<Input, GoogleWorkspaceUserDeleteOutput> = {
   id: 'it-automation.google-workspace.user-delete',
   label: 'Google Workspace User Delete',
-  category: 'output',
+  category: 'it_ops',
   runner: { kind: 'inline' },
   inputSchema,
   outputSchema,
@@ -148,7 +148,7 @@ const definition: ComponentDefinition<Input, GoogleWorkspaceUserDeleteOutput> = 
     slug: 'google-workspace-user-delete',
     version: '2.0.0',
     type: 'output',
-    category: 'building-block',
+    category: 'it_ops',
     description: 'Delete Google Workspace user accounts to automatically release all licenses and complete offboarding.',
     icon: 'Building',
     author: {

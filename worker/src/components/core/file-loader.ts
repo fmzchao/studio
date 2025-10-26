@@ -41,7 +41,7 @@ const definition: ComponentDefinition<Input, Output> = {
     slug: 'file-loader',
     version: '1.0.0',
     type: 'input',
-    category: 'input-output',
+    category: 'input',
     description: 'Load file contents from ShipSec storage for use in workflows.',
     icon: 'FileUp',
     author: {

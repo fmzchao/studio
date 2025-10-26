@@ -117,11 +117,14 @@ export interface ComponentAuthorMetadata {
   url?: string;
 }
 
-export type ComponentUiCategory =
-  | 'security-tool'
-  | 'building-block'
-  | 'input-output'
-  | 'trigger';
+// Categories supported by the new functional grouping plus legacy values for backwards compatibility
+export type ComponentCategory =
+  | 'input'
+  | 'transform'
+  | 'ai'
+  | 'security'
+  | 'it_ops'
+  | 'output';
 
 export type ComponentUiType =
   | 'trigger'
@@ -134,7 +137,7 @@ export interface ComponentUiMetadata {
   slug: string;
   version: string;
   type: ComponentUiType;
-  category: ComponentUiCategory;
+  category: ComponentCategory;
   description?: string;
   documentation?: string;
   documentationUrl?: string;
@@ -168,7 +171,7 @@ export interface ExecutionContext {
 export interface ComponentDefinition<I = unknown, O = unknown> {
   id: string;
   label: string;
-  category: 'trigger' | 'input' | 'discovery' | 'transform' | 'output';
+  category: ComponentCategory;
   runner: RunnerConfig;
   inputSchema: z.ZodType<I>;
   outputSchema: z.ZodType<O>;

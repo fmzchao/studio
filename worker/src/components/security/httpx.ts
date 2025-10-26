@@ -108,7 +108,7 @@ const dockerTimeoutSeconds = (() => {
 const definition: ComponentDefinition<Input, Output> = {
   id: 'shipsec.httpx.scan',
   label: 'httpx Web Probe',
-  category: 'discovery',
+  category: 'security',
   runner: {
     kind: 'docker',
     image: 'projectdiscovery/httpx:latest',
@@ -241,7 +241,7 @@ printf '{"results":%s,"raw":"%s","stderr":"%s","exitCode":%d}' \
     slug: 'httpx',
     version: '1.0.0',
     type: 'scan',
-    category: 'security-tool',
+    category: 'security',
     description: 'Identify live HTTP endpoints and collect response metadata using ProjectDiscovery httpx.',
     documentation: 'ProjectDiscovery httpx documentation details CLI flags for probing hosts, extracting metadata, and filtering responses.',
     documentationUrl: 'https://github.com/projectdiscovery/httpx',

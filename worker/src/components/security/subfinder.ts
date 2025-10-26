@@ -63,7 +63,7 @@ const outputSchema = z.object({
 const definition: ComponentDefinition<Input, Output> = {
   id: 'shipsec.subfinder.run',
   label: 'Subfinder',
-  category: 'discovery',
+  category: 'security',
   runner: {
     kind: 'docker',
     image: 'projectdiscovery/subfinder:latest',
@@ -142,7 +142,7 @@ printf '{"subdomains":%s,"rawOutput":"%s","domainCount":%d,"subdomainCount":%d}'
     slug: 'subfinder',
     version: '1.0.0',
     type: 'scan',
-    category: 'security-tool',
+    category: 'security',
     description: 'Discover subdomains for a target domain using ProjectDiscovery subfinder.',
     documentation: 'ProjectDiscovery Subfinder documentation details configuration, data sources, and usage examples.',
     documentationUrl: 'https://github.com/projectdiscovery/subfinder',

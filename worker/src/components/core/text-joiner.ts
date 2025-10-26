@@ -54,7 +54,7 @@ const definition: ComponentDefinition<Input, Output> = {
     slug: 'text-joiner',
     version: '1.0.0',
     type: 'process',
-    category: 'building-block',
+    category: 'transform',
     description: 'Join array of strings into formatted text for AI prompts.',
     icon: 'Merge',
     author: {

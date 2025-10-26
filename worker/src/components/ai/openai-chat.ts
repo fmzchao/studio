@@ -83,7 +83,7 @@ const outputSchema = z.object({
 const definition: ComponentDefinition<Input, Output> = {
   id: 'core.openai.chat',
   label: 'OpenAI Chat Completion',
-  category: 'transform',
+  category: 'ai',
   runner: { kind: 'inline' },
   inputSchema,
   outputSchema,
@@ -92,7 +92,7 @@ const definition: ComponentDefinition<Input, Output> = {
     slug: 'openai-chat-completion',
     version: '1.0.0',
     type: 'process',
-    category: 'building-block',
+    category: 'ai',
     description:
       'Send a system + user prompt to an OpenAI compatible chat completion API and return the response.',
     icon: 'MessageCircle',

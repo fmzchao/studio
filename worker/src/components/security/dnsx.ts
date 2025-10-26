@@ -91,7 +91,7 @@ const outputSchema: z.ZodType<Output> = z.object({
 const definition: ComponentDefinition<Input, Output> = {
   id: 'shipsec.dnsx.run',
   label: 'DNSX Resolver',
-  category: 'discovery',
+  category: 'security',
   runner: {
     kind: 'docker',
     image: 'projectdiscovery/dnsx:latest',
@@ -216,7 +216,7 @@ fi
     slug: 'dnsx',
     version: '1.0.0',
     type: 'scan',
-    category: 'security-tool',
+    category: 'security',
     description:
       'Resolve DNS records using ProjectDiscovery dnsx with support for multiple record types, custom resolvers, and rate limiting.',
     documentation: 'https://github.com/projectdiscovery/dnsx',
