@@ -20,7 +20,7 @@
     "dev:stack": "bun run dev:infra && pm2 logs shipsec-frontend",
     "dev:stack:stop": "bash -lc 'pm2 delete shipsec-frontend shipsec-backend shipsec-worker || true && docker compose down'",
     "typecheck": "bun --filter='@shipsec/*' typecheck",
-    "test": "(cd packages/component-sdk && bun test) && (cd worker && bun test) && (cd backend && bun test) && (cd frontend && bun run test)"
+    "test": "bun --filter='@shipsec/*' run test"
   },
   "devDependencies": {
     "bun-types": "^1.3.0",
