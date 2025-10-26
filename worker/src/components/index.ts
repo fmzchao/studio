@@ -13,6 +13,7 @@ import './core/console-log';
 import './core/secret-fetch';
 import './ai/openai-chat';
 import './ai/gemini-chat';
+import './ai/openrouter-chat';
 import './ai/ai-agent';
 
 // Security components

@@ -7,7 +7,7 @@ import { componentRegistry, ComponentDefinition } from '@shipsec/component-sdk';
 export type GenerateTextFn = typeof generateTextImpl;
 export type CreateOpenAIFn = typeof createOpenAIImpl;
 
-const DEFAULT_MODEL = 'gpt-4o-mini';
+const DEFAULT_MODEL = 'gpt-5-mini';
 const DEFAULT_TEMPERATURE = 0.7;
 const DEFAULT_MAX_TOKENS = 512;
 const DEFAULT_BASE_URL = process.env.OPENAI_BASE_URL ?? '';
@@ -151,9 +151,11 @@ const definition: ComponentDefinition<Input, Output> = {
         default: DEFAULT_MODEL,
         description: 'OpenAI compatible chat model to invoke.',
         options: [
-          { label: 'gpt-4o-mini', value: 'gpt-4o-mini' },
-          { label: 'gpt-4o', value: 'gpt-4o' },
-          { label: 'gpt-4.1-mini', value: 'gpt-4.1-mini' },
+          { label: 'GPT-5 Mini', value: 'gpt-5-mini' },
+          { label: 'GPT-5 Pro', value: 'gpt-5-pro' },
+          { label: 'GPT-5', value: 'gpt-5' },
+          { label: 'GPT-4o', value: 'gpt-4o' },
+          { label: 'GPT-4.1 Mini', value: 'gpt-4.1-mini' },
         ],
       },
       {

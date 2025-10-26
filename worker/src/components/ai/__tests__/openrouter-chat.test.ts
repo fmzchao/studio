@@ -1,18 +1,18 @@
-import { describe, it, expect, vi, beforeEach, mock } from 'bun:test';
+import { describe, it, expect, beforeEach, mock } from 'bun:test';
 import '../../index';
 import { componentRegistry } from '@shipsec/component-sdk';
 import type { ExecutionContext } from '@shipsec/component-sdk';
 import { createOpenAI as createOpenAIImpl } from '@ai-sdk/openai';
 import type { ToolSet, GenerateTextResult } from 'ai';
-import type { CreateOpenAIFn, GenerateTextFn } from '../openai-chat';
+import type { CreateOpenAIFn, GenerateTextFn } from '../openrouter-chat';
 
 type GenerateTextParams = Parameters<GenerateTextFn>[0];
 
 const createGenerateTextResult = (): GenerateTextResult<ToolSet, never> => ({
-    content: [],
-    text: 'hello world',
-    reasoning: [],
-    reasoningText: undefined,
+  content: [],
+  text: 'openrouter response',
+  reasoning: [],
+  reasoningText: undefined,
   files: [],
   sources: [],
   toolCalls: [],
@@ -23,32 +23,32 @@ const createGenerateTextResult = (): GenerateTextResult<ToolSet, never> => ({
   dynamicToolResults: [],
   finishReason: 'stop',
   usage: {
-    inputTokens: 5,
-    outputTokens: 7,
-    totalTokens: 12,
+    inputTokens: 12,
+    outputTokens: 18,
+    totalTokens: 30,
   },
   totalUsage: {
-    inputTokens: 5,
-    outputTokens: 7,
-    totalTokens: 12,
+    inputTokens: 12,
+    outputTokens: 18,
+    totalTokens: 30,
   },
   warnings: undefined,
   request: {},
   response: {
     id: 'resp',
     timestamp: new Date('2024-01-01T00:00:00Z'),
-    modelId: 'gpt-5-mini',
+    modelId: 'openrouter/auto',
     messages: [],
   },
   output: undefined as never,
-    providerMetadata: undefined,
-    steps: [],
+  providerMetadata: undefined,
+  steps: [],
   experimental_output: undefined as never,
 });
 
 let generateTextCalls: GenerateTextParams[] = [];
-const generateTextMock = (async (_args: GenerateTextParams) => {
-  generateTextCalls.push(_args);
+const generateTextMock = (async (args: GenerateTextParams) => {
+  generateTextCalls.push(args);
   return createGenerateTextResult();
 }) as GenerateTextFn;
 const createOpenAIMock = mock<CreateOpenAIFn>((options) => createOpenAIImpl(options));
@@ -58,12 +58,12 @@ beforeEach(() => {
   createOpenAIMock.mockClear();
 });
 
-describe('core.openai.chat component', () => {
-  it('resolves API key from secrets and calls the provider', async () => {
-    const definition = componentRegistry.get<any, any>('core.openai.chat');
+describe('core.openrouter.chat component', () => {
+  it('resolves API key, applies headers, and calls the provider', async () => {
+    const definition = componentRegistry.get<any, any>('core.openrouter.chat');
     expect(definition).toBeDefined();
 
-    const secretsGet = mock(async () => ({ value: 'sk-secret-from-store', version: 1 }));
+    const secretsGet = mock(async () => ({ value: 'or-secret-from-store', version: 1 }));
     const context: ExecutionContext = {
       runId: 'test-run',
       componentRef: 'node-1',
@@ -78,46 +78,61 @@ describe('core.openai.chat component', () => {
 
     const result = await (definition!.execute as any)(
       {
-        systemPrompt: 'system prompt',
-        userPrompt: 'Hello?',
-        model: 'gpt-5-mini',
-        temperature: 0.5,
-        maxTokens: 256,
-        apiBaseUrl: '',
-        apiKey: 'a2e6b4ad-1234-4e4c-b64f-0123456789ab',
+        systemPrompt: 'You are helpful.',
+        userPrompt: 'Summarise the finding.',
+        model: 'meta-llama/llama-3.1-70b-instruct',
+        temperature: 0.6,
+        maxTokens: 512,
+        apiBaseUrl: 'https://openrouter.example/v1',
+        apiKey: 'openrouter-secret',
+        httpReferer: ' https://studio.shipsec.ai/workflows ',
+        appTitle: ' ShipSec Studio Automation ',
       },
       context,
       {
         generateText: generateTextMock,
         createOpenAI: createOpenAIMock,
-      }
+      },
     );
 
-    expect(secretsGet).toHaveBeenCalledWith('a2e6b4ad-1234-4e4c-b64f-0123456789ab');
+    expect(secretsGet).toHaveBeenCalledWith('openrouter-secret');
     expect(createOpenAIMock).toHaveBeenCalledWith(
-      expect.objectContaining({ apiKey: 'sk-secret-from-store' }),
+      expect.objectContaining({
+        apiKey: 'or-secret-from-store',
+        baseURL: 'https://openrouter.example/v1',
+        headers: {
+          'HTTP-Referer': 'https://studio.shipsec.ai/workflows',
+          'X-Title': 'ShipSec Studio Automation',
+        },
+      }),
     );
+
     expect(generateTextCalls).toHaveLength(1);
     expect(generateTextCalls[0]).toEqual(
       expect.objectContaining({
-        prompt: 'Hello?',
-        system: 'system prompt',
-        temperature: 0.5,
-        maxOutputTokens: 256,
+        prompt: 'Summarise the finding.',
+        system: 'You are helpful.',
+        temperature: 0.6,
+        maxOutputTokens: 512,
       }),
     );
+
     expect(result.chatModel).toEqual(
       expect.objectContaining({
-        provider: 'openai',
-        modelId: 'gpt-5-mini',
-        apiKeySecretId: 'a2e6b4ad-1234-4e4c-b64f-0123456789ab',
+        provider: 'openrouter',
+        modelId: 'meta-llama/llama-3.1-70b-instruct',
+        apiKeySecretId: 'openrouter-secret',
+        baseUrl: 'https://openrouter.example/v1',
+        headers: {
+          'HTTP-Referer': 'https://studio.shipsec.ai/workflows',
+          'X-Title': 'ShipSec Studio Automation',
+        },
       }),
     );
-    expect(result.chatModel.apiKey).toBeUndefined();
   });
 
   it('throws when secret cannot be resolved', async () => {
-    const definition = componentRegistry.get<any, any>('core.openai.chat');
+    const definition = componentRegistry.get<any, any>('core.openrouter.chat');
     expect(definition).toBeDefined();
 
     const secretsGet = mock(async () => null);
@@ -137,19 +152,22 @@ describe('core.openai.chat component', () => {
       (definition!.execute as any)(
         {
           systemPrompt: '',
-          userPrompt: 'Hello',
-          model: 'gpt-5-mini',
+          userPrompt: 'Summarise the finding.',
+          model: 'openrouter/auto',
           temperature: 0.7,
           maxTokens: 512,
           apiBaseUrl: '',
           apiKey: 'missing-secret',
+          httpReferer: '',
+          appTitle: '',
         },
         context,
         {
-        generateText: generateTextMock,
-        createOpenAI: createOpenAIMock,
-      }
+          generateText: generateTextMock,
+          createOpenAI: createOpenAIMock,
+        },
       ),
     ).rejects.toThrow(/secret "missing-secret" was not found/i);
   });
 });
+
