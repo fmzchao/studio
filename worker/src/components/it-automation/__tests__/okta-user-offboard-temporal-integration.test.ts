@@ -1,4 +1,5 @@
-import { describe, it, expect, vi, beforeEach, mock } from 'bun:test';
+import { describe, it, expect, vi, beforeEach, afterEach, mock } from 'bun:test';
+import { Context } from '@temporalio/activity';
 import { runComponentActivity } from '../../../temporal/activities/run-component.activity';
 import { createMockSecretsService, createMockTrace, createMockLogCollector } from '../../../testing/test-utils';
 
@@ -23,8 +24,20 @@ mock.module('@okta/okta-sdk-nodejs', () => ({
 import '../../index';
 
 describe('Okta User Offboard - Temporal Activity Integration', () => {
+  const contextSpy = vi.spyOn(Context, 'current');
+
   beforeEach(() => {
     vi.clearAllMocks();
+    contextSpy.mockReturnValue({
+      info: {
+        activityId: 'activity-1',
+        attempt: 1,
+      },
+    } as any);
+  });
+
+  afterEach(() => {
+    contextSpy.mockReset();
   });
 
   it('should successfully deactivate user through temporal activity', async () => {
@@ -94,7 +107,6 @@ describe('Okta User Offboard - Temporal Activity Integration', () => {
     });
 
     // Assertions
-    expect(result.success).toBe(true);
     expect(result.output.success).toBe(true);
     expect(result.output.userDeactivated).toBe(true);
     expect(result.output.userDeleted).toBe(false);
@@ -124,7 +136,12 @@ describe('Okta User Offboard - Temporal Activity Integration', () => {
 
     // Execute through temporal activity
     const result = await runComponentActivity({
-      componentId: 'it-automation.okta.user-offboard',
+      runId: 'test-run-fail-1',
+      workflowId: 'test-workflow-1',
+      action: {
+        ref: 'okta-offboard',
+        componentId: 'it-automation.okta.user-offboard',
+      },
       params: {
         user_email: 'notfound@example.com',
         okta_domain: 'company.okta.com',
@@ -132,18 +149,15 @@ describe('Okta User Offboard - Temporal Activity Integration', () => {
         action: 'deactivate',
         dry_run: false,
       },
-      runId: 'test-run-fail-1',
-      componentRef: 'okta-offboard',
-      secrets: mockSecretsService,
-      trace,
-      logCollector,
+      metadata: {
+        streamId: 'test-stream',
+      },
     });
 
     const endTime = Date.now();
     const executionTime = endTime - startTime;
 
     // Assertions
-    expect(result.success).toBe(false);
     expect(result.output.success).toBe(false);
     expect(result.output.userDeactivated).toBe(false);
     expect(result.output.userDeleted).toBe(false);
@@ -172,7 +186,12 @@ describe('Okta User Offboard - Temporal Activity Integration', () => {
 
     // Execute through temporal activity
     const result = await runComponentActivity({
-      componentId: 'it-automation.okta.user-offboard',
+      runId: 'test-run-fail-2',
+      workflowId: 'test-workflow-1',
+      action: {
+        ref: 'okta-offboard',
+        componentId: 'it-automation.okta.user-offboard',
+      },
       params: {
         user_email: 'test@example.com',
         okta_domain: 'company.okta.com',
@@ -180,18 +199,15 @@ describe('Okta User Offboard - Temporal Activity Integration', () => {
         action: 'deactivate',
         dry_run: false,
       },
-      runId: 'test-run-fail-2',
-      componentRef: 'okta-offboard',
-      secrets: mockSecretsService,
-      trace,
-      logCollector,
+      metadata: {
+        streamId: 'test-stream',
+      },
     });
 
     const endTime = Date.now();
     const executionTime = endTime - startTime;
 
     // Assertions
-    expect(result.success).toBe(false);
     expect(result.output.success).toBe(false);
     expect(result.output.userDeactivated).toBe(false);
     expect(result.output.userDeleted).toBe(false);
@@ -224,7 +240,12 @@ describe('Okta User Offboard - Temporal Activity Integration', () => {
 
     // Execute through temporal activity
     const result = await runComponentActivity({
-      componentId: 'it-automation.okta.user-offboard',
+      runId: 'test-run-fail-3',
+      workflowId: 'test-workflow-1',
+      action: {
+        ref: 'okta-offboard',
+        componentId: 'it-automation.okta.user-offboard',
+      },
       params: {
         user_email: 'test@example.com',
         okta_domain: 'company.okta.com',
@@ -232,18 +253,15 @@ describe('Okta User Offboard - Temporal Activity Integration', () => {
         action: 'deactivate',
         dry_run: false,
       },
-      runId: 'test-run-fail-3',
-      componentRef: 'okta-offboard',
-      secrets: mockSecretsService,
-      trace,
-      logCollector,
+      metadata: {
+        streamId: 'test-stream',
+      },
     });
 
     const endTime = Date.now();
     const executionTime = endTime - startTime;
 
     // Assertions
-    expect(result.success).toBe(false);
     expect(result.output.success).toBe(false);
     expect(result.output.userDeactivated).toBe(false);
     expect(result.output.userDeleted).toBe(false);
@@ -284,7 +302,12 @@ describe('Okta User Offboard - Temporal Activity Integration', () => {
 
     // Execute through temporal activity in dry run mode
     const result = await runComponentActivity({
-      componentId: 'it-automation.okta.user-offboard',
+      runId: 'test-run-dry',
+      workflowId: 'test-workflow-1',
+      action: {
+        ref: 'okta-offboard',
+        componentId: 'it-automation.okta.user-offboard',
+      },
       params: {
         user_email: 'test@example.com',
         okta_domain: 'company.okta.com',
@@ -292,15 +315,12 @@ describe('Okta User Offboard - Temporal Activity Integration', () => {
         action: 'deactivate',
         dry_run: true,
       },
-      runId: 'test-run-dry',
-      componentRef: 'okta-offboard',
-      secrets: mockSecretsService,
-      trace,
-      logCollector,
+      metadata: {
+        streamId: 'test-stream',
+      },
     });
 
     // Assertions
-    expect(result.success).toBe(true);
     expect(result.output.success).toBe(true);
     expect(result.output.userDeactivated).toBe(true); // Simulated
     expect(result.output.userDeleted).toBe(false);
@@ -336,12 +356,13 @@ describe('Okta User Offboard - Temporal Activity Integration', () => {
     mockUserApi.deactivateUser.mockResolvedValue({});
     mockUserApi.deleteUser.mockResolvedValue({});
 
-    const trace = createMockTrace();
-    const logCollector = createMockLogCollector();
-
-    // Execute delete action through temporal activity
     const result = await runComponentActivity({
-      componentId: 'it-automation.okta.user-offboard',
+      runId: 'test-run-delete',
+      workflowId: 'test-workflow-1',
+      action: {
+        ref: 'okta-offboard',
+        componentId: 'it-automation.okta.user-offboard',
+      },
       params: {
         user_email: 'test@example.com',
         okta_domain: 'company.okta.com',
@@ -349,15 +370,12 @@ describe('Okta User Offboard - Temporal Activity Integration', () => {
         action: 'delete',
         dry_run: false,
       },
-      runId: 'test-run-delete',
-      componentRef: 'okta-offboard',
-      secrets: mockSecretsService,
-      trace,
-      logCollector,
+      metadata: {
+        streamId: 'test-stream',
+      },
     });
 
     // Assertions
-    expect(result.success).toBe(true);
     expect(result.output.success).toBe(true);
     expect(result.output.userDeactivated).toBe(true);
     expect(result.output.userDeleted).toBe(true);
@@ -390,12 +408,13 @@ describe('Okta User Offboard - Temporal Activity Integration', () => {
 
     mockUserApi.getUser.mockResolvedValue(mockUser);
 
-    const trace = createMockTrace();
-    const logCollector = createMockLogCollector();
-
-    // Execute through temporal activity
     const result = await runComponentActivity({
-      componentId: 'it-automation.okta.user-offboard',
+      runId: 'test-run-already-deactivated',
+      workflowId: 'test-workflow-1',
+      action: {
+        ref: 'okta-offboard',
+        componentId: 'it-automation.okta.user-offboard',
+      },
       params: {
         user_email: 'test@example.com',
         okta_domain: 'company.okta.com',
@@ -403,15 +422,12 @@ describe('Okta User Offboard - Temporal Activity Integration', () => {
         action: 'deactivate',
         dry_run: false,
       },
-      runId: 'test-run-already-deactivated',
-      componentRef: 'okta-offboard',
-      secrets: mockSecretsService,
-      trace,
-      logCollector,
+      metadata: {
+        streamId: 'test-stream',
+      },
     });
 
     // Assertions
-    expect(result.success).toBe(true);
     expect(result.output.success).toBe(true);
     expect(result.output.userDeactivated).toBe(false);
     expect(result.output.userDeleted).toBe(false);

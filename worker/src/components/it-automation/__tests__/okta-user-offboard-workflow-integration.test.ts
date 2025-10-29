@@ -88,15 +88,6 @@ describe('Okta User Offboard - Workflow Integration', () => {
     mockUserApi.getUser.mockResolvedValue(mockUser);
     mockUserApi.deactivateUser.mockResolvedValue({});
 
-    // Mock the secrets service injection
-    vi.mock('../../../temporal/activities/run-component.activity', async () => {
-      const actual = await vi.importActual<typeof import('../../../temporal/activities/run-component.activity')>('../../../temporal/activities/run-component.activity');
-      return {
-        ...actual,
-        // We'll let the actual implementation run, but with our mocked secrets
-      };
-    });
-
     const traceEvents: TraceEvent[] = [];
     const trace = {
       record: (event: TraceEvent) => {
