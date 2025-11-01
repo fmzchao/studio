@@ -1,3 +1,10 @@
+const path = require('path');
+
+const swcBinaryPath = path.join(
+  __dirname,
+  'node_modules/.bun/@swc+core-darwin-arm64@1.13.21/node_modules/@swc/core-darwin-arm64/swc.darwin-arm64.node',
+);
+
 module.exports = {
   apps: [
     {
@@ -26,6 +33,7 @@ module.exports = {
       env_file: __dirname + '/worker/.env',
       env: {
         TEMPORAL_TASK_QUEUE: 'shipsec-default',
+        SWC_BINARY_PATH: swcBinaryPath,
       },
     },
     {
@@ -36,6 +44,7 @@ module.exports = {
       env_file: __dirname + '/worker/.env',
       env: {
         TEMPORAL_TASK_QUEUE: 'test-worker-integration',
+        SWC_BINARY_PATH: swcBinaryPath,
       },
     },
   ],
