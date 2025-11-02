@@ -48,11 +48,6 @@ describe('google-workspace-user-delete', () => {
 
   it('should successfully delete a user in a non-dry run', async () => {
     // 1. Set up mocks
-    const mockSecrets = {
-      get: vi.fn().mockResolvedValue({ value: JSON.stringify({ private_key: 'test-key' }) }),
-      list: vi.fn().mockResolvedValue([]),
-    };
-
     const mockUser = {
       data: {
         id: '12345',
@@ -70,12 +65,12 @@ describe('google-workspace-user-delete', () => {
     // 2. Define input parameters
     const params = {
       primary_email: 'test@example.com',
-      service_account_secret_id: 'secret-123',
+      service_account_secret: JSON.stringify({ private_key: 'test-key' }),
       dry_run: false,
     };
 
     // 3. Create mock context
-    const context = createMockExecutionContext({ secrets: mockSecrets });
+    const context = createMockExecutionContext();
 
     // 4. Execute the component
     const result: GoogleWorkspaceUserDeleteOutput = await execute(params, context);
@@ -84,7 +79,6 @@ describe('google-workspace-user-delete', () => {
     expect(result.success).toBe(true);
     expect(result.userDeleted).toBe(true);
     expect(result.message).toContain('Successfully deleted user');
-    expect(mockSecrets.get).toHaveBeenCalledWith('secret-123');
     expect(mockAdminClient.users.get).toHaveBeenCalledWith({ userKey: 'test@example.com' });
     expect(mockAdminClient.users.delete).toHaveBeenCalledWith({ userKey: 'test@example.com' });
     expect(context.logger.info).toHaveBeenCalledWith('[GoogleWorkspace] Successfully deleted user account: test@example.com');
@@ -92,22 +86,18 @@ describe('google-workspace-user-delete', () => {
 
   it('should simulate deletion in dry run mode', async () => {
     // 1. Set up mocks
-    const mockSecrets = {
-      get: vi.fn().mockResolvedValue({ value: JSON.stringify({ private_key: 'test-key' }) }),
-      list: vi.fn().mockResolvedValue([]),
-    };
     const mockUser = { data: { id: '12345', primaryEmail: 'test@example.com' } };
     mockAdminClient.users.get.mockResolvedValue(mockUser);
 
     // 2. Define input parameters
     const params = {
       primary_email: 'test@example.com',
-      service_account_secret_id: 'secret-123',
+      service_account_secret: JSON.stringify({ private_key: 'test-key' }),
       dry_run: true,
     };
 
     // 3. Create mock context
-    const context = createMockExecutionContext({ secrets: mockSecrets });
+    const context = createMockExecutionContext();
 
     // 4. Execute the component
     const result: GoogleWorkspaceUserDeleteOutput = await execute(params, context);
@@ -122,17 +112,16 @@ describe('google-workspace-user-delete', () => {
 
   it('should fail gracefully if user is not found', async () => {
     // 1. Set up mocks
-    const mockSecrets = {
-      get: vi.fn().mockResolvedValue({ value: JSON.stringify({ private_key: 'test-key' }) }),
-      list: vi.fn().mockResolvedValue([]),
-    };
     mockAdminClient.users.get.mockRejectedValue({ code: 404 });
 
     // 2. Define input parameters
-    const params = { primary_email: 'notfound@example.com', service_account_secret_id: 'secret-123' };
+    const params = {
+      primary_email: 'notfound@example.com',
+      service_account_secret: JSON.stringify({ private_key: 'test-key' }),
+    };
 
     // 3. Create mock context
-    const context = createMockExecutionContext({ secrets: mockSecrets });
+    const context = createMockExecutionContext();
 
     // 4. Execute the component
     const result: GoogleWorkspaceUserDeleteOutput = await execute(params, context);
@@ -146,16 +135,14 @@ describe('google-workspace-user-delete', () => {
 
   it('should fail if secret is not found', async () => {
     // 1. Set up mocks
-    const mockSecrets = {
-      get: vi.fn().mockResolvedValue(null),
-      list: vi.fn().mockResolvedValue([]),
+    // 2. Define input parameters
+    const params = {
+      primary_email: 'test@example.com',
+      service_account_secret: '',
     };
 
-    // 2. Define input parameters
-    const params = { primary_email: 'test@example.com', service_account_secret_id: 'invalid-secret' };
-
     // 3. Create mock context
-    const context = createMockExecutionContext({ secrets: mockSecrets });
+    const context = createMockExecutionContext();
 
     // 4. Execute the component
     const result: GoogleWorkspaceUserDeleteOutput = await execute(params, context);
@@ -163,7 +150,7 @@ describe('google-workspace-user-delete', () => {
     // 5. Assert the results
     expect(result.success).toBe(false);
     expect(result.userDeleted).toBe(false);
-    expect(result.error).toContain('not found or has no active version');
+    expect(result.error).toContain('Service account secret is required');
     expect(mockAdminClient.users.get).not.toHaveBeenCalled();
     expect(mockAdminClient.users.delete).not.toHaveBeenCalled();
   });

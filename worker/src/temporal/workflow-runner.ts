@@ -233,9 +233,29 @@ export async function executeWorkflow(
     });
 
     const outputsObject: Record<string, unknown> = {};
+    let reportedFailure = false;
+    const failureDetails: string[] = [];
+
     results.forEach((value, key) => {
       outputsObject[key] = value;
+      if (isComponentFailure(value)) {
+        reportedFailure = true;
+        const message = extractFailureMessage(value);
+        failureDetails.push(`[${key}] ${message}`);
+      }
     });
+
+    if (reportedFailure) {
+      const baseMessage = 'One or more workflow actions failed';
+      return {
+        outputs: outputsObject,
+        success: false,
+        error:
+          failureDetails.length > 0
+            ? `${baseMessage}: ${failureDetails.join('; ')}`
+            : baseMessage,
+      };
+    }
 
     return { outputs: outputsObject, success: true };
   } catch (error) {
@@ -245,6 +265,26 @@ export async function executeWorkflow(
       error: error instanceof Error ? error.message : String(error),
     };
   }
+}
+
+function isComponentFailure(value: unknown): value is { success: boolean; error?: unknown } {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'success' in value &&
+    (value as { success?: unknown }).success === false
+  );
+}
+
+function extractFailureMessage(value: { success: boolean; error?: unknown }): string {
+  if (!value) {
+    return 'Component reported failure';
+  }
+  const errorMessage = value.error;
+  if (typeof errorMessage === 'string' && errorMessage.trim().length > 0) {
+    return errorMessage;
+  }
+  return 'Component reported failure';
 }
 
 function maskSecretOutputs(component: RegisteredComponent, output: unknown): unknown {

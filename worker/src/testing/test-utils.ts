@@ -38,3 +38,39 @@ export function createMockExecutionContext(
     secrets: mergedSecrets,
   };
 }
+
+export function createMockSecretsService(secrets: Record<string, string> = {}): ISecretsService {
+  return {
+    get: vi.fn().mockImplementation((secretId: string) => {
+      const secretValue = secrets[secretId];
+      return secretValue ? Promise.resolve({ value: secretValue }) : Promise.resolve(null);
+    }),
+    list: vi.fn().mockResolvedValue([]),
+  };
+}
+
+export function createMockTrace(): any {
+  const events: any[] = [];
+  return {
+    record: vi.fn().mockImplementation((event) => {
+      events.push(event);
+      console.log('TRACE:', event.type, event.nodeRef, event.message);
+    }),
+    flush: vi.fn().mockResolvedValue(undefined),
+    setRunMetadata: vi.fn(),
+    finalizeRun: vi.fn(),
+    events,
+  };
+}
+
+export function createMockLogCollector(): any {
+  const logs: any[] = [];
+  return {
+    append: vi.fn().mockImplementation((log) => {
+      logs.push(log);
+      console.log('LOG:', log.level, log.message);
+    }),
+    flush: vi.fn().mockResolvedValue(undefined),
+    logs,
+  };
+}

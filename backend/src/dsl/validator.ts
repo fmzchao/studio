@@ -129,6 +129,15 @@ function isPlaceholderIssue(issue: ZodIssue, placeholderFields: Set<string>): bo
     return true;
   }
 
+  if (
+    issue.code === 'invalid_string' ||
+    (issue as { code?: string }).code === 'invalid_format' ||
+    issue.code === 'invalid_enum_value' ||
+    issue.code === 'invalid_literal'
+  ) {
+    return true;
+  }
+
   if (issue.code === 'invalid_union') {
     return issue.errors.every((variant) =>
       variant.every((inner) => inner.code === 'invalid_type'),
