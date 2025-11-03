@@ -36,14 +36,14 @@ export class LocalAuthProvider implements AuthProviderStrategy {
   constructor(private readonly config: LocalAuthConfig) {}
 
   async authenticate(request: Request): Promise<AuthContext> {
-    const orgId = extractOrganizationId(request);
+    const orgId = extractOrganizationId(request) ?? 'local-dev';
 
     if (this.config.apiKey) {
       const token = extractBearerToken(request.headers.authorization);
       if (token === this.config.apiKey) {
         return {
           userId: 'local-api-key',
-          organizationId: orgId ?? 'local-dev',
+          organizationId: orgId,
           roles: DEFAULT_ROLES,
           isAuthenticated: true,
           provider: this.name,

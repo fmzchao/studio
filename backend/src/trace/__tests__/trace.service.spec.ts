@@ -40,6 +40,7 @@ describe('TraceService', () => {
         data: null,
         sequence: 1,
         createdAt: new Date('2025-01-01T00:00:00.000Z'),
+        organizationId: 'test-org',
       },
       {
         id: 2,
@@ -55,6 +56,7 @@ describe('TraceService', () => {
         data: null,
         sequence: 2,
         createdAt: new Date('2025-01-01T00:00:01.000Z'),
+        organizationId: 'test-org',
       },
       {
         id: 3,
@@ -70,6 +72,7 @@ describe('TraceService', () => {
         data: null,
         sequence: 3,
         createdAt: new Date('2025-01-01T00:00:02.000Z'),
+        organizationId: 'test-org',
       },
       {
         id: 4,
@@ -85,6 +88,7 @@ describe('TraceService', () => {
         data: null,
         sequence: 4,
         createdAt: new Date('2025-01-01T00:00:03.000Z'),
+        organizationId: 'test-org',
       },
     ];
 
@@ -173,6 +177,7 @@ describe('TraceService', () => {
         },
         sequence: 10,
         createdAt: new Date('2025-01-02T00:00:00.000Z'),
+        organizationId: 'test-org',
       },
     ];
 

@@ -7,13 +7,17 @@ import type { AuthContext } from './types';
 import type { AuthProviderStrategy } from './providers/auth-provider.interface';
 import { LocalAuthProvider } from './providers/local-auth.provider';
 import { ClerkAuthProvider } from './providers/clerk-auth.provider';
+import { PlatformContextClient } from '../platform/platform-context.client';
 
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
   private readonly provider: AuthProviderStrategy;
 
-  constructor(private readonly configService: ConfigService) {
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly platformContextClient: PlatformContextClient,
+  ) {
     this.provider = this.createProvider();
     this.logger.log(`Auth provider initialised: ${this.provider.name}`);
   }
@@ -35,7 +39,7 @@ export class AuthService {
 
     const provider: AuthProviderName = config.provider;
     if (provider === 'clerk') {
-      return new ClerkAuthProvider(config.clerk);
+      return new ClerkAuthProvider(config.clerk, this.platformContextClient);
     }
 
     return new LocalAuthProvider(config.local);

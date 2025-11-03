@@ -44,7 +44,7 @@ _Last updated: 2025-02-15_
   _Module:_ `backend/src/auth/auth.module.ts` registered globally; guards available for downstream modules.
 - [x] Implement `LocalDevProvider` (API key / allow-all) to preserve OSS developer experience.  
   _Provider:_ `backend/src/auth/providers/local-auth.provider.ts` supports bearer API keys, optional org headers, and fallback dev mode.
-- [ ] Implement `ClerkProvider` that verifies Clerk JWTs, then consults the platform control plane for org/role enrichment via service-account APIs before normalizing claims to `{ userId, organizationId, roles: ['ADMIN'|'MEMBER'] }`.
+- [x] Implement `ClerkProvider` that verifies Clerk JWTs, then consults the platform control plane for org/role enrichment via service-account APIs before normalizing claims to `{ userId, organizationId, roles: ['ADMIN'|'MEMBER'] }`.
 - [x] Add configuration + boot-time validation to select provider (`AUTH_PROVIDER=local|clerk`).  
   _AuthService:_ selects provider via `auth` config, logging active strategy on boot (Clerk requires only `CLERK_PUBLISHABLE_KEY` + `CLERK_SECRET_KEY`).
 - [ ] Provide testing harness & unit tests for guard behaviours.
@@ -91,8 +91,8 @@ _Last updated: 2025-02-15_
 
 ### Studio backend changes
 
-- [ ] Extend `ClerkProvider` to validate end-user tokens, then call platform `/service/studio/context` using the configured service-account token to fetch org/role data.
-- [ ] Cache context per request, respect platform roles when enforcing workflow + secret permissions.
+- [x] Extend `ClerkProvider` to validate end-user tokens, then call platform `/service/studio/context` using the configured service-account token to fetch org/role data.
+- [ ] Cache context per request, respect platform roles when enforcing workflow + secret permissions. _(Create/update/list workflows now require org context; remaining routes still need enforcement.)_
 - [ ] Support platform-triggered runs: accept service-account tokens from platform, verify via existing local provider or dedicated guard, and enforce org assertions.
 - [ ] Emit run lifecycle events/webhooks so the platform can mirror execution state (status updates, trace summaries).
 - [ ] Continue to store minimal org IDs locally while treating platform data as canonical.

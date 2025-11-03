@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
 
 import { AppController } from './app.controller';
@@ -10,7 +11,10 @@ import { TraceModule } from './trace/trace.module';
 import { WorkflowsModule } from './workflows/workflows.module';
 import { TestingSupportModule } from './testing/testing.module';
 import { authConfig } from './config/auth.config';
+import { platformConfig } from './config/platform.config';
 import { AuthModule } from './auth/auth.module';
+import { AuthGuard } from './auth/auth.guard';
+import { RolesGuard } from './auth/roles.guard';
 
 const coreModules = [
   AuthModule,
@@ -28,12 +32,22 @@ const testingModules =
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: ['.env', '../.env'],
-      load: [authConfig],
+      load: [authConfig, platformConfig],
     }),
     ...coreModules,
     ...testingModules,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService,
+    {
+      provide: APP_GUARD,
+      useClass: AuthGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: RolesGuard,
+    },
+  ],
 })
 export class AppModule {}

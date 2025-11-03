@@ -45,7 +45,12 @@ export function validateWorkflowGraph(
         field: 'type',
         message: `Unknown component type: ${node.type}`,
         severity: 'error',
-        suggestion: 'Available components: ' + componentRegistry.list().map(c => c.id).join(', '),
+        suggestion:
+          'Available components: ' +
+          componentRegistry
+            .list()
+            .map((entry) => entry.id)
+            .join(', '),
       });
     }
   }
@@ -125,26 +130,22 @@ function isPlaceholderIssue(issue: ZodIssue, placeholderFields: Set<string>): bo
     return false;
   }
 
-  if (issue.code === 'invalid_type') {
-    return true;
+  switch (issue.code) {
+    case 'invalid_type':
+      return true;
+    case 'invalid_format':
+      return true;
+    case 'invalid_union':
+      if ('unionErrors' in issue) {
+        const unionIssue = issue as ZodIssue & { unionErrors: ZodError[] };
+        return unionIssue.unionErrors.every((variant: ZodError) =>
+          variant.issues.every((inner) => inner.code === 'invalid_type'),
+        );
+      }
+      return false;
+    default:
+      return false;
   }
-
-  if (
-    issue.code === 'invalid_key' ||
-    (issue as { code?: string }).code === 'invalid_format' ||
-    issue.code === 'invalid_value' ||
-    issue.code === 'unrecognized_keys'
-  ) {
-    return true;
-  }
-
-  if (issue.code === 'invalid_union') {
-    return issue.errors.every((variant) =>
-      variant.every((inner) => inner.code === 'invalid_type'),
-    );
-  }
-
-  return false;
 }
 
 /**
@@ -439,5 +440,3 @@ function resolveActionPortSnapshot(
 
   return { inputs, outputs };
 }
-
-

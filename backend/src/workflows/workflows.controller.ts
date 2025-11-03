@@ -43,6 +43,8 @@ import { TraceService } from '../trace/trace.service';
 import { WorkflowsService } from './workflows.service';
 import { LogStreamService } from '../trace/log-stream.service';
 import type { Request, Response } from 'express';
+import { CurrentAuth } from '../auth/auth-context.decorator';
+import type { AuthContext } from '../auth/types';
 
 const traceFailureSchema = {
   type: 'object',
@@ -196,18 +198,22 @@ export class WorkflowsController {
   @Post()
   @UsePipes(new ZodValidationPipe(WorkflowGraphSchema))
   @ApiOkResponse({ type: WorkflowResponseDto })
-  async create(@Body() body: CreateWorkflowRequestDto): Promise<WorkflowResponse> {
-    const serviceResponse = await this.workflowsService.create(body);
+  async create(
+    @CurrentAuth() auth: AuthContext | null,
+    @Body() body: CreateWorkflowRequestDto,
+  ): Promise<WorkflowResponse> {
+    const serviceResponse = await this.workflowsService.create(body, auth);
     return this.transformServiceResponseToApi(serviceResponse);
   }
 
   @Put(':id')
   @ApiOkResponse({ type: WorkflowResponseDto })
   async update(
+    @CurrentAuth() auth: AuthContext | null,
     @Param('id') id: string,
     @Body(new ZodValidationPipe(WorkflowGraphSchema)) body: UpdateWorkflowRequestDto,
   ): Promise<WorkflowResponse> {
-    const serviceResponse = await this.workflowsService.update(id, body);
+    const serviceResponse = await this.workflowsService.update(id, body, auth);
     return this.transformServiceResponseToApi(serviceResponse);
   }
 
@@ -244,9 +250,10 @@ export class WorkflowsController {
     },
   })
   async listRuns(
+    @CurrentAuth() auth: AuthContext | null,
     @Query(new ZodValidationPipe(ListRunsQuerySchema)) query: ListRunsQueryDto,
   ) {
-    return this.workflowsService.listRuns({
+    return this.workflowsService.listRuns(auth, {
       workflowId: query.workflowId,
       status: query.status,
       limit: query.limit,
@@ -255,14 +262,17 @@ export class WorkflowsController {
 
   @Get(':id')
   @ApiOkResponse({ type: WorkflowResponseDto })
-  async findOne(@Param('id') id: string): Promise<WorkflowResponse> {
-    const serviceResponse = await this.workflowsService.findById(id);
+  async findOne(
+    @CurrentAuth() auth: AuthContext | null,
+    @Param('id') id: string,
+  ): Promise<WorkflowResponse> {
+    const serviceResponse = await this.workflowsService.findById(id, auth);
     return this.transformServiceResponseToApi(serviceResponse);
   }
 
   @Delete(':id')
-  async remove(@Param('id') id: string) {
-    await this.workflowsService.delete(id);
+  async remove(@CurrentAuth() auth: AuthContext | null, @Param('id') id: string) {
+    await this.workflowsService.delete(id, auth);
     return { status: 'deleted', id };
   }
 
@@ -360,6 +370,7 @@ export class WorkflowsController {
     },
   })
   async run(
+    @CurrentAuth() auth: AuthContext | null,
     @Param('id') id: string,
     @Body(new ZodValidationPipe(RunWorkflowRequestSchema))
     body: RunWorkflowRequestDto,
@@ -369,7 +380,7 @@ export class WorkflowsController {
         inputs: body.inputs,
         versionId: body.versionId,
         version: body.version,
-      });
+      }, auth);
     } catch (error) {
       if (error instanceof HttpException) throw error;
       const message = error instanceof Error ? error.message : 'Failed to run workflow';
@@ -672,8 +683,8 @@ export class WorkflowsController {
 
   @Get()
   @ApiOkResponse({ type: [WorkflowResponseDto] })
-  async findAll(): Promise<WorkflowResponse[]> {
-    const serviceResponses = await this.workflowsService.list();
+  async findAll(@CurrentAuth() auth: AuthContext | null): Promise<WorkflowResponse[]> {
+    const serviceResponses = await this.workflowsService.list(auth);
     return serviceResponses.map(response => this.transformServiceResponseToApi(response));
   }
 

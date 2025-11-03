@@ -18,6 +18,7 @@ const originalFetch = global.fetch;
     lineCount: 2,
     createdAt: new Date('2025-01-01T00:00:00Z'),
     updatedAt: new Date('2025-01-01T00:00:01Z'),
+    organizationId: 'test-org',
   };
 
   beforeEach(() => {
