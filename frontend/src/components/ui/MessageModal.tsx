@@ -26,7 +26,7 @@ export function MessageModal({ open, onOpenChange, title, message }: MessageModa
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[80vh]">
+      <DialogContent className="max-w-4xl max-h-[80vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>
@@ -34,14 +34,14 @@ export function MessageModal({ open, onOpenChange, title, message }: MessageModa
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex-1 overflow-auto">
+        <div className="flex-1 overflow-y-auto">
           {hasAnsi ? (
             <div
-              className="text-xs font-mono whitespace-pre-wrap break-words bg-muted/30 rounded p-3 border"
+              className="text-xs font-mono whitespace-pre-wrap break-words bg-muted/30 rounded p-3 border min-h-[200px]"
               dangerouslySetInnerHTML={{ __html: ansiHtml }}
             />
           ) : (
-            <pre className="text-xs font-mono whitespace-pre-wrap break-words bg-muted/30 rounded p-3 border">
+            <pre className="text-xs font-mono whitespace-pre-wrap break-words bg-muted/30 rounded p-3 border min-h-[200px]">
               {message}
             </pre>
           )}
