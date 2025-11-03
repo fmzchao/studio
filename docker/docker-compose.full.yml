@@ -136,7 +136,7 @@ services:
       - VITE_API_URL=http://localhost:3211
       - VITE_BACKEND_URL=http://localhost:3211
     ports:
-      - "80:8080"
+      - "8090:8080"
     depends_on:
       - backend
     restart: unless-stopped

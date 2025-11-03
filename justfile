@@ -47,7 +47,7 @@ up:
     docker compose -f docker/docker-compose.full.yml up -d
     echo "✅ Full environment started"
     echo "📊 Services:"
-    echo "   - Frontend: http://localhost"
+    echo "   - Frontend: http://localhost:8090"
     echo "   - Backend API: http://localhost:3211"
     echo "   - PostgreSQL: localhost:5433"
     echo "   - Temporal: localhost:7233"

@@ -10,7 +10,6 @@ import {
   Req,
   Res,
   UseGuards,
-  UsePipes,
   BadRequestException,
   HttpException,
 } from '@nestjs/common';
@@ -34,10 +33,7 @@ import {
   WorkflowLogsQueryDto,
   WorkflowLogsQuerySchema,
   UpdateWorkflowRequestDto,
-  WorkflowGraphSchema,
   WorkflowResponseDto,
-  WorkflowResponse,
-  WorkflowResponseSchema,
   ServiceWorkflowResponse,
 } from './dto/workflow-graph.dto';
 import { TraceService } from '../trace/trace.service';
@@ -202,7 +198,7 @@ export class WorkflowsController {
   async create(
     @CurrentAuth() auth: AuthContext | null,
     @Body() body: CreateWorkflowRequestDto,
-  ): Promise<WorkflowResponse> {
+  ): Promise<WorkflowResponseDto> {
     const serviceResponse = await this.workflowsService.create(body, auth);
     return this.transformServiceResponseToApi(serviceResponse);
   }
@@ -215,7 +211,7 @@ export class WorkflowsController {
     @CurrentAuth() auth: AuthContext | null,
     @Param('id') id: string,
     @Body() body: UpdateWorkflowRequestDto,
-  ): Promise<WorkflowResponse> {
+  ): Promise<WorkflowResponseDto> {
     const serviceResponse = await this.workflowsService.update(id, body, auth);
     return this.transformServiceResponseToApi(serviceResponse);
   }
@@ -268,7 +264,7 @@ export class WorkflowsController {
   async findOne(
     @CurrentAuth() auth: AuthContext | null,
     @Param('id') id: string,
-  ): Promise<WorkflowResponse> {
+  ): Promise<WorkflowResponseDto> {
     const serviceResponse = await this.workflowsService.findById(id, auth);
     return this.transformServiceResponseToApi(serviceResponse);
   }
@@ -696,12 +692,12 @@ export class WorkflowsController {
 
   @Get()
   @ApiOkResponse({ type: [WorkflowResponseDto] })
-  async findAll(@CurrentAuth() auth: AuthContext | null): Promise<WorkflowResponse[]> {
+  async findAll(@CurrentAuth() auth: AuthContext | null): Promise<WorkflowResponseDto[]> {
     const serviceResponses = await this.workflowsService.list(auth);
     return serviceResponses.map(response => this.transformServiceResponseToApi(response));
   }
 
-  private transformServiceResponseToApi(serviceResponse: ServiceWorkflowResponse): WorkflowResponse {
+  private transformServiceResponseToApi(serviceResponse: ServiceWorkflowResponse): WorkflowResponseDto {
     return {
       ...serviceResponse,
       lastRun: serviceResponse.lastRun?.toISOString() ?? null,

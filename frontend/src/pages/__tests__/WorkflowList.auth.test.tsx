@@ -1,13 +1,18 @@
-import { beforeEach, describe, expect, it, vi } from 'bun:test'
+import { beforeEach, describe, expect, it, mock } from 'bun:test'
 import { MemoryRouter } from 'react-router-dom'
 import { render, screen } from '@testing-library/react'
+import type { components } from '@shipsec/backend-client'
 
 import { WorkflowList } from '@/pages/WorkflowList'
 import { useAuthStore, DEFAULT_ORG_ID } from '@/store/authStore'
 
-const listWorkflowsMock = vi.fn<[], Promise<any[]>>().mockResolvedValue([])
+type WorkflowResponseDto = components['schemas']['WorkflowResponseDto']
 
-vi.mock('@/services/api', () => ({
+const mockWorkflows: WorkflowResponseDto[] = []
+
+const listWorkflowsMock = mock(async () => mockWorkflows)
+
+mock.module('@/services/api', () => ({
   api: {
     workflows: {
       list: listWorkflowsMock,
@@ -16,7 +21,7 @@ vi.mock('@/services/api', () => ({
 }))
 
 async function resetAuthStore() {
-  const persist = (useAuthStore as typeof useAuthStore & { persist?: any }).persist
+  const persist = (useAuthStore as typeof useAuthStore & { persist?: { clearStorage?: () => Promise<void> } }).persist
   if (persist?.clearStorage) {
     await persist.clearStorage()
   }

@@ -13,7 +13,7 @@ async function bootstrap() {
 
   // Enable CORS for frontend
   app.enableCors({
-    origin: ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:3211'],
+    origin: ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:8090', 'http://localhost:3211'],
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'x-organization-id'],

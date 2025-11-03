@@ -11,7 +11,6 @@ import {
 import {
   WorkflowGraphDto,
   WorkflowGraphSchema,
-  WorkflowResponse,
   ServiceWorkflowResponse,
 } from './dto/workflow-graph.dto';
 import {

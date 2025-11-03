@@ -3,10 +3,18 @@ import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import { LogStreamService } from '../log-stream.service';
 import type { WorkflowLogStreamRecord } from '../../database/schema';
 import type { LogStreamRepository } from '../log-stream.repository';
+import type { AuthContext } from '../../auth/types';
 
 describe('LogStreamService', () => {
 const originalEnv = { ...process.env };
 const originalFetch = global.fetch;
+  const authContext: AuthContext = {
+    userId: 'test-user',
+    organizationId: 'test-org',
+    roles: ['ADMIN'],
+    isAuthenticated: true,
+    provider: 'test',
+  };
   const record: WorkflowLogStreamRecord = {
     id: 1,
     runId: 'run-123',
@@ -40,7 +48,7 @@ const originalFetch = global.fetch;
     } as unknown as LogStreamRepository;
     const service = new LogStreamService(repository);
 
-    await expect(service.fetch('run-123')).rejects.toThrow('Loki integration is not configured');
+    await expect(service.fetch('run-123', null)).rejects.toThrow('Loki integration is not configured');
   });
 
   it('returns log entries from Loki', async () => {
@@ -71,7 +79,7 @@ const originalFetch = global.fetch;
       listByRunId: async () => [record],
     } as unknown as LogStreamRepository;
     const service = new LogStreamService(repository);
-    const result = await service.fetch('run-123', { nodeRef: 'node-1', stream: 'stdout' });
+    const result = await service.fetch('run-123', authContext, { nodeRef: 'node-1', stream: 'stdout' });
 
     expect(result.streams).toHaveLength(1);
     const [stream] = result.streams;

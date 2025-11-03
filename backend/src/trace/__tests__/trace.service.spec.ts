@@ -2,6 +2,7 @@ import { describe, expect, it } from 'bun:test';
 
 import type { WorkflowTraceRecord } from '../../database/schema';
 import { TraceService } from '../trace.service';
+import type { AuthContext } from '../../auth/types';
 
 class FakeTraceRepository {
   public events: WorkflowTraceRecord[] = [];
@@ -23,6 +24,13 @@ describe('TraceService', () => {
   const repository = new FakeTraceRepository();
   const service = new TraceService(repository as any);
   const runId = 'service-run';
+  const authContext: AuthContext = {
+    userId: 'test-user',
+    organizationId: 'test-org',
+    roles: ['ADMIN'],
+    isAuthenticated: true,
+    provider: 'test',
+  };
 
   it('maps stored records to trace events', async () => {
     repository.events = [
@@ -92,7 +100,7 @@ describe('TraceService', () => {
       },
     ];
 
-    const { events, cursor } = await service.list(runId);
+    const { events, cursor } = await service.list(runId, authContext);
     expect(events).toEqual([
       {
         id: '1',
@@ -147,7 +155,7 @@ describe('TraceService', () => {
   });
 
   it('lists events after a sequence cursor', async () => {
-    const { events } = await service.listSince(runId, 2);
+    const { events } = await service.listSince(runId, 2, authContext);
     expect(events.map((event) => event.id)).toEqual(['3', '4']);
   });
 
@@ -181,7 +189,7 @@ describe('TraceService', () => {
       },
     ];
 
-    const { events } = await service.list(metaRunId);
+    const { events } = await service.list(metaRunId, authContext);
     expect(events).toEqual([
       {
         id: '10',

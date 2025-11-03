@@ -535,8 +535,9 @@ export interface components {
                 y: number;
                 zoom: number;
             };
-            currentVersionId: string | null;
-            currentVersion: number | null;
+            /** Format: uuid */
+            currentVersionId?: string | null;
+            currentVersion?: number | null;
             compiledDefinition: unknown;
             lastRun: string | null;
             runCount: number;
@@ -868,16 +869,16 @@ export interface operations {
                     "application/json": {
                         /** @description Temporal workflow identifier */
                         runId?: string;
-                    /** @description Workflow record id */
-                    workflowId?: string;
-                    /** @description Workflow version identifier used for execution */
-                    workflowVersionId?: string;
-                    /** @description Workflow version number used for execution */
-                    workflowVersion?: number;
-                    /** @description Temporal first execution run id */
-                    temporalRunId?: string;
-                    /** @description Temporal task queue used for execution */
-                    taskQueue?: string;
+                        /** @description Workflow record id */
+                        workflowId?: string;
+                        /** @description Workflow version identifier used for execution */
+                        workflowVersionId?: string;
+                        /** @description Workflow version number used for execution */
+                        workflowVersion?: number;
+                        /** @description Temporal first execution run id */
+                        temporalRunId?: string;
+                        /** @description Temporal task queue used for execution */
+                        taskQueue?: string;
                         /** @enum {string} */
                         status?: "RUNNING" | "COMPLETED" | "FAILED" | "CANCELLED" | "TERMINATED" | "CONTINUED_AS_NEW" | "TIMED_OUT" | "UNKNOWN";
                     };

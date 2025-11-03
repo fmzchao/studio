@@ -2,7 +2,7 @@ import { ZodError, ZodIssue } from 'zod';
 
 import { componentRegistry, type ComponentPortMetadata } from '@shipsec/component-sdk';
 
-import type { WorkflowGraph } from '../workflows/dto/workflow-graph.dto';
+import type { WorkflowGraphDto } from '../workflows/dto/workflow-graph.dto';
 import type { WorkflowAction, WorkflowDefinition } from './types';
 import {
   ActionPortSnapshot,
@@ -29,7 +29,7 @@ export interface ValidationResult {
  * Comprehensive DSL validation for workflow graphs
  */
 export function validateWorkflowGraph(
-  graph: WorkflowGraph,
+  graph: WorkflowGraphDto,
   compiledDefinition: WorkflowDefinition,
 ): ValidationResult {
   const errors: ValidationError[] = [];
@@ -208,7 +208,7 @@ function validateSecretParameters(
  * Validate input mappings between nodes
  */
 function validateInputMappings(
-  graph: WorkflowGraph,
+  graph: WorkflowGraphDto,
   compiledDefinition: WorkflowDefinition,
   actionPorts: Map<string, ActionPortSnapshot>,
   errors: ValidationError[],
@@ -348,7 +348,7 @@ function validateEdgeCompatibility(
  * Validate manual trigger runtime inputs configuration
  */
 function validateManualTriggerConfiguration(
-  _graph: WorkflowGraph,
+  _graph: WorkflowGraphDto,
   compiledDefinition: WorkflowDefinition,
   errors: ValidationError[],
   warnings: ValidationError[],

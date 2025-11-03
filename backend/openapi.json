@@ -15,6 +15,64 @@
         ]
       }
     },
+    "/service/studio/workflows/link": {
+      "post": {
+        "operationId": "PlatformController_linkWorkflow",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Platform"
+        ]
+      }
+    },
+    "/service/studio/workflows/link/{platformAgentId}": {
+      "get": {
+        "operationId": "PlatformController_getLink",
+        "parameters": [
+          {
+            "name": "platformAgentId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Platform"
+        ]
+      },
+      "delete": {
+        "operationId": "PlatformController_unlink",
+        "parameters": [
+          {
+            "name": "platformAgentId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Platform"
+        ]
+      }
+    },
     "/workflows": {
       "post": {
         "operationId": "WorkflowsController_create",
@@ -209,14 +267,6 @@
                           "workflowId": {
                             "type": "string"
                           },
-                          "workflowVersionId": {
-                            "type": "string",
-                            "nullable": true
-                          },
-                          "workflowVersion": {
-                            "type": "number",
-                            "nullable": true
-                          },
                           "status": {
                             "type": "string",
                             "enum": [
@@ -241,6 +291,14 @@
                           },
                           "temporalRunId": {
                             "type": "string"
+                          },
+                          "workflowVersionId": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "workflowVersion": {
+                            "type": "number",
+                            "nullable": true
                           },
                           "workflowName": {
                             "type": "string"
@@ -389,14 +447,6 @@
                       "type": "string",
                       "description": "Workflow record id"
                     },
-                    "workflowVersionId": {
-                      "type": "string",
-                      "description": "Workflow version identifier used for execution"
-                    },
-                    "workflowVersion": {
-                      "type": "integer",
-                      "description": "Workflow version number used for execution"
-                    },
                     "temporalRunId": {
                       "type": "string",
                       "description": "Temporal first execution run id"
@@ -404,6 +454,14 @@
                     "taskQueue": {
                       "type": "string",
                       "description": "Temporal task queue used for execution"
+                    },
+                    "workflowVersionId": {
+                      "type": "string",
+                      "description": "Workflow version identifier used for execution"
+                    },
+                    "workflowVersion": {
+                      "type": "integer",
+                      "description": "Workflow version number used for execution"
                     },
                     "status": {
                       "type": "string",
@@ -1125,6 +1183,27 @@
                         "type": "string",
                         "example": "input"
                       },
+                      "categoryConfig": {
+                        "type": "object",
+                        "properties": {
+                          "label": {
+                            "type": "string",
+                            "example": "📥 Input"
+                          },
+                          "color": {
+                            "type": "string",
+                            "example": "text-blue-600"
+                          },
+                          "description": {
+                            "type": "string",
+                            "example": "Data sources, triggers, and credential access"
+                          },
+                          "emoji": {
+                            "type": "string",
+                            "example": "📥"
+                          }
+                        }
+                      },
                       "description": {
                         "type": "string",
                         "example": "Load files from filesystem"
@@ -1213,41 +1292,66 @@
                             "label": {
                               "type": "string"
                             },
-                            "type": {
-                              "oneOf": [
-                                {
+                            "dataType": {
+                              "type": "object",
+                              "properties": {
+                                "kind": {
                                   "type": "string",
                                   "enum": [
-                                    "string",
-                                    "array",
-                                    "object",
-                                    "file",
-                                    "secret",
-                                    "number"
+                                    "primitive",
+                                    "list",
+                                    "map",
+                                    "contract"
                                   ]
                                 },
-                                {
-                                  "type": "array",
-                                  "items": {
-                                    "type": "string",
-                                    "enum": [
-                                      "string",
-                                      "array",
-                                      "object",
-                                      "file",
-                                      "secret",
-                                      "number"
-                                    ]
-                                  },
-                                  "minItems": 1
+                                "name": {
+                                  "type": "string"
+                                },
+                                "element": {
+                                  "type": "object"
+                                },
+                                "value": {
+                                  "type": "object"
+                                },
+                                "coercion": {
+                                  "type": "object",
+                                  "properties": {
+                                    "from": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string",
+                                        "enum": [
+                                          "any",
+                                          "text",
+                                          "secret",
+                                          "number",
+                                          "boolean",
+                                          "file",
+                                          "json"
+                                        ]
+                                      }
+                                    }
+                                  }
                                 }
-                              ]
+                              },
+                              "required": [
+                                "kind"
+                              ],
+                              "additionalProperties": true
                             },
                             "required": {
                               "type": "boolean"
                             },
                             "description": {
                               "type": "string",
+                              "nullable": true
+                            },
+                            "valuePriority": {
+                              "type": "string",
+                              "enum": [
+                                "manual-first",
+                                "connection-first"
+                              ],
                               "nullable": true
                             }
                           }
@@ -1264,16 +1368,52 @@
                             "label": {
                               "type": "string"
                             },
-                            "type": {
-                              "type": "string",
-                              "enum": [
-                                "string",
-                                "array",
-                                "object",
-                                "file",
-                                "secret",
-                                "number"
-                              ]
+                            "dataType": {
+                              "type": "object",
+                              "properties": {
+                                "kind": {
+                                  "type": "string",
+                                  "enum": [
+                                    "primitive",
+                                    "list",
+                                    "map",
+                                    "contract"
+                                  ]
+                                },
+                                "name": {
+                                  "type": "string"
+                                },
+                                "element": {
+                                  "type": "object"
+                                },
+                                "value": {
+                                  "type": "object"
+                                },
+                                "coercion": {
+                                  "type": "object",
+                                  "properties": {
+                                    "from": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string",
+                                        "enum": [
+                                          "any",
+                                          "text",
+                                          "secret",
+                                          "number",
+                                          "boolean",
+                                          "file",
+                                          "json"
+                                        ]
+                                      }
+                                    }
+                                  }
+                                }
+                              },
+                              "required": [
+                                "kind"
+                              ],
+                              "additionalProperties": true
                             },
                             "description": {
                               "type": "string",
@@ -1385,7 +1525,249 @@
         ],
         "responses": {
           "200": {
-            "description": "Get a specific component by ID"
+            "description": "Get a specific component by ID",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "slug": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "version": {
+                      "type": "string"
+                    },
+                    "type": {
+                      "type": "string"
+                    },
+                    "category": {
+                      "type": "string"
+                    },
+                    "categoryConfig": {
+                      "type": "object",
+                      "properties": {
+                        "label": {
+                          "type": "string"
+                        },
+                        "color": {
+                          "type": "string"
+                        },
+                        "description": {
+                          "type": "string"
+                        },
+                        "emoji": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "description": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "documentation": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "documentationUrl": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "icon": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "logo": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "author": {
+                      "type": "object",
+                      "nullable": true,
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "type": {
+                          "type": "string"
+                        },
+                        "url": {
+                          "type": "string",
+                          "nullable": true
+                        }
+                      }
+                    },
+                    "runner": {
+                      "type": "object"
+                    },
+                    "inputs": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "label": {
+                            "type": "string"
+                          },
+                          "dataType": {
+                            "type": "object",
+                            "properties": {
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "primitive",
+                                  "list",
+                                  "map",
+                                  "contract"
+                                ]
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "element": {
+                                "type": "object"
+                              },
+                              "value": {
+                                "type": "object"
+                              },
+                              "coercion": {
+                                "type": "object",
+                                "properties": {
+                                  "from": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string",
+                                      "enum": [
+                                        "any",
+                                        "text",
+                                        "secret",
+                                        "number",
+                                        "boolean",
+                                        "file",
+                                        "json"
+                                      ]
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            "required": [
+                              "kind"
+                            ],
+                            "additionalProperties": true
+                          },
+                          "required": {
+                            "type": "boolean"
+                          },
+                          "description": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "valuePriority": {
+                            "type": "string",
+                            "enum": [
+                              "manual-first",
+                              "connection-first"
+                            ],
+                            "nullable": true
+                          }
+                        }
+                      }
+                    },
+                    "outputs": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "label": {
+                            "type": "string"
+                          },
+                          "dataType": {
+                            "type": "object",
+                            "properties": {
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "primitive",
+                                  "list",
+                                  "map",
+                                  "contract"
+                                ]
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "element": {
+                                "type": "object"
+                              },
+                              "value": {
+                                "type": "object"
+                              },
+                              "coercion": {
+                                "type": "object",
+                                "properties": {
+                                  "from": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string",
+                                      "enum": [
+                                        "any",
+                                        "text",
+                                        "secret",
+                                        "number",
+                                        "boolean",
+                                        "file",
+                                        "json"
+                                      ]
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            "required": [
+                              "kind"
+                            ],
+                            "additionalProperties": true
+                          },
+                          "description": {
+                            "type": "string",
+                            "nullable": true
+                          }
+                        }
+                      }
+                    },
+                    "parameters": {
+                      "type": "array"
+                    },
+                    "examples": {
+                      "type": "array"
+                    },
+                    "isLatest": {
+                      "type": "boolean",
+                      "nullable": true
+                    },
+                    "deprecated": {
+                      "type": "boolean",
+                      "nullable": true
+                    },
+                    "example": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  }
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -1517,6 +1899,8 @@
             "required": true,
             "in": "path",
             "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
               "type": "string"
             }
           }
@@ -1538,6 +1922,8 @@
             "required": true,
             "in": "path",
             "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
               "type": "string"
             }
           }
@@ -1561,6 +1947,8 @@
             "required": true,
             "in": "path",
             "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
               "type": "string"
             }
           }
@@ -2168,118 +2556,6 @@
               "viewport"
             ]
           },
-          "nodes": {
-            "minItems": 1,
-            "type": "array",
-            "items": {
-              "type": "object",
-              "properties": {
-                "id": {
-                  "type": "string"
-                },
-                "type": {
-                  "type": "string"
-                },
-                "position": {
-                  "type": "object",
-                  "properties": {
-                    "x": {
-                      "type": "number"
-                    },
-                    "y": {
-                      "type": "number"
-                    }
-                  },
-                  "required": [
-                    "x",
-                    "y"
-                  ]
-                },
-                "data": {
-                  "type": "object",
-                  "properties": {
-                    "label": {
-                      "type": "string"
-                    },
-                    "config": {
-                      "default": {},
-                      "type": "object",
-                      "propertyNames": {
-                        "type": "string"
-                      },
-                      "additionalProperties": {}
-                    }
-                  },
-                  "required": [
-                    "label"
-                  ]
-                }
-              },
-              "required": [
-                "id",
-                "type",
-                "position",
-                "data"
-              ]
-            }
-          },
-          "edges": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "properties": {
-                "id": {
-                  "type": "string"
-                },
-                "source": {
-                  "type": "string"
-                },
-                "target": {
-                  "type": "string"
-                },
-                "sourceHandle": {
-                  "type": "string"
-                },
-                "targetHandle": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "id",
-                "source",
-                "target"
-              ]
-            }
-          },
-          "viewport": {
-            "type": "object",
-            "properties": {
-              "x": {
-                "type": "number"
-              },
-              "y": {
-                "type": "number"
-              },
-              "zoom": {
-                "type": "number"
-              }
-            },
-            "required": [
-              "x",
-              "y",
-              "zoom"
-            ]
-          },
-          "currentVersionId": {
-            "format": "uuid",
-            "type": "string",
-            "nullable": true
-          },
-          "currentVersion": {
-            "type": "integer",
-            "nullable": true,
-            "minimum": 1
-          },
           "compiledDefinition": {
             "nullable": true
           },
@@ -2297,20 +2573,31 @@
           },
           "updatedAt": {
             "type": "string"
+          },
+          "currentVersionId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "nullable": true
+          },
+          "currentVersion": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991,
+            "nullable": true
           }
         },
         "required": [
           "id",
           "name",
           "graph",
-          "nodes",
-          "edges",
-          "viewport",
           "compiledDefinition",
           "lastRun",
           "runCount",
           "createdAt",
-          "updatedAt"
+          "updatedAt",
+          "currentVersionId",
+          "currentVersion"
         ]
       },
       "UpdateWorkflowRequestDto": {
@@ -2446,10 +2733,14 @@
             "additionalProperties": {}
           },
           "versionId": {
-            "type": "string"
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
           },
           "version": {
-            "type": "number"
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
           }
         }
       },

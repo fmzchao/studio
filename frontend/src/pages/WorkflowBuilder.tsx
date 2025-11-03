@@ -90,8 +90,8 @@ function WorkflowBuilderContent() {
         })
 
         // Deserialize and set nodes/edges
-        const workflowEdges = deserializeEdges(workflow.edges)
-        const workflowNodes = deserializeNodes(workflow.nodes, workflow.edges)
+        const workflowEdges = deserializeEdges(workflow)
+        const workflowNodes = deserializeNodes(workflow)
 
         setNodes(workflowNodes)
         setEdges(workflowEdges)
@@ -268,11 +268,21 @@ function WorkflowBuilderContent() {
     }
 
     try {
-      if (nodes.length === 0) {
+      // Defensive check for undefined nodes/edges
+      if (!nodes || !Array.isArray(nodes) || nodes.length === 0) {
         toast({
           variant: 'destructive',
           title: 'Cannot save workflow',
           description: 'Add at least one component before saving.',
+        })
+        return
+      }
+
+      if (!edges || !Array.isArray(edges)) {
+        toast({
+          variant: 'destructive',
+          title: 'Cannot save workflow',
+          description: 'Invalid workflow edges data.',
         })
         return
       }
