@@ -7,6 +7,7 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Copy } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
 import { AnsiUp } from 'ansi_up'
 
 interface MessageModalProps {
@@ -18,8 +19,33 @@ interface MessageModalProps {
 
 export function MessageModal({ open, onOpenChange, title, message }: MessageModalProps) {
   const hasAnsi = /\u001b\[[0-9;]*m/.test(message)
-  const au = new AnsiUp()
-  const ansiHtml = hasAnsi ? au.ansi_to_html(message) : ''
+  const [wrap, setWrap] = useState(true)
+  const [colorize, setColorize] = useState(true)
+
+  // Load persisted prefs on mount; default colorize to hasAnsi if unset
+  useEffect(() => {
+    try {
+      const w = localStorage.getItem('messageModal.wrap')
+      if (w !== null) setWrap(w === '1')
+      const c = localStorage.getItem('messageModal.color')
+      if (c !== null) setColorize(c === '1')
+      else setColorize(hasAnsi)
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  useEffect(() => {
+    try { localStorage.setItem('messageModal.wrap', wrap ? '1' : '0') } catch {}
+  }, [wrap])
+  useEffect(() => {
+    try { localStorage.setItem('messageModal.color', colorize ? '1' : '0') } catch {}
+  }, [colorize])
+
+  const ansiHtml = useMemo(() => {
+    if (!(colorize && hasAnsi)) return ''
+    const au = new AnsiUp()
+    return au.ansi_to_html(message)
+  }, [colorize, hasAnsi, message])
   const copyToClipboard = () => {
     navigator.clipboard.writeText(message)
   }
@@ -35,28 +61,49 @@ export function MessageModal({ open, onOpenChange, title, message }: MessageModa
         </DialogHeader>
 
         <div className="flex-1 overflow-y-auto">
-          {hasAnsi ? (
+          {colorize && hasAnsi ? (
             <div
-              className="text-xs font-mono whitespace-pre-wrap break-words bg-muted/30 rounded p-3 border min-h-[200px]"
+              className={`text-xs font-mono bg-muted/30 rounded p-3 border min-h-[200px] ${wrap ? 'whitespace-pre-wrap break-words' : 'whitespace-pre overflow-x-auto'}`}
               dangerouslySetInnerHTML={{ __html: ansiHtml }}
             />
           ) : (
-            <pre className="text-xs font-mono whitespace-pre-wrap break-words bg-muted/30 rounded p-3 border min-h-[200px]">
+            <pre className={`text-xs font-mono bg-muted/30 rounded p-3 border min-h-[200px] ${wrap ? 'whitespace-pre-wrap break-words' : 'whitespace-pre overflow-x-auto'}`}>
               {message}
             </pre>
           )}
         </div>
 
         <div className="flex justify-between items-center pt-4">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={copyToClipboard}
-            className="flex items-center gap-2"
-          >
-            <Copy className="h-4 w-4" />
-            Copy to clipboard
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={copyToClipboard}
+              className="flex items-center gap-2"
+            >
+              <Copy className="h-4 w-4" />
+              Copy to clipboard
+            </Button>
+            <Button
+              variant={wrap ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setWrap((v) => !v)}
+              aria-pressed={wrap}
+              title="Toggle word wrap"
+            >
+              Wrap: {wrap ? 'On' : 'Off'}
+            </Button>
+            <Button
+              variant={colorize ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setColorize((v) => !v)}
+              aria-pressed={colorize}
+              title="Toggle ANSI colorization"
+              disabled={!hasAnsi}
+            >
+              Colorize: {colorize && hasAnsi ? 'On' : 'Off'}
+            </Button>
+          </div>
 
           <Button
             variant="outline"
