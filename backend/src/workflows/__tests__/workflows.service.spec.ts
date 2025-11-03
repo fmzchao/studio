@@ -256,8 +256,11 @@ describe('WorkflowsService', () => {
       };
       return storedRunMeta;
     },
-    async findByRunId(runId: string) {
+    async findByRunId(runId: string, options: { organizationId?: string | null } = {}) {
       if (storedRunMeta && storedRunMeta.runId === runId) {
+        if (options.organizationId && storedRunMeta.organizationId !== options.organizationId) {
+          return undefined;
+        }
         return storedRunMeta;
       }
       return undefined;
@@ -270,6 +273,15 @@ describe('WorkflowsService', () => {
         return completedCount;
       }
       return 0;
+    },
+  };
+
+  const workflowRoleRepositoryMock = {
+    async upsert() {
+      return;
+    },
+    async hasRole() {
+      return false;
     },
   };
 
@@ -327,6 +339,7 @@ describe('WorkflowsService', () => {
     const temporalService = buildTemporalStub();
     service = new WorkflowsService(
       repositoryMock,
+      workflowRoleRepositoryMock as any,
       versionRepositoryMock as any,
       runRepositoryMock as any,
       traceRepositoryMock as any,
@@ -344,7 +357,7 @@ describe('WorkflowsService', () => {
 
   it('commits a workflow definition', async () => {
     await service.create(sampleGraph, authContext);
-    const definition = await service.commit('workflow-id');
+    const definition = await service.commit('workflow-id', authContext);
     expect(definition.actions.length).toBeGreaterThan(0);
     expect(savedDefinition).toEqual(definition);
     const latestVersion = versionRepositoryMock.findLatestByWorkflowId
@@ -381,6 +394,7 @@ describe('WorkflowsService', () => {
       runId: run.runId,
       workflowId: 'workflow-id',
       inputs: { message: 'hi' },
+      organizationId: TEST_ORG,
     });
     expect(storedRunMeta).toMatchObject({
       runId: run.runId,
@@ -409,9 +423,9 @@ describe('WorkflowsService', () => {
     await service.create(sampleGraph, authContext);
     const run = await service.run('workflow-id', {}, authContext);
     completedCount = 1;
-    const status = await service.getRunStatus(run.runId, run.temporalRunId);
-    const result = await service.getRunResult(run.runId, run.temporalRunId);
-    await service.cancelRun(run.runId, run.temporalRunId);
+    const status = await service.getRunStatus(run.runId, run.temporalRunId, authContext);
+    const result = await service.getRunResult(run.runId, run.temporalRunId, authContext);
+    await service.cancelRun(run.runId, run.temporalRunId, authContext);
 
     expect(status.runId).toBe(run.runId);
     expect(status.workflowId).toBe('workflow-id');
@@ -447,6 +461,7 @@ describe('WorkflowsService', () => {
 
     service = new WorkflowsService(
       repositoryMock,
+      workflowRoleRepositoryMock as any,
       versionRepositoryMock as any,
       runRepositoryMock as any,
       traceRepositoryMock as any,
@@ -467,7 +482,7 @@ describe('WorkflowsService', () => {
       organizationId: TEST_ORG,
     };
 
-    const status = await service.getRunStatus('shipsec-run-fail');
+    const status = await service.getRunStatus('shipsec-run-fail', undefined, authContext);
     expect(status.status).toBe('FAILED');
     expect(status.failure).toEqual({
       reason: 'Component crashed',

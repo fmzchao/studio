@@ -9,6 +9,7 @@ import {
   Query,
   Req,
   Res,
+  UseGuards,
   UsePipes,
   BadRequestException,
   HttpException,
@@ -45,6 +46,7 @@ import { LogStreamService } from '../trace/log-stream.service';
 import type { Request, Response } from 'express';
 import { CurrentAuth } from '../auth/auth-context.decorator';
 import type { AuthContext } from '../auth/types';
+import { RequireWorkflowRole, WorkflowRoleGuard } from './workflow-role.guard';
 
 const traceFailureSchema = {
   type: 'object',
@@ -207,6 +209,8 @@ export class WorkflowsController {
   }
 
   @Put(':id')
+  @UseGuards(WorkflowRoleGuard)
+  @RequireWorkflowRole('ADMIN')
   @ApiOkResponse({ type: WorkflowResponseDto })
   async update(
     @CurrentAuth() auth: AuthContext | null,
@@ -271,12 +275,16 @@ export class WorkflowsController {
   }
 
   @Delete(':id')
+  @UseGuards(WorkflowRoleGuard)
+  @RequireWorkflowRole('ADMIN')
   async remove(@CurrentAuth() auth: AuthContext | null, @Param('id') id: string) {
     await this.workflowsService.delete(id, auth);
     return { status: 'deleted', id };
   }
 
   @Post(':id/commit')
+  @UseGuards(WorkflowRoleGuard)
+  @RequireWorkflowRole('ADMIN')
   @ApiOkResponse({
     description: 'Compiled workflow definition',
     schema: {
@@ -318,9 +326,10 @@ export class WorkflowsController {
       },
     },
   })
-  async commit(@Param('id') id: string) {
+  
+  async commit(@Param('id') id: string, @CurrentAuth() auth: AuthContext | null) {
     try {
-      return await this.workflowsService.commit(id);
+      return await this.workflowsService.commit(id, auth);
     } catch (error) {
       if (error instanceof HttpException) throw error;
       const message = error instanceof Error ? error.message : 'Commit failed';
@@ -395,8 +404,9 @@ export class WorkflowsController {
   async status(
     @Param('runId') runId: string,
     @Query(new ZodValidationPipe(TemporalRunQuerySchema)) query: TemporalRunQueryDto,
+    @CurrentAuth() auth: AuthContext | null,
   ) {
-    return this.workflowsService.getRunStatus(runId, query.temporalRunId);
+    return this.workflowsService.getRunStatus(runId, query.temporalRunId, auth);
   }
 
   @Get('/runs/:runId/result')
@@ -406,8 +416,9 @@ export class WorkflowsController {
   async result(
     @Param('runId') runId: string,
     @Query(new ZodValidationPipe(TemporalRunQuerySchema)) query: TemporalRunQueryDto,
+    @CurrentAuth() auth: AuthContext | null,
   ) {
-    const result = await this.workflowsService.getRunResult(runId, query.temporalRunId);
+    const result = await this.workflowsService.getRunResult(runId, query.temporalRunId, auth);
     return { runId, result };
   }
 
@@ -418,8 +429,9 @@ export class WorkflowsController {
   async cancel(
     @Param('runId') runId: string,
     @Query(new ZodValidationPipe(TemporalRunQuerySchema)) query: TemporalRunQueryDto,
+    @CurrentAuth() auth: AuthContext | null,
   ) {
-    await this.workflowsService.cancelRun(runId, query.temporalRunId);
+    await this.workflowsService.cancelRun(runId, query.temporalRunId, auth);
     return { status: 'cancelled', runId };
   }
 
@@ -428,8 +440,8 @@ export class WorkflowsController {
     description: 'Trace events for a workflow run',
     schema: traceEnvelopeSchema,
   })
-  async trace(@Param('runId') runId: string) {
-    const { events, cursor } = await this.traceService.list(runId);
+  async trace(@Param('runId') runId: string, @CurrentAuth() auth: AuthContext | null) {
+    const { events, cursor } = await this.traceService.list(runId, auth);
     return { runId, events, cursor };
   }
 
@@ -438,8 +450,8 @@ export class WorkflowsController {
     description: 'Full event timeline for a workflow run',
     schema: traceEnvelopeSchema,
   })
-  async events(@Param('runId') runId: string) {
-    const { events, cursor } = await this.traceService.list(runId);
+  async events(@Param('runId') runId: string, @CurrentAuth() auth: AuthContext | null) {
+    const { events, cursor } = await this.traceService.list(runId, auth);
     return { runId, events, cursor };
   }
 
@@ -448,8 +460,8 @@ export class WorkflowsController {
     description: 'Derived data flow packets for a workflow run',
     schema: dataFlowEnvelopeSchema,
   })
-  async dataflows(@Param('runId') runId: string) {
-    const { events } = await this.traceService.list(runId);
+  async dataflows(@Param('runId') runId: string, @CurrentAuth() auth: AuthContext | null) {
+    const { events } = await this.traceService.list(runId, auth);
     const packets = await this.workflowsService.buildDataFlows(runId, events);
     return { runId, packets };
   }
@@ -459,6 +471,7 @@ export class WorkflowsController {
   async stream(
     @Param('runId') runId: string,
     @Query(new ZodValidationPipe(StreamRunQuerySchema)) query: StreamRunQueryDto,
+    @CurrentAuth() auth: AuthContext | null,
     @Res() res: Response,
     @Req() req: Request,
   ): Promise<void> {
@@ -527,7 +540,7 @@ export class WorkflowsController {
       }
 
       try {
-        const { events, cursor } = await this.traceService.listSince(runId, lastSequence);
+        const { events, cursor } = await this.traceService.listSince(runId, lastSequence, auth);
         if (events.length > 0) {
           const lastId = events[events.length - 1]?.id;
           if (lastId) {
@@ -566,7 +579,7 @@ export class WorkflowsController {
       }
 
       try {
-        const status = await this.workflowsService.getRunStatus(runId, query.temporalRunId);
+        const status = await this.workflowsService.getRunStatus(runId, query.temporalRunId, auth);
         const signature = JSON.stringify(status);
         if (signature !== lastStatusSignature) {
           lastStatusSignature = signature;
@@ -593,7 +606,7 @@ export class WorkflowsController {
           try {
             const notification = JSON.parse(payload);
             if (notification.sequence > lastSequence) {
-              const { events } = await this.traceService.listSince(runId, lastSequence);
+              const { events } = await this.traceService.listSince(runId, lastSequence, auth);
               if (events.length > 0) {
                 const lastId = events[events.length - 1]?.id;
                 if (lastId) {
@@ -673,8 +686,9 @@ export class WorkflowsController {
     @Param('runId') runId: string,
     @Query(new ZodValidationPipe(WorkflowLogsQuerySchema))
     query: WorkflowLogsQueryDto,
+    @CurrentAuth() auth: AuthContext | null,
   ) {
-    return this.logStreamService.fetch(runId, {
+    return this.logStreamService.fetch(runId, auth, {
       nodeRef: query.nodeRef,
       stream: query.stream,
       limit: query.limit,

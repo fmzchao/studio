@@ -433,6 +433,9 @@ function WorkflowBuilderContent() {
         onRun={handleRun}
         onSave={handleSave}
       />
+      <div className="px-6 pt-2">
+        <AuthStatusBanner />
+      </div>
       <Button
         type="button"
         variant="secondary"

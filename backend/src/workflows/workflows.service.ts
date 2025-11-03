@@ -18,6 +18,7 @@ import {
   WorkflowRecord,
   WorkflowRepository,
 } from './repository/workflow.repository';
+import { WorkflowRoleRepository } from './repository/workflow-role.repository';
 import { WorkflowRunRepository } from './repository/workflow-run.repository';
 import { WorkflowVersionRepository } from './repository/workflow-version.repository';
 import { TraceRepository } from '../trace/trace.repository';
@@ -83,6 +84,7 @@ export class WorkflowsService {
 
   constructor(
     private readonly repository: WorkflowRepository,
+    private readonly roleRepository: WorkflowRoleRepository,
     private readonly versionRepository: WorkflowVersionRepository,
     private readonly runRepository: WorkflowRunRepository,
     private readonly traceRepository: TraceRepository,
@@ -101,11 +103,57 @@ export class WorkflowsService {
     return organizationId;
   }
 
+  private ensureOrganizationAdmin(auth?: AuthContext | null): void {
+    if (!auth?.roles || !auth.roles.includes('ADMIN')) {
+      throw new ForbiddenException('Administrator role required');
+    }
+  }
+
+  private async requireWorkflowAdmin(
+    workflowId: string,
+    auth?: AuthContext | null,
+  ): Promise<string> {
+    const organizationId = this.requireOrganizationId(auth);
+    if (auth?.roles?.includes('ADMIN')) {
+      return organizationId;
+    }
+
+    if (!auth?.userId) {
+      throw new ForbiddenException('Administrator role required');
+    }
+
+    const hasRole = await this.roleRepository.hasRole({
+      workflowId,
+      userId: auth.userId,
+      role: 'ADMIN',
+      organizationId,
+    });
+
+    if (!hasRole) {
+      throw new ForbiddenException('Administrator role required');
+    }
+
+    return organizationId;
+  }
+
+  private async requireRunAccess(
+    runId: string,
+    auth?: AuthContext | null,
+  ) {
+    const organizationId = this.requireOrganizationId(auth);
+    const run = await this.runRepository.findByRunId(runId, { organizationId });
+    if (!run) {
+      throw new NotFoundException(`Workflow run ${runId} not found`);
+    }
+    return { organizationId, run };
+  }
+
   async create(
     dto: WorkflowGraphDto,
     auth?: AuthContext | null,
   ): Promise<ServiceWorkflowResponse> {
     const input = this.parse(dto);
+    this.ensureOrganizationAdmin(auth);
     const organizationId = this.requireOrganizationId(auth);
     const record = await this.repository.create(input, { organizationId });
     let version: WorkflowVersionRecord;
@@ -115,6 +163,14 @@ export class WorkflowsService {
         graph: input,
         organizationId,
       });
+      if (auth?.userId) {
+        await this.roleRepository.upsert({
+          workflowId: record.id,
+          userId: auth.userId,
+          role: 'ADMIN',
+          organizationId,
+        });
+      }
     } catch (error) {
       await this.repository.delete(record.id, { organizationId });
       throw error;
@@ -132,7 +188,7 @@ export class WorkflowsService {
     auth?: AuthContext | null,
   ): Promise<ServiceWorkflowResponse> {
     const input = this.parse(dto);
-    const organizationId = this.requireOrganizationId(auth);
+    const organizationId = await this.requireWorkflowAdmin(id, auth);
     const record = await this.repository.update(id, input, { organizationId });
     const version = await this.versionRepository.create({
       workflowId: record.id,
@@ -168,7 +224,7 @@ export class WorkflowsService {
   }
 
   async delete(id: string, auth?: AuthContext | null): Promise<void> {
-    const organizationId = this.requireOrganizationId(auth);
+    const organizationId = await this.requireWorkflowAdmin(id, auth);
     await this.repository.delete(id, { organizationId });
     this.logger.log(`Deleted workflow ${id}`);
   }
@@ -225,7 +281,11 @@ export class WorkflowsService {
       const nodeCount = Array.isArray(graph?.nodes) ? graph!.nodes!.length : 0;
 
       // Get event count
-      const eventCount = await this.traceRepository.countByType(run.runId, 'NODE_STARTED');
+      const eventCount = await this.traceRepository.countByType(
+        run.runId,
+        'NODE_STARTED',
+        organizationId,
+      );
 
       // Get current status from Temporal
       let currentStatus = 'UNKNOWN';
@@ -262,13 +322,16 @@ export class WorkflowsService {
     return { runs: enrichedRuns };
   }
 
-  async commit(id: string): Promise<WorkflowDefinition> {
-    const workflow = await this.repository.findById(id);
+  async commit(id: string, auth?: AuthContext | null): Promise<WorkflowDefinition> {
+    const organizationId = await this.requireWorkflowAdmin(id, auth);
+    const workflow = await this.repository.findById(id, { organizationId });
     if (!workflow) {
       throw new NotFoundException(`Workflow ${id} not found`);
     }
 
-    const version = await this.versionRepository.findLatestByWorkflowId(id);
+    const version = await this.versionRepository.findLatestByWorkflowId(id, {
+      organizationId,
+    });
     if (!version) {
       throw new NotFoundException(`No versions recorded for workflow ${id}`);
     }
@@ -276,8 +339,10 @@ export class WorkflowsService {
     this.logger.log(`Compiling workflow ${workflow.id} version ${version.version}`);
     const graph = WorkflowGraphSchema.parse(version.graph);
     const definition = compileWorkflowGraph(graph);
-    await this.repository.saveCompiledDefinition(id, definition);
-    await this.versionRepository.setCompiledDefinition(version.id, definition);
+    await this.repository.saveCompiledDefinition(id, definition, { organizationId });
+    await this.versionRepository.setCompiledDefinition(version.id, definition, {
+      organizationId,
+    });
     this.logger.log(
       `Compiled workflow ${workflow.id} version ${version.version} with ${definition.actions.length} action(s); entrypoint=${definition.entrypoint.ref}`,
     );
@@ -320,6 +385,7 @@ export class WorkflowsService {
             workflowId: workflow.id,
             definition: compiledDefinition,
             inputs: request.inputs ?? {},
+            organizationId,
           },
         ],
       });
@@ -422,6 +488,7 @@ export class WorkflowsService {
   async getRunStatus(
     runId: string,
     temporalRunId?: string,
+    auth?: AuthContext | null,
   ): Promise<WorkflowRunStatusPayload> {
     this.logger.log(
       `Fetching status for workflow run ${runId} (temporalRunId=${temporalRunId ?? 'latest'})`,
@@ -430,27 +497,33 @@ export class WorkflowsService {
       workflowId: runId,
       runId: temporalRunId,
     });
-    const metadata = await this.runRepository.findByRunId(runId);
+    const { organizationId, run } = await this.requireRunAccess(runId, auth);
 
     let completedActions = 0;
-    if (metadata?.totalActions && metadata.totalActions > 0) {
-      completedActions = await this.traceRepository.countByType(runId, 'NODE_COMPLETED');
+    if (run.totalActions && run.totalActions > 0) {
+      completedActions = await this.traceRepository.countByType(
+        runId,
+        'NODE_COMPLETED',
+        organizationId,
+      );
     }
 
-    return this.mapTemporalStatus(runId, temporalStatus, metadata ?? null, completedActions);
+    return this.mapTemporalStatus(runId, temporalStatus, run, completedActions);
   }
 
-  async getRunResult(runId: string, temporalRunId?: string) {
+  async getRunResult(runId: string, temporalRunId?: string, auth?: AuthContext | null) {
     this.logger.log(
       `Fetching result for workflow run ${runId} (temporalRunId=${temporalRunId ?? 'latest'})`,
     );
+    await this.requireRunAccess(runId, auth);
     return this.temporalService.getWorkflowResult({ workflowId: runId, runId: temporalRunId });
   }
 
-  async cancelRun(runId: string, temporalRunId?: string): Promise<void> {
+  async cancelRun(runId: string, temporalRunId?: string, auth?: AuthContext | null): Promise<void> {
     this.logger.warn(
       `Cancelling workflow run ${runId} (temporalRunId=${temporalRunId ?? 'latest'})`,
     );
+    await this.requireRunAccess(runId, auth);
     await this.temporalService.cancelWorkflow({ workflowId: runId, runId: temporalRunId });
   }
 

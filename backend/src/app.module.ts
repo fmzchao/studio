@@ -15,9 +15,11 @@ import { platformConfig } from './config/platform.config';
 import { AuthModule } from './auth/auth.module';
 import { AuthGuard } from './auth/auth.guard';
 import { RolesGuard } from './auth/roles.guard';
+import { PlatformModule } from './platform/platform.module';
 
 const coreModules = [
   AuthModule,
+  PlatformModule,
   WorkflowsModule,
   TraceModule,
   ComponentsModule,

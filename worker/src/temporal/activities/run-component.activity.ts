@@ -37,9 +37,16 @@ export function initializeComponentActivityServices(options: {
   globalLogs = options.logs;
 }
 
-export async function setRunMetadataActivity(input: { runId: string; workflowId: string }): Promise<void> {
+export async function setRunMetadataActivity(input: {
+  runId: string;
+  workflowId: string;
+  organizationId?: string | null;
+}): Promise<void> {
   if (globalTrace instanceof TraceAdapter) {
-    globalTrace.setRunMetadata(input.runId, { workflowId: input.workflowId });
+    globalTrace.setRunMetadata(input.runId, {
+      workflowId: input.workflowId,
+      organizationId: input.organizationId ?? null,
+    });
   }
 }
 
@@ -143,6 +150,7 @@ export async function runComponentActivity(
               message: entry.message,
               timestamp: new Date(entry.timestamp),
               metadata: entry.metadata,
+              organizationId: input.organizationId ?? null,
             })
             .catch((error) => {
               console.error('[Logs] Failed to append log entry', error);

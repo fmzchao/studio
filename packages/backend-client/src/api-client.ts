@@ -4,6 +4,7 @@ import type { paths } from './client';
 export interface ClientConfig {
   baseUrl?: string;
   headers?: Record<string, string>;
+  middleware?: Middleware | Middleware[];
 }
 
 /**
@@ -25,6 +26,15 @@ export class ShipSecApiClient {
         ...config.headers,
       },
     });
+
+    if (config.middleware) {
+      const middlewares = Array.isArray(config.middleware)
+        ? config.middleware
+        : [config.middleware];
+      for (const mw of middlewares) {
+        this.client.use(mw);
+      }
+    }
   }
 
   /**

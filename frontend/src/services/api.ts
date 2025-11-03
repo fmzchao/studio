@@ -59,9 +59,7 @@ export const API_BASE_URL = resolveApiBaseUrl()
 // Create type-safe API client
 const apiClient = createShipSecClient({
   baseUrl: API_BASE_URL,
-})
-
-apiClient.use({
+  middleware: {
   async onRequest({ request }) {
     const { token, organizationId } = useAuthStore.getState()
 
@@ -79,6 +77,7 @@ apiClient.use({
     }
 
     return request
+  },
   },
 })
 

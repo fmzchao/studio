@@ -13,7 +13,7 @@ _Last updated: 2025-02-15_
 | Phase 0 | 🟢 Completed | Baseline analysis & scaffolding |
 | Phase 1 | 🟢 Completed | Modular auth provider abstraction |
 | Phase 2 | 🟡 In Progress | Org-scoped persistence & access guards |
-| Phase 3 | ⚪ Not Started | Frontend + client auth plumbing |
+| Phase 3 | 🟡 In Progress | Frontend + client auth plumbing |
 | Phase 4 | ⚪ Not Started | Platform bridge & service accounts |
 | Phase 5 | ⚪ Not Started | Documentation & rollout |
 | Phase 6 | ⚪ Not Started | Extensibility & custom auth hooks |
@@ -57,11 +57,11 @@ _Last updated: 2025-02-15_
 
 - [x] Apply schema migrations adding `organization_id` (+ indexes) to workflows, workflow runs, secrets, secret versions, files/artifacts. _(Migration `0008_add-org-scoping.sql` landed and schema types updated.)_
 - [x] Backfill existing records using a temporary default org (or flag for manual migration). _(Migration `backend/drizzle/0009_backfill-org-columns.sql` seeds `local-dev` org for legacy rows.)_
-- [x] Update repositories & services to require `AuthContext.organizationId`, filter queries, and reject cross-org access. _(Workflows + secrets + files enforce org scoping; trace/log pending.)_
-- [ ] Introduce `workflow_roles` (workflow/user/role) table limited to `ADMIN`/`MEMBER`.
-- [ ] Implement decorators/guards for resource-level permissions (e.g., only admins can mutate workflows).
-- [ ] Extend worker run payloads & Trace adapters to persist organization metadata end-to-end. _(Run metadata + repositories capture `organizationId`; worker adapters + trace service still pending.)_
-- [ ] Add regression tests covering org isolation and role enforcement.
+- [x] Update repositories & services to require `AuthContext.organizationId`, filter queries, and reject cross-org access. _(Trace + log repositories now scope by org.)_
+- [x] Introduce `workflow_roles` (workflow/user/role) table limited to `ADMIN`/`MEMBER`. _(Migration `0010_create_workflow_roles.sql` with repository helper at `backend/src/workflows/repository/workflow-role.repository.ts`.)_
+- [x] Implement decorators/guards for resource-level permissions (e.g., only admins can mutate workflows). _(Route-level guard `WorkflowRoleGuard` + `@RequireWorkflowRole` applied to mutating endpoints.)_
+- [x] Extend worker run payloads & Trace adapters to persist organization metadata end-to-end. _(Worker Temporal inputs, trace/log adapters now carry `organizationId` through persistence.)_
+- [x] Add regression tests covering org isolation and role enforcement. _(Backend workflow service/controller specs updated to exercise org-aware paths.)_
 
 ---
 
@@ -69,12 +69,12 @@ _Last updated: 2025-02-15_
 
 **Goal:** Propagate auth tokens from the browser to the Studio backend and respect role-based UI states.
 
-- [ ] Update `@shipsec/backend-client` to accept an auth middleware hook and attach bearer tokens.
-- [ ] Extend `frontend/src/services/api.ts` to source tokens (Clerk or other) and forward them with each request.
-- [ ] Add a lightweight auth store exposing `userId`, `organizationId`, and roles to the UI.
-- [ ] Apply role-aware UI gating (disable edits for `MEMBER`, hide destructive actions unless `ADMIN`).
-- [ ] Provide fallback UX for local provider (e.g., API key input banner).
-- [ ] Add unit/component tests for auth-aware UI.
+- [x] Update `@shipsec/backend-client` to accept an auth middleware hook and attach bearer tokens. _(Client config now accepts `middleware`, see `packages/backend-client/src/api-client.ts`.)_
+- [x] Extend `frontend/src/services/api.ts` to source tokens (Clerk or other) and forward them with each request. _(Auth middleware forwards bearer + organization headers.)_
+- [x] Add a lightweight auth store exposing `userId`, `organizationId`, and roles to the UI. _(Persisted Zustand store at `frontend/src/store/authStore.ts`.)_
+- [x] Apply role-aware UI gating (disable edits for `MEMBER`, hide destructive actions unless `ADMIN`). _(Workflow builder, list, and secrets respect role checks.)_
+- [x] Provide fallback UX for local provider (e.g., API key input banner). _(AuthStatusBanner surfaces local-mode guidance.)_
+- [x] Add unit/component tests for auth-aware UI. _(Workflow and secrets pages assert MEMBER read-only state.)_
 
 ---
 
@@ -86,14 +86,14 @@ _Last updated: 2025-02-15_
 
 - [ ] Create a dedicated service-account scope for Studio (read user/org/role metadata, list components, register workflow pointers).
 - [ ] Expose a typed `/service/studio/context` endpoint returning `{ userId, organizationId, roles, orgMetadata }` for a given user; require Studio service-account auth.
-- [ ] Provide `/service/studio/workflows` endpoints for linking platform agents to Studio workflow IDs (create/update/delete).
+- [x] Provide `/service/studio/workflows` endpoints for linking platform agents to Studio workflow IDs (create/update/delete). _(Implemented via `PlatformController` in Studio backend.)_
 - [ ] Document token provisioning (how ops issues Studio’s service-account token).
 
 ### Studio backend changes
 
 - [x] Extend `ClerkProvider` to validate end-user tokens, then call platform `/service/studio/context` using the configured service-account token to fetch org/role data.
 - [ ] Cache context per request, respect platform roles when enforcing workflow + secret permissions. _(Create/update/list workflows now require org context; remaining routes still need enforcement.)_
-- [ ] Support platform-triggered runs: accept service-account tokens from platform, verify via existing local provider or dedicated guard, and enforce org assertions.
+- [x] Support platform-triggered runs: accept service-account tokens from platform, verify via existing local provider or dedicated guard, and enforce org assertions. _(Global auth guard recognises `PLATFORM_SERVICE_TOKEN`; new `/service/studio/workflows/link` endpoints require it.)_
 - [ ] Emit run lifecycle events/webhooks so the platform can mirror execution state (status updates, trace summaries).
 - [ ] Continue to store minimal org IDs locally while treating platform data as canonical.
 - [ ] Expose a documented `AuthProviderStrategy` interface plus registration hook so downstream users can ship custom providers without patching core code.

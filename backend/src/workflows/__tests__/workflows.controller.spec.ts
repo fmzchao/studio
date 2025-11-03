@@ -283,14 +283,30 @@ describe('WorkflowsController', () => {
         runStore.set(data.runId, record);
         return record;
       },
-      async findByRunId(runId: string) {
-        return runStore.get(runId);
+      async findByRunId(runId: string, options: { organizationId?: string | null } = {}) {
+        const record = runStore.get(runId);
+        if (!record) {
+          return undefined;
+        }
+        if (options.organizationId && record.organizationId !== options.organizationId) {
+          return undefined;
+        }
+        return record;
       },
     };
 
     const traceRepositoryStub = {
       async countByType() {
         return 1;
+      },
+    };
+
+    const workflowRoleRepositoryStub = {
+      async upsert() {
+        return;
+      },
+      async hasRole() {
+        return false;
       },
     };
 
@@ -331,6 +347,7 @@ describe('WorkflowsController', () => {
 
     const workflowsService = new WorkflowsService(
       repositoryStub as WorkflowRepository,
+      workflowRoleRepositoryStub as any,
       versionRepositoryStub as any,
       runRepositoryStub as any,
       traceRepositoryStub as any,
@@ -378,7 +395,7 @@ describe('WorkflowsController', () => {
   it('commits, starts, and inspects workflow runs', async () => {
     const created = await controller.create(authContext, baseGraph);
 
-    const definition = await controller.commit(created.id);
+    const definition = await controller.commit(created.id, authContext);
     expect(definition.actions).toHaveLength(2);
 
     const run = await controller.run(authContext, created.id, {
@@ -391,26 +408,26 @@ describe('WorkflowsController', () => {
     expect(run.workflowVersion).toBeDefined();
     expect(run.workflowVersionId).toBeDefined();
 
-    const status = await controller.status(run.runId, { temporalRunId: run.temporalRunId });
+    const status = await controller.status(run.runId, { temporalRunId: run.temporalRunId }, authContext);
     expect(status.runId).toBe(run.runId);
     expect(status.workflowId).toBe(created.id);
     expect(status.status).toBe('RUNNING');
     expect(status.progress).toEqual({ completedActions: 1, totalActions: 2 });
 
-    const result = await controller.result(run.runId, { temporalRunId: run.temporalRunId });
+    const result = await controller.result(run.runId, { temporalRunId: run.temporalRunId }, authContext);
     expect(result).toEqual({
       runId: run.runId,
       result: { workflowId: run.runId, success: true },
     });
 
-    const cancelResponse = await controller.cancel(run.runId, { temporalRunId: run.temporalRunId });
+    const cancelResponse = await controller.cancel(run.runId, { temporalRunId: run.temporalRunId }, authContext);
     expect(cancelResponse).toEqual({ status: 'cancelled', runId: run.runId });
     expect(lastCancelledRun).toEqual({
       workflowId: run.runId,
       runId: run.temporalRunId,
     });
 
-    const trace = await controller.trace(run.runId);
+    const trace = await controller.trace(run.runId, authContext);
     expect(trace.runId).toBe(run.runId);
     expect(trace.events).toHaveLength(0);
     expect(trace.cursor).toBeUndefined();

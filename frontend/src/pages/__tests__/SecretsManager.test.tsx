@@ -68,6 +68,7 @@ mock.module('@/store/secretStore', () => {
 
 import { SecretsManager } from '@/pages/SecretsManager'
 import { useSecretStore } from '@/store/secretStore'
+import { useAuthStore, DEFAULT_ORG_ID } from '@/store/authStore'
 
 type MockStoreState = {
   secrets: SecretSummary[]
@@ -84,6 +85,20 @@ type MockStoreState = {
 }
 
 const useSecretStoreMock = useSecretStore as any
+
+async function resetAuthStore() {
+  const persist = (useAuthStore as typeof useAuthStore & { persist?: any }).persist
+  if (persist?.clearStorage) {
+    await persist.clearStorage()
+  }
+  useAuthStore.setState({
+    token: null,
+    userId: null,
+    organizationId: DEFAULT_ORG_ID,
+    roles: ['ADMIN'],
+    provider: 'local',
+  })
+}
 
 const ISO = '2024-01-01T00:00:00.000Z'
 
@@ -140,6 +155,7 @@ const openEditDialog = async () => {
 describe('SecretsManager edit dialog', () => {
   beforeEach(() => {
     setupStore()
+    return resetAuthStore()
   })
 
   it('updates metadata without rotating when only metadata changes', async () => {
@@ -245,5 +261,23 @@ describe('SecretsManager edit dialog', () => {
 
     expect(updateSecret).not.toHaveBeenCalled()
     expect(rotateSecret).not.toHaveBeenCalled()
+  })
+})
+
+describe('SecretsManager role gating', () => {
+  beforeEach(async () => {
+    setupStore()
+    await resetAuthStore()
+  })
+
+  it('disables create actions for members', async () => {
+    useAuthStore.setState({ roles: ['MEMBER'] })
+    renderSecretsManager()
+
+    const banner = await screen.findByText(/read-only access/i)
+    expect(banner).toBeInTheDocument()
+
+    const createButton = await screen.findByRole('button', { name: /create secret/i })
+    expect(createButton).toBeDisabled()
   })
 })
