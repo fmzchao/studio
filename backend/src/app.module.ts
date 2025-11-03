@@ -9,8 +9,11 @@ import { SecretsModule } from './secrets/secrets.module';
 import { TraceModule } from './trace/trace.module';
 import { WorkflowsModule } from './workflows/workflows.module';
 import { TestingSupportModule } from './testing/testing.module';
+import { authConfig } from './config/auth.config';
+import { AuthModule } from './auth/auth.module';
 
 const coreModules = [
+  AuthModule,
   WorkflowsModule,
   TraceModule,
   ComponentsModule,
@@ -25,6 +28,7 @@ const testingModules =
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: ['.env', '../.env'],
+      load: [authConfig],
     }),
     ...coreModules,
     ...testingModules,
