@@ -106,11 +106,12 @@ services:
     container_name: shipsec-backend
     environment:
       - NODE_ENV=production
+      - SHIPSEC_ENV=production
       - PORT=3211
       - DATABASE_URL=postgresql://shipsec:shipsec@postgres:5432/shipsec
       - TEMPORAL_ADDRESS=temporal:7233
       - TEMPORAL_NAMESPACE=shipsec-prod
-      - TEMPORAL_TASK_QUEUE=shipsec-default
+      - TEMPORAL_TASK_QUEUE=shipsec-prod
       - MINIO_ROOT_USER=minioadmin
       - MINIO_ROOT_PASSWORD=minioadmin
       - MINIO_ENDPOINT=minio
@@ -155,10 +156,11 @@ services:
     container_name: shipsec-worker
     environment:
       - NODE_ENV=production
+      - SHIPSEC_ENV=production
       - DATABASE_URL=postgresql://shipsec:shipsec@postgres:5432/shipsec
       - TEMPORAL_ADDRESS=temporal:7233
       - TEMPORAL_NAMESPACE=shipsec-prod
-      - TEMPORAL_TASK_QUEUE=shipsec-default
+      - TEMPORAL_TASK_QUEUE=shipsec-prod
       - MINIO_ROOT_USER=minioadmin
       - MINIO_ROOT_PASSWORD=minioadmin
       - MINIO_ENDPOINT=minio

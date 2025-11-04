@@ -2,9 +2,10 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { Sidebar, SidebarHeader, SidebarContent, SidebarFooter, SidebarItem } from '@/components/ui/sidebar'
 import { AppTopBar } from '@/components/layout/AppTopBar'
 import { Button } from '@/components/ui/button'
-import { Workflow, KeyRound, Plus } from 'lucide-react'
+import { Workflow, KeyRound, Plus, Shield } from 'lucide-react'
 import React, { useState, useEffect } from 'react'
 import { useAuthStore } from '@/store/authStore'
+import { hasAdminRole } from '@/utils/auth'
 
 interface AppLayoutProps {
   children: React.ReactNode
@@ -29,7 +30,8 @@ export function AppLayout({ children }: AppLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const location = useLocation()
   const navigate = useNavigate()
-  const canManageWorkflows = useAuthStore((state) => state.roles.includes('ADMIN'))
+  const roles = useAuthStore((state) => state.roles)
+  const canManageWorkflows = hasAdminRole(roles)
 
   // Auto-collapse sidebar when opening workflow builder, expand for other routes
   useEffect(() => {
@@ -52,6 +54,11 @@ export function AppLayout({ children }: AppLayoutProps) {
       name: 'Secrets',
       href: '/secrets',
       icon: KeyRound,
+    },
+    {
+      name: 'Auth Test',
+      href: '/auth-test',
+      icon: Shield,
     }
   ]
 

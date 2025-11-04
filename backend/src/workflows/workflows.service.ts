@@ -103,9 +103,16 @@ export class WorkflowsService {
   }
 
   private ensureOrganizationAdmin(auth?: AuthContext | null): void {
+    this.logger.debug(
+      `[WORKFLOWS] Checking org admin - Auth: ${auth ? 'present' : 'null'}, Roles: ${auth?.roles ? JSON.stringify(auth.roles) : 'none'}, User: ${auth?.userId || 'none'}, Org: ${auth?.organizationId || 'none'}`
+    );
     if (!auth?.roles || !auth.roles.includes('ADMIN')) {
+      this.logger.warn(
+        `[WORKFLOWS] Access denied - User: ${auth?.userId || 'none'}, Org: ${auth?.organizationId || 'none'}, Roles: ${auth?.roles ? JSON.stringify(auth.roles) : 'none'}`
+      );
       throw new ForbiddenException('Administrator role required');
     }
+    this.logger.debug(`[WORKFLOWS] Org admin check passed for user: ${auth.userId}`);
   }
 
   private async requireWorkflowAdmin(

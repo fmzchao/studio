@@ -6,6 +6,7 @@ import { Workflow, Loader2, AlertCircle } from 'lucide-react'
 import { api } from '@/services/api'
 import type { WorkflowMetadata } from '@/schemas/workflow'
 import { useAuthStore } from '@/store/authStore'
+import { hasAdminRole } from '@/utils/auth'
 
 export function WorkflowList() {
   const navigate = useNavigate()
@@ -13,7 +14,7 @@ export function WorkflowList() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const roles = useAuthStore((state) => state.roles)
-  const canManageWorkflows = roles.includes('ADMIN')
+  const canManageWorkflows = hasAdminRole(roles)
   const isReadOnly = !canManageWorkflows
 
   useEffect(() => {

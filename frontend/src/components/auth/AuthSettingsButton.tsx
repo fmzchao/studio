@@ -19,9 +19,11 @@ import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { ShieldAlert, ShieldCheck, Info } from 'lucide-react'
 import { useAuthStore, DEFAULT_ORG_ID } from '@/store/authStore'
+import { useAuthProvider } from '@/auth/auth-context'
 
 export function AuthSettingsButton() {
   const { token, organizationId, setToken, setOrganizationId, clear } = useAuthStore()
+  const authProvider = useAuthProvider()
   const [open, setOpen] = useState(false)
   const [draftToken, setDraftToken] = useState(token ?? '')
   const [draftOrg, setDraftOrg] = useState(organizationId ?? DEFAULT_ORG_ID)
@@ -34,7 +36,10 @@ export function AuthSettingsButton() {
   }, [open, token, organizationId])
 
   const isConfigured = useMemo(() => Boolean(token && token.length > 0), [token])
-  const isLocalMode = useMemo(() => !token || token.trim().length === 0, [token])
+  // Only show local mode UI when the provider is actually "local", not when using Clerk
+  const isLocalMode = useMemo(() => {
+    return authProvider.name === 'local' && (!token || token.trim().length === 0)
+  }, [authProvider.name, token])
 
   const handleSave = () => {
     setToken(draftToken.trim().length > 0 ? draftToken.trim() : null)

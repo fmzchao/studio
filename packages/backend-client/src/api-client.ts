@@ -132,6 +132,34 @@ export class ShipSecApiClient {
     });
   }
 
+  async listWorkflowRuns(options?: {
+    workflowId?: string;
+    status?: string;
+    limit?: number;
+  }) {
+    return this.client.GET('/workflows/runs', {
+      params: {
+        query: {
+          workflowId: options?.workflowId,
+          status: options?.status,
+          limit: options?.limit,
+        },
+      },
+    });
+  }
+
+  async getWorkflowRunEvents(runId: string) {
+    return this.client.GET('/workflows/runs/{runId}/events', {
+      params: { path: { runId } },
+    });
+  }
+
+  async getWorkflowRunDataFlows(runId: string) {
+    return this.client.GET('/workflows/runs/{runId}/dataflows', {
+      params: { path: { runId } },
+    });
+  }
+
   // ===== Files =====
   
   async listFiles(limit: number = 100) {

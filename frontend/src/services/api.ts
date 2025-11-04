@@ -1,5 +1,6 @@
 import { createShipSecClient, type components } from '@shipsec/backend-client'
 import { useAuthStore } from '@/store/authStore'
+import { getFreshClerkToken } from '@/utils/clerk-token'
 
 // Direct type imports from backend client
 type WorkflowResponseDto = components['schemas']['WorkflowResponseDto']
@@ -41,11 +42,34 @@ const apiClient = createShipSecClient({
   baseUrl: API_BASE_URL,
   middleware: {
   async onRequest({ request }) {
-    const { token, organizationId } = useAuthStore.getState()
+    const storeState = useAuthStore.getState()
+    let token = storeState.token
+    const organizationId = storeState.organizationId
+
+    // For Clerk auth, always fetch a fresh token on-demand to prevent expiration issues
+    // This ensures we never use a stale/expired token
+    if (storeState.provider === 'clerk') {
+      try {
+        const freshToken = await getFreshClerkToken()
+        if (freshToken) {
+          token = freshToken
+          // Update store with fresh token so it's available for next time
+          storeState.setToken(freshToken)
+        } else {
+          // If we can't get a fresh token, fall back to store token
+          console.warn('[API] Failed to get fresh Clerk token, using store token');
+        }
+      } catch (error) {
+        console.error('[API] Error fetching fresh Clerk token:', error);
+        // Fall back to store token if fresh token fetch fails
+      }
+    }
 
     if (token && token.trim().length > 0) {
       const headerValue = token.startsWith('Bearer ') ? token : `Bearer ${token}`
       request.headers.set('Authorization', headerValue)
+    } else {
+      console.warn('[API] No token available for request:', request.url);
     }
 
     if (organizationId && organizationId.trim().length > 0) {
@@ -197,21 +221,15 @@ export const api = {
     },
 
     getEvents: async (executionId: string) => {
-      const response = await fetch(`${API_BASE_URL}/workflows/runs/${executionId}/events`)
-      if (!response.ok) {
-        throw new Error(`Failed to fetch events: ${response.statusText}`)
-      }
-      const data = await response.json()
-      return data
+      const response = await apiClient.getWorkflowRunEvents(executionId)
+      if (response.error) throw new Error('Failed to fetch events')
+      return response.data || []
     },
 
     getDataFlows: async (executionId: string) => {
-      const response = await fetch(`${API_BASE_URL}/workflows/runs/${executionId}/dataflows`)
-      if (!response.ok) {
-        throw new Error(`Failed to fetch data flows: ${response.statusText}`)
-      }
-      const data = await response.json()
-      return data
+      const response = await apiClient.getWorkflowRunDataFlows(executionId)
+      if (response.error) throw new Error('Failed to fetch data flows')
+      return response.data || []
     },
 
     stream: (executionId: string, options?: { cursor?: string; temporalRunId?: string }) => {
@@ -234,20 +252,9 @@ export const api = {
       status?: string;
       limit?: number;
     }) => {
-      const params = new URLSearchParams()
-      if (options?.workflowId) params.set('workflowId', options.workflowId)
-      if (options?.status) params.set('status', options.status)
-      if (options?.limit) params.set('limit', String(options.limit))
-
-      const query = params.toString()
-      const response = await fetch(`${API_BASE_URL}/workflows/runs${query ? `?${query}` : ''}`)
-
-      if (!response.ok) {
-        throw new Error(`Failed to fetch runs: ${response.statusText}`)
-      }
-
-      const data = await response.json()
-      return data
+      const response = await apiClient.listWorkflowRuns(options)
+      if (response.error) throw new Error('Failed to fetch runs')
+      return response.data || { runs: [] }
     },
   },
 

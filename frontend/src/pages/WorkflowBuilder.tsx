@@ -29,6 +29,7 @@ import {
 } from '@/utils/workflowSerializer'
 import type { NodeData } from '@/schemas/node'
 import { useAuthStore } from '@/store/authStore'
+import { hasAdminRole } from '@/utils/auth'
 
 function WorkflowBuilderContent() {
   const { id } = useParams<{ id: string }>()
@@ -36,7 +37,7 @@ function WorkflowBuilderContent() {
   const isNewWorkflow = id === 'new'
   const { metadata, setMetadata, setWorkflowId, markClean, resetWorkflow } = useWorkflowStore()
   const roles = useAuthStore((state) => state.roles)
-  const canManageWorkflows = roles.includes('ADMIN')
+  const canManageWorkflows = hasAdminRole(roles)
   const [nodes, setNodes, onNodesChange] = useNodesState<NodeData>([])
   const [edges, setEdges, onEdgesChange] = useEdgesState([])
   const { getComponent } = useComponentStore()

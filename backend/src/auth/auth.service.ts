@@ -44,7 +44,19 @@ export class AuthService {
 
     const provider: AuthProviderName = config.provider;
     if (provider === 'clerk') {
-      return new ClerkAuthProvider(config.clerk, this.platformContextClient);
+      // Validate Clerk configuration before creating provider
+      if (!config.clerk.secretKey) {
+        const error = new Error(
+          'Clerk auth provider is configured but CLERK_SECRET_KEY is missing. ' +
+          'Please set CLERK_SECRET_KEY in your environment variables or change AUTH_PROVIDER to "local".'
+        );
+        this.logger.error(error.message);
+        throw error;
+      }
+      if (!config.clerk.publishableKey) {
+        this.logger.warn('CLERK_PUBLISHABLE_KEY is not set, but this is only needed on the frontend');
+      }
+      return new ClerkAuthProvider(config.clerk);
     }
 
     return new LocalAuthProvider(config.local);

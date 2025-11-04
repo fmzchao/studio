@@ -14,6 +14,7 @@ import {
 import type { SecretSummary } from '@/schemas/secret'
 import { useSecretStore } from '@/store/secretStore'
 import { useAuthStore } from '@/store/authStore'
+import { hasAdminRole } from '@/utils/auth'
 
 interface FormState {
   name: string
@@ -88,7 +89,7 @@ function formatDate(iso: string) {
 
 export function SecretsManager() {
   const roles = useAuthStore((state) => state.roles)
-  const canManageSecrets = roles.includes('ADMIN')
+  const canManageSecrets = hasAdminRole(roles)
   const isReadOnly = !canManageSecrets
   const secrets = useSecretStore((state) => state.secrets)
   const loading = useSecretStore((state) => state.loading)
