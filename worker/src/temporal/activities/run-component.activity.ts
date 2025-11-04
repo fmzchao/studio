@@ -59,13 +59,34 @@ export async function finalizeRunActivity(input: { runId: string }): Promise<voi
 export async function runComponentActivity(
   input: RunComponentActivityInput,
 ): Promise<RunComponentActivityOutput> {
+  const activityInfo = Context.current().info;
+  console.log(`🎯 ACTIVITY CALLED - runComponentActivity:`, {
+    activityId: activityInfo.activityId,
+    attempt: activityInfo.attempt,
+    workflowId: activityInfo.workflowExecution.workflowId,
+    runId: info.workflowExecution.runId,
+    componentId: action.componentId,
+    ref: action.ref,
+    timestamp: new Date().toISOString()
+  });
+
   const { action, params, warnings = [] } = input;
+  console.log(`📋 Activity input details:`, {
+    componentId: action.componentId,
+    ref: action.ref,
+    hasParams: !!params,
+    paramKeys: params ? Object.keys(params) : [],
+    warningsCount: warnings.length
+  });
+
   const component = componentRegistry.get(action.componentId);
   if (!component) {
+    console.error(`❌ Component not found: ${action.componentId}`);
     throw new Error(`Component not registered: ${action.componentId}`);
   }
 
-  const activityInfo = Context.current().info;
+  console.log(`✅ Component found: ${action.componentId}`);
+
   const nodeMetadata = input.metadata ?? {};
   const streamId = nodeMetadata.streamId ?? nodeMetadata.groupId ?? action.ref;
   const joinStrategy = nodeMetadata.joinStrategy;

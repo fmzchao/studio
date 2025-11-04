@@ -110,6 +110,7 @@ services:
       - DATABASE_URL=postgresql://shipsec:shipsec@postgres:5432/shipsec
       - TEMPORAL_ADDRESS=temporal:7233
       - TEMPORAL_NAMESPACE=shipsec-prod
+      - TEMPORAL_TASK_QUEUE=shipsec-default
       - MINIO_ROOT_USER=minioadmin
       - MINIO_ROOT_PASSWORD=minioadmin
       - MINIO_ENDPOINT=minio
@@ -157,6 +158,7 @@ services:
       - DATABASE_URL=postgresql://shipsec:shipsec@postgres:5432/shipsec
       - TEMPORAL_ADDRESS=temporal:7233
       - TEMPORAL_NAMESPACE=shipsec-prod
+      - TEMPORAL_TASK_QUEUE=shipsec-default
       - MINIO_ROOT_USER=minioadmin
       - MINIO_ROOT_PASSWORD=minioadmin
       - MINIO_ENDPOINT=minio
