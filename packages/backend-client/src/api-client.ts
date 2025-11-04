@@ -47,51 +47,51 @@ export class ShipSecApiClient {
   // ===== Health =====
   
   async health() {
-    return this.client.GET('/health');
+    return this.client.GET('/api/v1/health');
   }
 
   // ===== Workflows =====
   
   async listWorkflows() {
-    return this.client.GET('/workflows');
+    return this.client.GET('/api/v1/workflows');
   }
 
   async getWorkflow(id: string) {
-    return this.client.GET('/workflows/{id}', {
+    return this.client.GET('/api/v1/workflows/{id}', {
       params: { path: { id } },
     });
   }
 
-  async createWorkflow(workflow: paths['/workflows']['post']['requestBody']['content']['application/json']) {
-    return this.client.POST('/workflows', {
+  async createWorkflow(workflow: paths['/api/v1/workflows']['post']['requestBody']['content']['application/json']) {
+    return this.client.POST('/api/v1/workflows', {
       body: workflow,
     });
   }
 
   async updateWorkflow(
     id: string,
-    workflow: paths['/workflows/{id}']['put']['requestBody']['content']['application/json'],
+    workflow: paths['/api/v1/workflows/{id}']['put']['requestBody']['content']['application/json'],
   ) {
-    return this.client.PUT('/workflows/{id}', {
+    return this.client.PUT('/api/v1/workflows/{id}', {
       params: { path: { id } },
       body: workflow,
     });
   }
 
   async deleteWorkflow(id: string) {
-    return this.client.DELETE('/workflows/{id}', {
+    return this.client.DELETE('/api/v1/workflows/{id}', {
       params: { path: { id } },
     });
   }
 
   async commitWorkflow(id: string) {
-    return this.client.POST('/workflows/{id}/commit', {
+    return this.client.POST('/api/v1/workflows/{id}/commit', {
       params: { path: { id } },
     });
   }
 
-  async runWorkflow(id: string, body: paths['/workflows/{id}/run']['post']['requestBody']['content']['application/json'] = { inputs: {} }) {
-    return this.client.POST('/workflows/{id}/run', {
+  async runWorkflow(id: string, body: paths['/api/v1/workflows/{id}/run']['post']['requestBody']['content']['application/json'] = { inputs: {} }) {
+    return this.client.POST('/api/v1/workflows/{id}/run', {
       params: { path: { id } },
       body,
     });
@@ -100,7 +100,7 @@ export class ShipSecApiClient {
   // ===== Workflow Runs =====
   
   async getWorkflowRunStatus(runId: string, temporalRunId?: string) {
-    return this.client.GET('/workflows/runs/{runId}/status', {
+    return this.client.GET('/api/v1/workflows/runs/{runId}/status', {
       params: { 
         path: { runId },
         query: temporalRunId ? { temporalRunId } : {},
@@ -109,7 +109,7 @@ export class ShipSecApiClient {
   }
 
   async getWorkflowRunResult(runId: string, temporalRunId?: string) {
-    return this.client.GET('/workflows/runs/{runId}/result', {
+    return this.client.GET('/api/v1/workflows/runs/{runId}/result', {
       params: {
         path: { runId },
         query: temporalRunId ? { temporalRunId } : {},
@@ -118,13 +118,13 @@ export class ShipSecApiClient {
   }
 
   async getWorkflowRunTrace(runId: string) {
-    return this.client.GET('/workflows/runs/{runId}/trace', {
+    return this.client.GET('/api/v1/workflows/runs/{runId}/trace', {
       params: { path: { runId } },
     });
   }
 
   async cancelWorkflowRun(runId: string, temporalRunId?: string) {
-    return this.client.POST('/workflows/runs/{runId}/cancel', {
+    return this.client.POST('/api/v1/workflows/runs/{runId}/cancel', {
       params: { 
         path: { runId },
         query: { temporalRunId: temporalRunId || '' } as any,
@@ -137,7 +137,7 @@ export class ShipSecApiClient {
     status?: string;
     limit?: number;
   }) {
-    return this.client.GET('/workflows/runs', {
+    return this.client.GET('/api/v1/workflows/runs', {
       params: {
         query: {
           workflowId: options?.workflowId,
@@ -149,13 +149,13 @@ export class ShipSecApiClient {
   }
 
   async getWorkflowRunEvents(runId: string) {
-    return this.client.GET('/workflows/runs/{runId}/events', {
+    return this.client.GET('/api/v1/workflows/runs/{runId}/events', {
       params: { path: { runId } },
     });
   }
 
   async getWorkflowRunDataFlows(runId: string) {
-    return this.client.GET('/workflows/runs/{runId}/dataflows', {
+    return this.client.GET('/api/v1/workflows/runs/{runId}/dataflows', {
       params: { path: { runId } },
     });
   }
@@ -163,7 +163,7 @@ export class ShipSecApiClient {
   // ===== Files =====
   
   async listFiles(limit: number = 100) {
-    return this.client.GET('/files', {
+    return this.client.GET('/api/v1/files', {
       params: {
         query: { limit },
       },
@@ -175,7 +175,7 @@ export class ShipSecApiClient {
     formData.append('file', file);
     
     // Use fetch directly for multipart/form-data uploads
-    const response = await fetch(`${this.baseUrl}/files/upload`, {
+    const response = await fetch(`${this.baseUrl}/api/v1/files/upload`, {
       method: 'POST',
       body: formData,
     });
@@ -189,13 +189,13 @@ export class ShipSecApiClient {
   }
 
   async getFileMetadata(id: string) {
-    return this.client.GET('/files/{id}', {
+    return this.client.GET('/api/v1/files/{id}', {
       params: { path: { id } },
     });
   }
 
   async downloadFile(id: string): Promise<Blob> {
-    const response = await fetch(`${this.baseUrl}/files/${id}/download`);
+    const response = await fetch(`${this.baseUrl}/api/v1/files/${id}/download`);
     if (!response.ok) {
       throw new Error(`Failed to download file: ${response.statusText}`);
     }
@@ -203,7 +203,7 @@ export class ShipSecApiClient {
   }
 
   async deleteFile(id: string) {
-    return this.client.DELETE('/files/{id}', {
+    return this.client.DELETE('/api/v1/files/{id}', {
       params: { path: { id } },
     });
   }
@@ -211,11 +211,11 @@ export class ShipSecApiClient {
   // ===== Components =====
   
   async listComponents() {
-    return this.client.GET('/components');
+    return this.client.GET('/api/v1/components');
   }
 
   async getComponent(id: string) {
-    return this.client.GET('/components/{id}', {
+    return this.client.GET('/api/v1/components/{id}', {
       params: { path: { id } },
     });
   }
@@ -223,17 +223,17 @@ export class ShipSecApiClient {
   // ===== Secrets =====
 
   async listSecrets() {
-    return this.client.GET('/secrets');
+    return this.client.GET('/api/v1/secrets');
   }
 
   async getSecret(id: string) {
-    return this.client.GET('/secrets/{id}', {
+    return this.client.GET('/api/v1/secrets/{id}', {
       params: { path: { id } },
     });
   }
 
   async getSecretValue(id: string, version?: number) {
-    return this.client.GET('/secrets/{id}/value', {
+    return this.client.GET('/api/v1/secrets/{id}/value', {
       params: {
         path: { id },
         query: version !== undefined ? { version } : undefined,
@@ -242,18 +242,18 @@ export class ShipSecApiClient {
   }
 
   async createSecret(
-    secret: paths['/secrets']['post']['requestBody']['content']['application/json'],
+    secret: paths['/api/v1/secrets']['post']['requestBody']['content']['application/json'],
   ) {
-    return this.client.POST('/secrets', {
+    return this.client.POST('/api/v1/secrets', {
       body: secret,
     });
   }
 
   async rotateSecret(
     id: string,
-    payload: paths['/secrets/{id}/rotate']['put']['requestBody']['content']['application/json'],
+    payload: paths['/api/v1/secrets/{id}/rotate']['put']['requestBody']['content']['application/json'],
   ) {
-    return this.client.PUT('/secrets/{id}/rotate', {
+    return this.client.PUT('/api/v1/secrets/{id}/rotate', {
       params: { path: { id } },
       body: payload,
     });
@@ -261,16 +261,16 @@ export class ShipSecApiClient {
 
   async updateSecret(
     id: string,
-    payload: paths['/secrets/{id}']['patch']['requestBody']['content']['application/json'],
+    payload: paths['/api/v1/secrets/{id}']['patch']['requestBody']['content']['application/json'],
   ) {
-    return this.client.PATCH('/secrets/{id}', {
+    return this.client.PATCH('/api/v1/secrets/{id}', {
       params: { path: { id } },
       body: payload,
     });
   }
 
   async deleteSecret(id: string) {
-    return this.client.DELETE('/secrets/{id}', {
+    return this.client.DELETE('/api/v1/secrets/{id}', {
       params: { path: { id } },
     });
   }

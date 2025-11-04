@@ -1,7 +1,7 @@
 {
   "openapi": "3.0.0",
   "paths": {
-    "/health": {
+    "/api/v1/health": {
       "get": {
         "operationId": "AppController_health",
         "parameters": [],
@@ -15,7 +15,7 @@
         ]
       }
     },
-    "/service/studio/workflows/link": {
+    "/api/v1/service/studio/workflows/link": {
       "post": {
         "operationId": "PlatformController_linkWorkflow",
         "parameters": [],
@@ -29,7 +29,7 @@
         ]
       }
     },
-    "/service/studio/workflows/link/{platformAgentId}": {
+    "/api/v1/service/studio/workflows/link/{platformAgentId}": {
       "get": {
         "operationId": "PlatformController_getLink",
         "parameters": [
@@ -73,7 +73,7 @@
         ]
       }
     },
-    "/workflows": {
+    "/api/v1/workflows": {
       "post": {
         "operationId": "WorkflowsController_create",
         "parameters": [],
@@ -126,7 +126,7 @@
         ]
       }
     },
-    "/workflows/{id}": {
+    "/api/v1/workflows/{id}": {
       "put": {
         "operationId": "WorkflowsController_update",
         "parameters": [
@@ -215,7 +215,7 @@
         ]
       }
     },
-    "/workflows/runs": {
+    "/api/v1/workflows/runs": {
       "get": {
         "operationId": "WorkflowsController_listRuns",
         "parameters": [
@@ -326,7 +326,7 @@
         ]
       }
     },
-    "/workflows/{id}/commit": {
+    "/api/v1/workflows/{id}/commit": {
       "post": {
         "operationId": "WorkflowsController_commit",
         "parameters": [
@@ -408,7 +408,7 @@
         ]
       }
     },
-    "/workflows/{id}/run": {
+    "/api/v1/workflows/{id}/run": {
       "post": {
         "operationId": "WorkflowsController_run",
         "parameters": [
@@ -487,7 +487,7 @@
         ]
       }
     },
-    "/workflows/runs/{runId}/status": {
+    "/api/v1/workflows/runs/{runId}/status": {
       "get": {
         "operationId": "WorkflowsController_status",
         "parameters": [
@@ -519,7 +519,7 @@
         ]
       }
     },
-    "/workflows/runs/{runId}/result": {
+    "/api/v1/workflows/runs/{runId}/result": {
       "get": {
         "operationId": "WorkflowsController_result",
         "parameters": [
@@ -551,7 +551,7 @@
         ]
       }
     },
-    "/workflows/runs/{runId}/cancel": {
+    "/api/v1/workflows/runs/{runId}/cancel": {
       "post": {
         "operationId": "WorkflowsController_cancel",
         "parameters": [
@@ -583,7 +583,7 @@
         ]
       }
     },
-    "/workflows/runs/{runId}/trace": {
+    "/api/v1/workflows/runs/{runId}/trace": {
       "get": {
         "operationId": "WorkflowsController_trace",
         "parameters": [
@@ -776,7 +776,7 @@
         ]
       }
     },
-    "/workflows/runs/{runId}/events": {
+    "/api/v1/workflows/runs/{runId}/events": {
       "get": {
         "operationId": "WorkflowsController_events",
         "parameters": [
@@ -969,7 +969,7 @@
         ]
       }
     },
-    "/workflows/runs/{runId}/dataflows": {
+    "/api/v1/workflows/runs/{runId}/dataflows": {
       "get": {
         "operationId": "WorkflowsController_dataflows",
         "parameters": [
@@ -1053,7 +1053,7 @@
         ]
       }
     },
-    "/workflows/runs/{runId}/stream": {
+    "/api/v1/workflows/runs/{runId}/stream": {
       "get": {
         "operationId": "WorkflowsController_stream",
         "parameters": [
@@ -1094,7 +1094,7 @@
         ]
       }
     },
-    "/workflows/runs/{runId}/logs": {
+    "/api/v1/workflows/runs/{runId}/logs": {
       "get": {
         "operationId": "WorkflowsController_logs",
         "parameters": [
@@ -1145,7 +1145,7 @@
         ]
       }
     },
-    "/components": {
+    "/api/v1/components": {
       "get": {
         "operationId": "ComponentsController_listComponents",
         "parameters": [],
@@ -1510,7 +1510,7 @@
         ]
       }
     },
-    "/components/{id}": {
+    "/api/v1/components/{id}": {
       "get": {
         "operationId": "ComponentsController_getComponent",
         "parameters": [
@@ -1775,7 +1775,7 @@
         ]
       }
     },
-    "/files/upload": {
+    "/api/v1/files/upload": {
       "post": {
         "operationId": "FilesController_uploadFile",
         "parameters": [],
@@ -1835,7 +1835,7 @@
         ]
       }
     },
-    "/files": {
+    "/api/v1/files": {
       "get": {
         "operationId": "FilesController_listFiles",
         "parameters": [
@@ -1890,7 +1890,7 @@
         ]
       }
     },
-    "/files/{id}": {
+    "/api/v1/files/{id}": {
       "get": {
         "operationId": "FilesController_getFile",
         "parameters": [
@@ -1938,7 +1938,7 @@
         ]
       }
     },
-    "/files/{id}/download": {
+    "/api/v1/files/{id}/download": {
       "get": {
         "operationId": "FilesController_downloadFile",
         "parameters": [
@@ -1971,7 +1971,7 @@
         ]
       }
     },
-    "/secrets": {
+    "/api/v1/secrets": {
       "get": {
         "operationId": "SecretsController_listSecrets",
         "parameters": [],
@@ -2024,7 +2024,7 @@
         ]
       }
     },
-    "/secrets/{id}": {
+    "/api/v1/secrets/{id}": {
       "get": {
         "operationId": "SecretsController_getSecret",
         "parameters": [
@@ -2113,7 +2113,7 @@
         ]
       }
     },
-    "/secrets/{id}/value": {
+    "/api/v1/secrets/{id}/value": {
       "get": {
         "operationId": "SecretsController_getSecretValue",
         "parameters": [
@@ -2152,7 +2152,7 @@
         ]
       }
     },
-    "/secrets/{id}/rotate": {
+    "/api/v1/secrets/{id}/rotate": {
       "put": {
         "operationId": "SecretsController_rotateSecret",
         "parameters": [
@@ -2192,7 +2192,7 @@
         ]
       }
     },
-    "/testing/webhooks": {
+    "/api/v1/testing/webhooks": {
       "post": {
         "operationId": "TestingWebhookController_acceptWebhook",
         "parameters": [
@@ -2251,7 +2251,7 @@
         ]
       }
     },
-    "/testing/webhooks/latest": {
+    "/api/v1/testing/webhooks/latest": {
       "get": {
         "operationId": "TestingWebhookController_latestRecord",
         "parameters": [],
@@ -2265,7 +2265,7 @@
         ]
       }
     },
-    "/testing/webhooks/{id}": {
+    "/api/v1/testing/webhooks/{id}": {
       "get": {
         "operationId": "TestingWebhookController_getRecord",
         "parameters": [
@@ -2296,7 +2296,12 @@
     "contact": {}
   },
   "tags": [],
-  "servers": [],
+  "servers": [
+    {
+      "url": "/api/v1",
+      "description": "API v1"
+    }
+  ],
   "components": {
     "schemas": {
       "CreateWorkflowRequestDto": {

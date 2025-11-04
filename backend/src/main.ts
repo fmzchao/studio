@@ -11,6 +11,9 @@ async function bootstrap() {
     logger: ['log', 'error', 'warn'],
   });
 
+  // Set global prefix for all routes
+  app.setGlobalPrefix('api/v1');
+
   // Enable CORS for frontend
   app.enableCors({
     origin: [
@@ -31,10 +34,11 @@ async function bootstrap() {
     .setTitle('ShipSec Studio API')
     .setDescription('ShipSec backend API')
     .setVersion('0.1.0')
+    .addServer('/api/v1', 'API v1')
     .build();
   const document = SwaggerModule.createDocument(app, config);
   const cleaned = cleanupOpenApiDoc(document);
-  SwaggerModule.setup('docs', app, cleaned);
+  SwaggerModule.setup('api/v1/docs', app, cleaned);
 
   await app.listen(port, host);
   console.log(`🚀 ShipSec backend listening on http://${host}:${port}`);

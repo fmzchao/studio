@@ -135,8 +135,8 @@ services:
       target: frontend
     container_name: shipsec-frontend
     environment:
-      - VITE_API_URL=http://localhost:3211
-      - VITE_BACKEND_URL=http://localhost:3211
+      - VITE_API_URL=https://studio.shipsec.ai
+      - VITE_BACKEND_URL=https://studio.shipsec.ai
     ports:
       - "8090:8080"
     depends_on:

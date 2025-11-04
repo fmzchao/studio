@@ -232,14 +232,14 @@ export const api = {
       return response.data || []
     },
 
-    stream: (executionId: string, options?: { cursor?: string; temporalRunId?: string }) => {
-      const params = new URLSearchParams()
-      if (options?.cursor) params.set('cursor', options.cursor)
-      if (options?.temporalRunId) params.set('temporalRunId', options.temporalRunId)
-      const query = params.toString()
-      const url = `${API_BASE_URL}/workflows/runs/${executionId}/stream${query ? `?${query}` : ''}`
-      return new EventSource(url)
-    },
+        stream: (executionId: string, options?: { cursor?: string; temporalRunId?: string }) => {
+          const params = new URLSearchParams()
+          if (options?.cursor) params.set('cursor', options.cursor)
+          if (options?.temporalRunId) params.set('temporalRunId', options.temporalRunId)
+          const query = params.toString()
+          const url = `${API_BASE_URL}/api/v1/workflows/runs/${executionId}/stream${query ? `?${query}` : ''}`
+          return new EventSource(url)
+        },
 
     cancel: async (executionId: string) => {
       const response = await apiClient.cancelWorkflowRun(executionId)
