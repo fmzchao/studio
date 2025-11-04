@@ -6,7 +6,9 @@
 FROM oven/bun:latest AS base
 # Install system deps
 RUN apt-get update && \
-    apt-get install -y ca-certificates python3 make g++ nodejs && \
+    apt-get install -y ca-certificates python3 make g++ curl && \
+    curl -fsSL https://deb.nodesource.com/setup_current.x | bash - && \
+    apt-get install -y nodejs && \
     update-ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 
