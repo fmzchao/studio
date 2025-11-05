@@ -130,16 +130,6 @@ const definition: ComponentDefinition<
         required: false,
         description: 'Optional team slug to target before removing the organization membership.',
       },
-      {
-        id: 'connectionId',
-        label: 'GitHub Connection',
-        type: 'text',
-        required: false,
-        description:
-          'Active GitHub connection to reuse. Select from the dropdown or wire a GitHub Connection Provider node.',
-        helpText:
-          'Manage connections from the Connections page. Tokens stay server-side and are fetched at runtime.',
-      },
     ],
   },
   async execute(params, context) {
