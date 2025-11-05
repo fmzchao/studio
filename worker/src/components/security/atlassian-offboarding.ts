@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { componentRegistry, type ComponentDefinition } from '@shipsec/component-sdk';
+import { componentRegistry, type ComponentDefinition, port } from '@shipsec/component-sdk';
 
 const emailUsernameArraySchema = z
   .array(z.string().min(1, 'Email username cannot be empty'))
@@ -184,7 +184,7 @@ function getSearchResults(payload: unknown): Array<Record<string, unknown>> {
 const definition: ComponentDefinition<Input, Output> = {
   id: 'shipsec.atlassian.offboarding',
   label: 'Atlassian Offboarding',
-  category: 'output',
+  category: 'security',
   runner: { kind: 'inline' },
   inputSchema,
   outputSchema,
@@ -193,7 +193,7 @@ const definition: ComponentDefinition<Input, Output> = {
     slug: 'atlassian-offboarding',
     version: '1.0.0',
     type: 'process',
-    category: 'security-tool',
+    category: 'security',
     description: 'Automate Atlassian user offboarding by searching for accounts and removing them from the organization.',
     documentation: 'https://developer.atlassian.com/cloud/admin/user-provisioning/rest/api-group-organization-users/',
     icon: 'UserMinus',
@@ -205,7 +205,7 @@ const definition: ComponentDefinition<Input, Output> = {
       {
         id: 'emailUsernames',
         label: 'Email Usernames',
-        type: 'array',
+        dataType: port.list(port.text()),
         required: true,
         description:
           'Email usernames (portion before the @) separated by commas or new lines to remove from the organization.',
@@ -214,7 +214,7 @@ const definition: ComponentDefinition<Input, Output> = {
       {
         id: 'orgId',
         label: 'Organization ID',
-        type: 'string',
+        dataType: port.text(),
         required: true,
         description: 'Atlassian organization identifier (UUID).',
         valuePriority: 'manual-first',
@@ -222,7 +222,7 @@ const definition: ComponentDefinition<Input, Output> = {
       {
         id: 'accessToken',
         label: 'Access Token',
-        type: 'secret',
+        dataType: port.secret(),
         required: false,
         description: 'Bearer token with admin scope. Takes priority over accessTokenSecretId if both provided.',
         valuePriority: 'connection-first',
@@ -232,8 +232,20 @@ const definition: ComponentDefinition<Input, Output> = {
       {
         id: 'results',
         label: 'Offboarding Results',
-        type: 'object',
+        dataType: port.list(port.json()),
         description: 'Status of each requested user offboarding attempt.',
+      },
+      {
+        id: 'summary',
+        label: 'Summary',
+        dataType: port.json(),
+        description: 'Aggregate statistics for the run.',
+      },
+      {
+        id: 'searchRaw',
+        label: 'Raw Search Response',
+        dataType: port.json(),
+        description: 'Unmodified search API payload for debugging.',
       },
     ],
     parameters: [
