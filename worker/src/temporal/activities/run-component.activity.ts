@@ -64,8 +64,8 @@ export async function runComponentActivity(
   console.log(`🎯 ACTIVITY CALLED - runComponentActivity:`, {
     activityId: activityInfo.activityId,
     attempt: activityInfo.attempt,
-    workflowId: activityInfo.workflowExecution.workflowId,
-    runId: activityInfo.workflowExecution.runId,
+    workflowId: activityInfo.workflowExecution?.workflowId ?? 'unknown',
+    runId: activityInfo.workflowExecution?.runId ?? 'unknown',
     componentId: action.componentId,
     ref: action.ref,
     timestamp: new Date().toISOString()
