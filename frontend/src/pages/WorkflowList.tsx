@@ -6,20 +6,23 @@ import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Workflow, Loader2, AlertCircle, Trash2 } from 'lucide-react'
 import { api } from '@/services/api'
-import type { WorkflowMetadata } from '@/schemas/workflow'
+import {
+  WorkflowMetadataSchema,
+  type WorkflowMetadataNormalized,
+} from '@/schemas/workflow'
 import { useAuthStore } from '@/store/authStore'
 import { hasAdminRole } from '@/utils/auth'
 
 export function WorkflowList() {
   const navigate = useNavigate()
-  const [workflows, setWorkflows] = useState<WorkflowMetadata[]>([])
+  const [workflows, setWorkflows] = useState<WorkflowMetadataNormalized[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const roles = useAuthStore((state) => state.roles)
   const canManageWorkflows = hasAdminRole(roles)
   const isReadOnly = !canManageWorkflows
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
-  const [workflowToDelete, setWorkflowToDelete] = useState<WorkflowMetadata | null>(null)
+  const [workflowToDelete, setWorkflowToDelete] = useState<WorkflowMetadataNormalized | null>(null)
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
 
@@ -32,7 +35,8 @@ export function WorkflowList() {
     setError(null)
     try {
       const data = await api.workflows.list()
-      setWorkflows(data)
+      const normalized = data.map((workflow) => WorkflowMetadataSchema.parse(workflow))
+      setWorkflows(normalized)
     } catch (err) {
       console.error('Failed to load workflows:', err)
       setError(err instanceof Error ? err.message : 'Failed to load workflows')
@@ -41,7 +45,7 @@ export function WorkflowList() {
     }
   }
 
-  const handleDeleteClick = (event: MouseEvent, workflow: WorkflowMetadata) => {
+  const handleDeleteClick = (event: MouseEvent, workflow: WorkflowMetadataNormalized) => {
     event.stopPropagation()
     if (!canManageWorkflows) {
       return
@@ -138,8 +142,7 @@ export function WorkflowList() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {workflows.map((workflow) => {
-              const nodeCount = workflow.graph?.nodes?.length ?? workflow.nodes?.length ?? 0
-
+              const nodeCount = workflow.nodes.length
               return (
                 <div
                   key={workflow.id}

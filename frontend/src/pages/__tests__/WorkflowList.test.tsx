@@ -50,30 +50,35 @@ mock.module('@/services/api', () => {
 })
 
 import { WorkflowList } from '@/pages/WorkflowList'
-import { DEFAULT_WORKFLOW_VIEWPORT, type WorkflowMetadata } from '@/schemas/workflow'
+import {
+  DEFAULT_WORKFLOW_VIEWPORT,
+  WorkflowMetadataSchema,
+  type WorkflowMetadataNormalized,
+} from '@/schemas/workflow'
 
 const ISO = '2024-01-01T00:00:00.000Z'
 
-const makeWorkflow = (id: string, name: string): WorkflowMetadata => ({
-  id,
-  name,
-  description: null,
-  nodes: [],
-  edges: [],
-  viewport: DEFAULT_WORKFLOW_VIEWPORT,
-  graph: {
+const makeWorkflow = (id: string, name: string): WorkflowMetadataNormalized =>
+  WorkflowMetadataSchema.parse({
+    id,
+    name,
+    description: null,
+    graph: {
+      nodes: [],
+      edges: [],
+      viewport: DEFAULT_WORKFLOW_VIEWPORT,
+    },
     nodes: [],
     edges: [],
     viewport: DEFAULT_WORKFLOW_VIEWPORT,
-  },
-  compiledDefinition: null,
-  lastRun: null,
-  runCount: 0,
-  createdAt: ISO,
-  updatedAt: ISO,
-  currentVersionId: null,
-  currentVersion: null,
-})
+    compiledDefinition: null,
+    lastRun: null,
+    runCount: 0,
+    createdAt: ISO,
+    updatedAt: ISO,
+    currentVersionId: null,
+    currentVersion: null,
+  })
 
 const renderWorkflowList = () =>
   render(
