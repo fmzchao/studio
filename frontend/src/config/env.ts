@@ -1,15 +1,13 @@
-import { z } from 'zod'
+// Centralized access to selected Vite env vars used in the UI.
+// Keep this minimal and typed; provide empty-string fallbacks so UI never breaks.
 
-const EnvSchema = z.object({
-  VITE_BACKEND_URL: z.string().url().default('http://localhost:3211'),
-  VITE_FRONTEND_BRANCH: z.string().optional().default(''),
-  VITE_BACKEND_BRANCH: z.string().optional().default(''),
-})
-
-const processEnv = {
-  VITE_BACKEND_URL: import.meta.env.VITE_BACKEND_URL,
-  VITE_FRONTEND_BRANCH: import.meta.env.VITE_FRONTEND_BRANCH,
-  VITE_BACKEND_BRANCH: import.meta.env.VITE_BACKEND_BRANCH,
+type FrontendEnv = {
+  VITE_FRONTEND_BRANCH: string
+  VITE_BACKEND_BRANCH: string
 }
 
-export const env = EnvSchema.parse(processEnv)
+export const env: FrontendEnv = {
+  VITE_FRONTEND_BRANCH: (import.meta.env.VITE_FRONTEND_BRANCH as string | undefined) ?? '',
+  VITE_BACKEND_BRANCH: (import.meta.env.VITE_BACKEND_BRANCH as string | undefined) ?? '',
+}
+

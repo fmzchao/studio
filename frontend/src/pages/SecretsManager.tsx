@@ -15,6 +15,7 @@ import type { SecretSummary } from '@/schemas/secret'
 import { useSecretStore } from '@/store/secretStore'
 import { useAuthStore } from '@/store/authStore'
 import { hasAdminRole } from '@/utils/auth'
+import { track, Events } from '@/features/analytics/events'
 
 interface FormState {
   name: string
@@ -175,12 +176,20 @@ export function SecretsManager() {
     }
 
     setIsSubmitting(true)
+    const normalizedName = formState.name.trim()
+    const normalizedTags = parseTags(formState.tags)
     try {
       await createSecret({
-        name: formState.name.trim(),
+        name: normalizedName,
         value: formState.value,
         description: formState.description.trim() || undefined,
-        tags: parseTags(formState.tags),
+        tags: normalizedTags,
+      })
+      // Avoid leaking raw secret identifiers to analytics; send derived metadata only.
+      track(Events.SecretCreated, {
+        has_tags: Boolean(normalizedTags?.length),
+        tag_count: normalizedTags?.length,
+        name_length: normalizedName.length,
       })
       setFormSuccess('Secret created successfully. You can now reference it from workflows.')
       setFormState(INITIAL_FORM)
@@ -304,9 +313,12 @@ export function SecretsManager() {
     setIsDeleting(true)
 
     const secretName = deleteTarget.name
+    const secretNameLength = secretName.trim().length
 
     try {
       await deleteSecretEntry(deleteTarget.id)
+      // Avoid emitting the raw secret name to analytics.
+      track(Events.SecretDeleted, { name_length: secretNameLength })
       setListSuccess(`Secret "${secretName}" deleted.`)
       handleDeleteDialogChange(false)
     } catch (err) {
