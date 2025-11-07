@@ -40,9 +40,48 @@
 - Keep humans in the loop: surface assumptions, blockers, and validation gaps promptly.
 
 ### 0. Capability Check
-- Identify whether your execution environment exposes CORE Memory (Codex CLI tool `corememory__*`).
-- **If CORE is available:** follow the memory-first workflow below.
-- **If CORE is unavailable:** rely on `.ai` docs, recent git history, and open issues for context; keep a written trail in repo docs or the PR description so teammates inherit your findings.
+- Identify whether your execution environment exposes CORE Memory (Codex CLI `memory` tool suite).
+- **If CORE is available:** immediately switch to the “CORE Memory Protocol” section below and follow it verbatim.
+- **If CORE is unavailable:** skip the CORE-specific block and rely on `.ai` docs, recent git history, and open issues for context; keep a written trail in repo docs or the PR description so teammates inherit your findings.
+
+### CORE Memory Protocol (CORE-enabled agents only)
+`trigger: always_on` — apply this section only when the CLI exposes CORE Memory. Agents that start without CORE should continue with the standard instructions; do **not** assume memory state exists.
+
+⚠️ **CRITICAL: READ THIS FIRST – MANDATORY MEMORY PROTOCOL** ⚠️  
+CORE Memory preserves project context, so every CORE-enabled session must follow the exact startup and shutdown sequences below.
+
+#### Mandatory startup sequence (run before any response)
+1. **Step 1 – `memory_search` (required first action):**
+   - Always search before replying to the user to pull prior discussions, decisions, and preferences related to the current topic.
+   - Extra triggers: the user references prior work (“previously”, “before”, etc.), you are working in the CORE project, or the task likely has history.
+   - Ask yourself which context is missing and craft a full semantic query (complete sentences, not keyword fragments).
+
+2. **Query patterns (pick the one that fits best):**
+   - **Entity-centric:** `[Person/Project] + [relationship/attribute] + [context]` (e.g., “Manoj's preferences for API design and error handling”).
+   - **Multi-entity relationship:** `[Entity1] + [relationship] + [Entity2] + [context]` (e.g., “Manoj and Harshith discussions about BFS search implementation”).
+   - **Semantic question:** fully phrased questions about requirements or causes (e.g., “What causes BFS search to return empty results?”).
+   - **Concept exploration:** `[concept] + related/connected + [domain/context]` (e.g., “concepts related to semantic relevance in knowledge graph search”).
+   - **Temporal:** `[temporal marker] + [topic] + [context]` (e.g., “recent changes to search implementation and reranking logic”).
+
+#### Mandatory shutdown sequence (run after you finish helping)
+1. **Final step – `memory_ingest` (required last action):**
+   - Capture the conversation summary before ending the session.
+   - Include `spaceId` from your initial `memory_get_space` call so the note lands in the right project bucket.
+
+2. **What to store (conceptual, no raw code/logs):**
+   - **From the user:** request, context, goals, constraints, and any blockers mentioned.
+   - **From the assistant:** solution details, reasoning, trade-offs, alternative approaches, and methodologies used.
+   - Emphasize technical explanations, decisions, and insights that will help in future sessions.
+   - Exclude code snippets, file dumps, CLI commands, or raw logs.
+
+3. **Quality check before storing:**
+   - Would someone understand the project context and decisions from this memory alone?
+   - Does it capture key reasoning and outcomes?
+
+#### Protocol summary
+1. **First action:** `memory_search` with a well-formed semantic query relevant to the user’s request.
+2. **Respond:** perform the requested work.
+3. **Final action:** `memory_ingest` with the session summary (and `spaceId`).
 
 ### 2. Core Operating Loop
 1. **Gather context**  
