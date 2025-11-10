@@ -125,12 +125,12 @@ export function Canvas({
     if (mode !== 'execution') {
       setNodes((nds) =>
         nds.map((node) => {
-          if (node.data.status) {
+          if (node.data.status && node.data.status !== 'idle') {
             return {
               ...node,
               data: {
                 ...node.data,
-                status: undefined,
+                status: 'idle',
               },
             }
           }
