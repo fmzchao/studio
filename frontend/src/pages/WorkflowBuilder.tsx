@@ -772,29 +772,31 @@ function WorkflowBuilderContent() {
         onExport={handleExportWorkflow}
         canManageWorkflows={canManageWorkflows}
       />
-      <Button
-        type="button"
-        variant="secondary"
-        onClick={toggleLibrary}
-        className={cn(
-          'fixed z-50 flex items-center gap-2 rounded-full border bg-background/95 text-xs font-medium shadow-lg transition-all duration-200 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
-          isLibraryVisible
-            ? 'top-[88px] left-[300px] md:left-[364px] h-10 w-10 justify-center'
-            : 'top-[88px] left-5 md:left-[72px] h-10 px-4 py-2'
-        )}
-        aria-expanded={isLibraryVisible}
-        aria-label={isLibraryVisible ? 'Hide component library' : 'Show component library'}
-        title={isLibraryVisible ? 'Hide components' : 'Show components'}
-      >
-        {isLibraryVisible ? (
-          <PanelLeftClose className="h-5 w-5 flex-shrink-0" />
-        ) : (
-          <PanelLeftOpen className="h-5 w-5 flex-shrink-0" />
-        )}
-        <span className={cn('font-medium whitespace-nowrap', isLibraryVisible ? 'hidden' : 'block')}>
-          Show components
-        </span>
-      </Button>
+      {mode === 'design' && (
+        <Button
+          type="button"
+          variant="secondary"
+          onClick={toggleLibrary}
+          className={cn(
+            'fixed z-50 flex items-center gap-2 rounded-full border bg-background/95 text-xs font-medium shadow-lg transition-all duration-200 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
+            isLibraryVisible
+              ? 'top-[88px] left-[300px] md:left-[364px] h-10 w-10 justify-center'
+              : 'top-[88px] left-5 md:left-[72px] h-10 px-4 py-2'
+          )}
+          aria-expanded={isLibraryVisible}
+          aria-label={isLibraryVisible ? 'Hide component library' : 'Show component library'}
+          title={isLibraryVisible ? 'Hide components' : 'Show components'}
+        >
+          {isLibraryVisible ? (
+            <PanelLeftClose className="h-5 w-5 flex-shrink-0" />
+          ) : (
+            <PanelLeftOpen className="h-5 w-5 flex-shrink-0" />
+          )}
+          <span className={cn('font-medium whitespace-nowrap', isLibraryVisible ? 'hidden' : 'block')}>
+            Show components
+          </span>
+        </Button>
+      )}
 
       <div ref={layoutRef} className="flex flex-1 overflow-hidden">
         <aside
