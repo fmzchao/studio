@@ -40,6 +40,7 @@ function WorkflowBuilderContent() {
   const isNewWorkflow = id === 'new'
   const {
     metadata,
+    isDirty,
     setMetadata,
     setWorkflowId,
     markClean,
@@ -221,7 +222,13 @@ function WorkflowBuilderContent() {
 
     setIsLoading(true)
     try {
-      await api.workflows.commit(workflowId)
+      const shouldCommitBeforeRun =
+        !options?.versionId &&
+        (isDirty || !metadata.currentVersionId)
+
+      if (shouldCommitBeforeRun) {
+        await api.workflows.commit(workflowId)
+      }
 
       const runId = await useExecutionStore.getState().startExecution(
         workflowId,
