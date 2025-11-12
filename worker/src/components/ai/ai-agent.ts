@@ -87,7 +87,6 @@ const chatModelSchema = z.object({
   provider: z.enum(['openai', 'gemini', 'openrouter']).default('openai'),
   modelId: z.string().optional(),
   apiKey: z.string().optional(),
-  apiKeySecretId: z.string().optional(),
   baseUrl: z.string().optional(),
   headers: z.record(z.string(), z.string()).optional(),
 });
@@ -115,6 +114,10 @@ const inputSchema = z.object({
       modelId: DEFAULT_OPENAI_MODEL,
     })
     .describe('Chat model configuration (provider, model ID, API key, base URL).'),
+  modelApiKey: z
+    .string()
+    .optional()
+    .describe('Optional API key override supplied via a Secret Loader node.'),
   mcp: mcpConfigSchema
     .default({
       endpoint: '',
@@ -242,7 +245,7 @@ function resolveApiKey(provider: ModelProvider, overrideKey?: string | null): st
   }
 
   throw new Error(
-    `Model provider API key is not configured for "${provider}". Provide chatModel.apiKeySecretId via a secret-enabled component.`,
+    `Model provider API key is not configured for "${provider}". Connect a Secret Loader node to the modelApiKey input or supply chatModel.apiKey.`,
   );
 }
 
@@ -327,6 +330,13 @@ Loop the Conversation State output back into the next agent invocation to keep m
         dataType: port.json(),
         required: false,
         description: 'Provider configuration. Example: {"provider":"gemini","modelId":"gemini-2.5-flash","apiKey":"gm-..."}',
+      },
+      {
+        id: 'modelApiKey',
+        label: 'Model API Key',
+        dataType: port.secret(),
+        required: false,
+        description: 'Optional override API key supplied via a Secret Loader output.',
       },
       {
         id: 'mcp',
@@ -463,27 +473,15 @@ Loop the Conversation State output back into the next agent invocation to keep m
     const effectiveModel = ensureModelName(effectiveProvider, chatModel?.modelId ?? null);
 
     let overrideApiKey = chatModel?.apiKey ?? null;
-    if ((!overrideApiKey || overrideApiKey.trim().length === 0) && chatModel?.apiKeySecretId) {
-      if (!context.secrets) {
-        throw new Error(
-          'AI Agent requires the secrets service to resolve chatModel.apiKeySecretId. Ensure the worker injects ISecretsService.',
-        );
-      }
-      context.emitProgress('Resolving model API key from secret storage...');
-      const secret = await context.secrets.get(chatModel.apiKeySecretId);
-      if (!secret || !secret.value) {
-        throw new Error(
-          `Chat model API key secret "${chatModel.apiKeySecretId}" was not found or has no value.`,
-        );
-      }
-      overrideApiKey = secret.value.trim();
+    if (params.modelApiKey && params.modelApiKey.trim().length > 0) {
+      overrideApiKey = params.modelApiKey.trim();
     }
 
     const effectiveApiKey = resolveApiKey(effectiveProvider, overrideApiKey);
     debugLog('Resolved model configuration', {
       effectiveProvider,
       effectiveModel,
-      hasExplicitApiKey: Boolean(chatModel?.apiKey) || Boolean(chatModel?.apiKeySecretId),
+      hasExplicitApiKey: Boolean(chatModel?.apiKey) || Boolean(params.modelApiKey),
       apiKeyProvided: Boolean(effectiveApiKey),
     });
 

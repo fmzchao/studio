@@ -2,12 +2,11 @@ import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import type { DestinationAdapterRegistration, DestinationSaveInput, DestinationSaveResult } from '../registry';
 import type { ExecutionContext } from '@shipsec/component-sdk';
 
-interface S3CredentialConfig {
-  accessKeyId?: string;
-  secretAccessKey?: string;
+interface AwsCredentialPayload {
+  accessKeyId: string;
+  secretAccessKey: string;
   sessionToken?: string;
   region?: string;
-  secretId?: string;
 }
 
 interface S3AdapterConfig {
@@ -18,43 +17,7 @@ interface S3AdapterConfig {
   endpoint?: string;
   forcePathStyle?: boolean;
   publicUrl?: string;
-  credentials?: S3CredentialConfig;
-}
-
-async function resolveCredentials(config: S3AdapterConfig, context: ExecutionContext) {
-  if (config.credentials?.secretId) {
-    if (!context.secrets) {
-      throw new Error('S3 destination requires the secrets service for managed credentials.');
-    }
-    const secret = await context.secrets.get(config.credentials.secretId);
-    if (!secret) {
-      throw new Error(`Secret ${config.credentials.secretId} was not found.`);
-    }
-    try {
-      const parsed = JSON.parse(secret.value);
-      return {
-        accessKeyId: parsed.accessKeyId as string,
-        secretAccessKey: parsed.secretAccessKey as string,
-        sessionToken: parsed.sessionToken as string | undefined,
-        region: (parsed.region as string | undefined) ?? config.region,
-      };
-    } catch (error) {
-      throw new Error(
-        error instanceof Error ? `Failed to parse AWS credentials secret: ${error.message}` : 'Secret value is not valid JSON.',
-      );
-    }
-  }
-
-  if (config.credentials?.accessKeyId && config.credentials?.secretAccessKey) {
-    return {
-      accessKeyId: config.credentials.accessKeyId,
-      secretAccessKey: config.credentials.secretAccessKey,
-      sessionToken: config.credentials.sessionToken,
-      region: config.region,
-    };
-  }
-
-  throw new Error('S3 destination requires credentials (either via secretId or inline access keys).');
+  credentials?: AwsCredentialPayload;
 }
 
 function buildObjectKey(config: S3AdapterConfig, fileName: string) {
@@ -77,16 +40,12 @@ export const s3DestinationAdapter: DestinationAdapterRegistration = {
     { id: 'endpoint', label: 'Custom endpoint', type: 'text' },
     { id: 'forcePathStyle', label: 'Force path style', type: 'boolean' },
     { id: 'publicUrl', label: 'Public URL prefix', type: 'text' },
-    { id: 'credentials.secretId', label: 'Credential secret', type: 'secret' },
-    { id: 'credentials.accessKeyId', label: 'Access key ID', type: 'text' },
-    { id: 'credentials.secretAccessKey', label: 'Secret access key', type: 'text' },
-    { id: 'credentials.sessionToken', label: 'Session token', type: 'text' },
   ],
   create(rawConfig) {
     return {
-      async save(input: DestinationSaveInput, context): Promise<DestinationSaveResult> {
+      async save(input: DestinationSaveInput, context: ExecutionContext): Promise<DestinationSaveResult> {
         const config = ensureS3Config(rawConfig);
-        const credentials = await resolveCredentials(config, context);
+        const credentials = ensureAwsCredentials(config);
         const key = buildObjectKey(config, input.fileName);
 
         const client = new S3Client({
@@ -150,4 +109,20 @@ function isS3Config(config: unknown): config is S3AdapterConfig {
   }
   const candidate = config as Partial<S3AdapterConfig>;
   return typeof candidate.bucket === 'string' && candidate.bucket.length > 0;
+}
+
+function ensureAwsCredentials(config: S3AdapterConfig): AwsCredentialPayload {
+  if (!config.credentials) {
+    throw new Error('S3 destination requires AWS credentials to be provided via the credentials port.');
+  }
+  const { accessKeyId, secretAccessKey, sessionToken, region } = config.credentials;
+  if (!accessKeyId || !secretAccessKey) {
+    throw new Error('S3 destination requires both access key ID and secret access key.');
+  }
+  return {
+    accessKeyId,
+    secretAccessKey,
+    sessionToken,
+    region,
+  };
 }

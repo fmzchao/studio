@@ -48,34 +48,21 @@ registerContract({
 
 const definition: ComponentDefinition<Input, Output> = {
   id: 'core.secret.fetch',
-  label: 'Secret Fetch',
+  label: 'Secret Loader',
   category: 'input',
   runner: { kind: 'inline' },
   inputSchema,
   outputSchema,
   docs: 'Fetch a secret from the ShipSec-managed secret store and expose it to downstream nodes.',
+  requiresSecrets: true,
   metadata: {
     slug: 'secret-fetch',
-    version: '1.0.0',
+    version: '1.1.0',
     type: 'input',
     category: 'input',
     description: 'Resolve a stored secret and provide it as masked output for other components.',
     icon: 'KeyRound',
     inputs: [
-      {
-        id: 'secretId',
-        label: 'Secret ID',
-        dataType: port.text({ coerceFrom: [] }),
-        required: true,
-        description: 'Secret identifier from the platform store.',
-      },
-      {
-        id: 'version',
-        label: 'Version',
-        dataType: port.number(),
-        required: false,
-        description: 'Optional version pin. Defaults to the active version.',
-      },
       {
         id: 'outputFormat',
         label: 'Output Format',
@@ -99,6 +86,20 @@ const definition: ComponentDefinition<Input, Output> = {
       },
     ],
     parameters: [
+      {
+        id: 'secretId',
+        label: 'Secret ID',
+        type: 'secret',
+        required: true,
+        description: 'Secret identifier from the platform store.',
+      },
+      {
+        id: 'version',
+        label: 'Version',
+        type: 'number',
+        required: false,
+        description: 'Optional version pin. Defaults to the active version.',
+      },
       {
         id: 'defaultOutputFormat',
         label: 'Default Output Format',

@@ -47,8 +47,8 @@ const inputSchema = z.object({
     .describe('Optional override for the Gemini API base URL.'),
   apiKey: z
     .string()
-    .optional()
-    .describe('Secret ID containing a Gemini API key. A secret must be supplied at runtime.'),
+    .min(1, 'API key is required')
+    .describe('Resolved Gemini API key supplied via a Secret Loader node.'),
 });
 
 type Input = z.infer<typeof inputSchema>;
@@ -56,8 +56,6 @@ type Input = z.infer<typeof inputSchema>;
 type GeminiChatModelConfig = {
   provider: 'gemini';
   modelId: string;
-  apiKey?: string;
-  apiKeySecretId?: string;
   baseUrl?: string;
 };
 
@@ -72,8 +70,6 @@ type Output = {
 const chatModelOutputSchema = z.object({
   provider: z.literal('gemini'),
   modelId: z.string(),
-  apiKey: z.string().optional(),
-  apiKeySecretId: z.string().optional(),
   baseUrl: z.string().optional(),
 });
 
@@ -119,6 +115,13 @@ const definition: ComponentDefinition<Input, Output> = {
         required: true,
         description: 'User input that will be sent to Gemini.',
       },
+      {
+        id: 'apiKey',
+        label: 'API Key',
+        dataType: port.secret(),
+        required: true,
+        description: 'Connect the Secret Loader output containing the Gemini API key.',
+      },
     ],
     outputs: [
       {
@@ -162,16 +165,6 @@ const definition: ComponentDefinition<Input, Output> = {
         ],
       },
       {
-        id: 'apiKey',
-        label: 'API Key Override',
-        type: 'secret',
-        required: true,
-        default: '',
-        placeholder: 'Select stored secret…',
-        description: 'Secret containing a Gemini API key for this invocation.',
-        helpText: 'Store your Gemini API key via the secrets adapter and select it here.',
-      },
-      {
         id: 'temperature',
         label: 'Temperature',
         type: 'number',
@@ -212,31 +205,9 @@ const definition: ComponentDefinition<Input, Output> = {
   ) {
     const { systemPrompt, userPrompt, model, temperature, maxTokens, apiBaseUrl, apiKey } = params;
 
-    const apiKeySecretId = apiKey?.trim() ?? '';
-
-    if (apiKeySecretId.length === 0) {
-      throw new Error('Gemini API key secret is required but was not provided.');
-    }
-
-    if (!context.secrets) {
-      throw new Error(
-        'Gemini Chat component requires the secrets service when an API key secret is provided.',
-      );
-    }
-
-    context.emitProgress('Resolving Gemini API key from secret storage...');
-    const secret = await context.secrets.get(apiKeySecretId);
-
-    if (!secret || !secret.value) {
-      throw new Error(
-        `Gemini API key secret "${apiKeySecretId}" was not found or does not contain a value.`,
-      );
-    }
-
-    const resolvedApiKey = secret.value.trim();
-
-    if (resolvedApiKey.length === 0) {
-      throw new Error(`Gemini API key secret "${apiKeySecretId}" is empty.`);
+    const resolvedApiKey = apiKey.trim();
+    if (!resolvedApiKey) {
+      throw new Error('Gemini API key is required but was not provided.');
     }
 
     const baseUrl = apiBaseUrl?.trim() ? apiBaseUrl.trim() : process.env.GEMINI_BASE_URL;
@@ -274,7 +245,6 @@ const definition: ComponentDefinition<Input, Output> = {
       const chatModelConfig: GeminiChatModelConfig = {
         provider: 'gemini',
         modelId: model,
-        ...(apiKeySecretId.length > 0 ? { apiKeySecretId } : {}),
         ...(baseUrl ? { baseUrl } : {}),
       };
 

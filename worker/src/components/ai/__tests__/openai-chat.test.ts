@@ -59,21 +59,17 @@ beforeEach(() => {
 });
 
 describe('core.openai.chat component', () => {
-  it('resolves API key from secrets and calls the provider', async () => {
+  it('uses the provided API key and calls the provider', async () => {
     const definition = componentRegistry.get<any, any>('core.openai.chat');
     expect(definition).toBeDefined();
 
-    const secretsGet = mock(async () => ({ value: 'sk-secret-from-store', version: 1 }));
     const context: ExecutionContext = {
       runId: 'test-run',
       componentRef: 'node-1',
       logger: { info: mock(() => {}), error: mock(() => {}) },
       emitProgress: mock(() => {}),
       metadata: { runId: 'test-run', componentRef: 'node-1' },
-      secrets: {
-        get: secretsGet,
-        list: mock(async () => []),
-      },
+      secrets: undefined,
     };
 
     const result = await (definition!.execute as any)(
@@ -84,7 +80,7 @@ describe('core.openai.chat component', () => {
         temperature: 0.5,
         maxTokens: 256,
         apiBaseUrl: '',
-        apiKey: 'a2e6b4ad-1234-4e4c-b64f-0123456789ab',
+        apiKey: 'sk-live-from-loader',
       },
       context,
       {
@@ -93,9 +89,8 @@ describe('core.openai.chat component', () => {
       }
     );
 
-    expect(secretsGet).toHaveBeenCalledWith('a2e6b4ad-1234-4e4c-b64f-0123456789ab');
     expect(createOpenAIMock).toHaveBeenCalledWith(
-      expect.objectContaining({ apiKey: 'sk-secret-from-store' }),
+      expect.objectContaining({ apiKey: 'sk-live-from-loader' }),
     );
     expect(generateTextCalls).toHaveLength(1);
     expect(generateTextCalls[0]).toEqual(
@@ -110,27 +105,21 @@ describe('core.openai.chat component', () => {
       expect.objectContaining({
         provider: 'openai',
         modelId: 'gpt-5-mini',
-        apiKeySecretId: 'a2e6b4ad-1234-4e4c-b64f-0123456789ab',
       }),
     );
-    expect(result.chatModel.apiKey).toBeUndefined();
   });
 
-  it('throws when secret cannot be resolved', async () => {
+  it('throws when API key string is empty', async () => {
     const definition = componentRegistry.get<any, any>('core.openai.chat');
     expect(definition).toBeDefined();
 
-    const secretsGet = mock(async () => null);
     const context: ExecutionContext = {
       runId: 'test-run',
       componentRef: 'node-1',
       logger: { info: mock(() => {}), error: mock(() => {}) },
       emitProgress: mock(() => {}),
       metadata: { runId: 'test-run', componentRef: 'node-1' },
-      secrets: {
-        get: secretsGet,
-        list: mock(async () => []),
-      },
+      secrets: undefined,
     };
 
     await expect(
@@ -142,7 +131,7 @@ describe('core.openai.chat component', () => {
           temperature: 0.7,
           maxTokens: 512,
           apiBaseUrl: '',
-          apiKey: 'missing-secret',
+          apiKey: '   ',
         },
         context,
         {
@@ -150,6 +139,6 @@ describe('core.openai.chat component', () => {
         createOpenAI: createOpenAIMock,
       }
       ),
-    ).rejects.toThrow(/secret "missing-secret" was not found/i);
+    ).rejects.toThrow(/API key is required/i);
   });
 });

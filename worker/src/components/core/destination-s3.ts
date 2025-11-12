@@ -9,8 +9,6 @@ const credentialObjectSchema = z.object({
   region: z.string().optional(),
 });
 
-const credentialsInputSchema = z.union([credentialObjectSchema, z.string().min(1)]);
-
 const inputSchema = z.object({
   bucket: z.string().min(1, 'Bucket is required'),
   region: z.string().optional(),
@@ -19,7 +17,7 @@ const inputSchema = z.object({
   endpoint: z.string().optional(),
   forcePathStyle: z.boolean().default(false),
   publicUrl: z.string().optional(),
-  credentials: credentialsInputSchema,
+  credentials: credentialObjectSchema.describe('Resolved AWS credentials bundle'),
   label: z.string().optional(),
   description: z.string().optional(),
 });
@@ -50,11 +48,10 @@ const definition: ComponentDefinition<Input, Output> = {
     inputs: [
       {
         id: 'credentials',
-        label: 'AWS credentials (JSON)',
-        dataType: port.secret(),
+        label: 'AWS Credentials',
+        dataType: port.credential(),
         required: true,
-        description:
-          'Connect a secret or credential provider that outputs a JSON object with accessKeyId, secretAccessKey, (optional) sessionToken + region.',
+        description: 'Connect the AWS Credentials bundle component.',
       },
     ],
     outputs: [
@@ -78,7 +75,6 @@ const definition: ComponentDefinition<Input, Output> = {
     ],
   },
   async execute(params): Promise<Output> {
-    const credentials = normalizeCredentials(params.credentials);
     const destination: DestinationConfig = {
       adapterId: 's3',
       config: {
@@ -89,7 +85,7 @@ const definition: ComponentDefinition<Input, Output> = {
         endpoint: params.endpoint,
         forcePathStyle: params.forcePathStyle,
         publicUrl: params.publicUrl,
-        credentials,
+        credentials: params.credentials,
       },
       metadata: {
         label: params.label,
@@ -102,19 +98,3 @@ const definition: ComponentDefinition<Input, Output> = {
 };
 
 componentRegistry.register(definition);
-
-function normalizeCredentials(input: z.infer<typeof credentialsInputSchema>) {
-  if (typeof input === 'string') {
-    try {
-      const parsed = JSON.parse(input);
-      return credentialObjectSchema.parse(parsed);
-    } catch (error) {
-      throw new Error(
-        error instanceof Error
-          ? `Failed to parse AWS credentials JSON: ${error.message}`
-          : 'AWS credentials input must be valid JSON.',
-      );
-    }
-  }
-  return credentialObjectSchema.parse(input);
-}

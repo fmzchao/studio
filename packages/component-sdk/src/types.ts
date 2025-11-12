@@ -71,6 +71,7 @@ export type PrimitivePortTypeName =
   | 'any'
   | 'text'
   | 'secret'
+  | 'credential'
   | 'number'
   | 'boolean'
   | 'file'
@@ -218,6 +219,7 @@ export interface ComponentDefinition<I = unknown, O = unknown> {
   outputSchema: z.ZodType<O>;
   docs?: string;
   metadata?: ComponentUiMetadata;
+  requiresSecrets?: boolean;
   execute: (params: I, context: ExecutionContext) => Promise<O>;
   resolvePorts?: (
     params: Record<string, unknown>,

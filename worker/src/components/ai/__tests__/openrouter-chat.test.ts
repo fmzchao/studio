@@ -59,21 +59,17 @@ beforeEach(() => {
 });
 
 describe('core.openrouter.chat component', () => {
-  it('resolves API key, applies headers, and calls the provider', async () => {
+  it('uses provided API key, applies headers, and calls the provider', async () => {
     const definition = componentRegistry.get<any, any>('core.openrouter.chat');
     expect(definition).toBeDefined();
 
-    const secretsGet = mock(async () => ({ value: 'or-secret-from-store', version: 1 }));
     const context: ExecutionContext = {
       runId: 'test-run',
       componentRef: 'node-1',
       logger: { info: mock(() => {}), error: mock(() => {}) },
       emitProgress: mock(() => {}),
       metadata: { runId: 'test-run', componentRef: 'node-1' },
-      secrets: {
-        get: secretsGet,
-        list: mock(async () => []),
-      },
+      secrets: undefined,
     };
 
     const result = await (definition!.execute as any)(
@@ -84,7 +80,7 @@ describe('core.openrouter.chat component', () => {
         temperature: 0.6,
         maxTokens: 512,
         apiBaseUrl: 'https://openrouter.example/v1',
-        apiKey: 'openrouter-secret',
+        apiKey: 'openrouter-live-key',
         httpReferer: ' https://studio.shipsec.ai/workflows ',
         appTitle: ' ShipSec Studio Automation ',
       },
@@ -95,10 +91,9 @@ describe('core.openrouter.chat component', () => {
       },
     );
 
-    expect(secretsGet).toHaveBeenCalledWith('openrouter-secret');
     expect(createOpenAIMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        apiKey: 'or-secret-from-store',
+        apiKey: 'openrouter-live-key',
         baseURL: 'https://openrouter.example/v1',
         headers: {
           'HTTP-Referer': 'https://studio.shipsec.ai/workflows',
@@ -121,7 +116,6 @@ describe('core.openrouter.chat component', () => {
       expect.objectContaining({
         provider: 'openrouter',
         modelId: 'meta-llama/llama-3.1-70b-instruct',
-        apiKeySecretId: 'openrouter-secret',
         baseUrl: 'https://openrouter.example/v1',
         headers: {
           'HTTP-Referer': 'https://studio.shipsec.ai/workflows',
@@ -131,21 +125,17 @@ describe('core.openrouter.chat component', () => {
     );
   });
 
-  it('throws when secret cannot be resolved', async () => {
+  it('throws when API key is empty', async () => {
     const definition = componentRegistry.get<any, any>('core.openrouter.chat');
     expect(definition).toBeDefined();
 
-    const secretsGet = mock(async () => null);
     const context: ExecutionContext = {
       runId: 'test-run',
       componentRef: 'node-1',
       logger: { info: mock(() => {}), error: mock(() => {}) },
       emitProgress: mock(() => {}),
       metadata: { runId: 'test-run', componentRef: 'node-1' },
-      secrets: {
-        get: secretsGet,
-        list: mock(async () => []),
-      },
+      secrets: undefined,
     };
 
     await expect(
@@ -157,7 +147,7 @@ describe('core.openrouter.chat component', () => {
           temperature: 0.7,
           maxTokens: 512,
           apiBaseUrl: '',
-          apiKey: 'missing-secret',
+          apiKey: '',
           httpReferer: '',
           appTitle: '',
         },
@@ -167,7 +157,6 @@ describe('core.openrouter.chat component', () => {
           createOpenAI: createOpenAIMock,
         },
       ),
-    ).rejects.toThrow(/secret "missing-secret" was not found/i);
+    ).rejects.toThrow(/API key is required/i);
   });
 });
-
