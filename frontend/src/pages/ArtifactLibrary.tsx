@@ -202,8 +202,8 @@ function ArtifactLibraryRow({
                 <Button
                   type="button"
                   variant="ghost"
-                  size="xs"
-                  className="gap-1"
+                  size="sm"
+                  className="h-7 gap-1 px-2 text-xs"
                   onClick={() => onCopyRemoteUri(remote.uri)}
                 >
                   <Copy className="h-3 w-3" />

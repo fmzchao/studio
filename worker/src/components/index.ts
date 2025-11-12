@@ -3,6 +3,10 @@
  * Import all component implementations to register them in the registry
  */
 
+import { initializeDestinationAdapters } from '../destinations';
+
+initializeDestinationAdapters();
+
 // Core components
 import './core/trigger-manual';
 import './core/file-loader';
@@ -15,6 +19,8 @@ import './core/array-pick';
 import './core/array-pack';
 import './core/artifact-writer';
 import './core/file-writer';
+import './core/destination-artifact';
+import './core/destination-s3';
 import './ai/openai-chat';
 import './ai/gemini-chat';
 import './ai/openrouter-chat';

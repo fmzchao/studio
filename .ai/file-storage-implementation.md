@@ -109,6 +109,8 @@ CREATE TABLE files (
 
 - When `s3PublicUrl` is supplied the worker derives a shareable HTTPS link for each object so the frontend can show “Open” actions alongside local downloads.
 
+- Destination adapters now back these writers. `core.destination.artifact` and `core.destination.s3` emit adapter configs over a `destination.writer` port, and `core.file.writer` (plus future writers) simply executes whichever adapter the workflow connects. Legacy toggles remain for backward compatibility but should be phased out once the builder exposes the new destination nodes.
+
 ## User Workflow
 
 ### 1. Upload File

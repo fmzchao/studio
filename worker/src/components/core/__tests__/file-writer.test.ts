@@ -56,8 +56,10 @@ describe('core.file.writer component', () => {
     const params = component.inputSchema.parse({
       fileName: 'output.txt',
       content: 'Hello world',
-      saveToRunArtifacts: true,
-      publishToArtifactLibrary: false,
+      destination: {
+        adapterId: 'artifact',
+        config: { destinations: ['run'] },
+      },
     });
 
     const result = await component.execute(params, context);
@@ -72,37 +74,25 @@ describe('core.file.writer component', () => {
     expect(result.size).toBe(11);
   });
 
-  it('throws when no destination is selected', async () => {
+  it('requires a destination configuration', () => {
     if (!component) throw new Error('Component not registered');
 
-    const context = createExecutionContext({
-      runId: 'run-456',
-      componentRef: 'node-2',
-    });
-
-    const params = component.inputSchema.parse({
-      fileName: 'noop.txt',
-      content: 'Missing destinations',
-      saveToRunArtifacts: false,
-      publishToArtifactLibrary: false,
-      destinationType: 'local',
-    });
-
-    await expect(component.execute(params, context)).rejects.toThrow(
-      'Select at least one destination',
-    );
+    expect(() =>
+      component?.inputSchema.parse({
+        fileName: 'noop.txt',
+        content: 'Missing destinations',
+      }),
+    ).toThrow();
   });
 
-  it('uploads to S3 when configured and annotates remote metadata', async () => {
+  it('uses an explicit destination adapter when provided', async () => {
     if (!component) throw new Error('Component not registered');
 
-    s3SendMock.mockResolvedValue({ ETag: '"abc123"' });
-
     const uploadMock = vi.fn().mockResolvedValue({
-      artifactId: 'artifact-s3',
-      fileId: 'file-s3',
-      name: 'report.json',
-      destinations: ['run', 'library'],
+      artifactId: 'dest-1',
+      fileId: 'file-d1',
+      name: 'adapter.txt',
+      destinations: ['library'],
     });
 
     const artifacts: IArtifactService = {
@@ -111,9 +101,34 @@ describe('core.file.writer component', () => {
     };
 
     const context = createExecutionContext({
+      runId: 'run-destination',
+      componentRef: 'node-destination',
+      artifacts,
+    });
+
+    const params = component.inputSchema.parse({
+      fileName: 'adapter.txt',
+      content: 'Destination registry FTW',
+      destination: {
+        adapterId: 'artifact',
+        config: { destinations: ['library'] },
+      },
+    });
+
+    const result = await component.execute(params, context);
+    expect(uploadMock).toHaveBeenCalledTimes(1);
+    expect(result.destinations).toEqual(['library']);
+    expect(result.artifactId).toBe('dest-1');
+  });
+
+  it('uploads to S3 when configured and annotates remote metadata', async () => {
+    if (!component) throw new Error('Component not registered');
+
+    s3SendMock.mockResolvedValue({ ETag: '"abc123"' });
+
+    const context = createExecutionContext({
       runId: 'run-789',
       componentRef: 'node-3',
-      artifacts,
     });
 
     const params = component.inputSchema.parse({
@@ -121,14 +136,18 @@ describe('core.file.writer component', () => {
       mimeType: 'application/json',
       content: { status: 'ok' },
       contentFormat: 'json',
-      saveToRunArtifacts: true,
-      publishToArtifactLibrary: true,
-      destinationType: 's3',
-      s3Bucket: 'shipsec-artifacts',
-      s3AccessKeyId: 'AKIA123',
-      s3SecretAccessKey: 'secret',
-      s3PathPrefix: 'runs/demo',
-      s3PublicUrl: 'https://cdn.example.com/artifacts',
+      destination: {
+        adapterId: 's3',
+        config: {
+          bucket: 'shipsec-artifacts',
+          credentials: {
+            accessKeyId: 'AKIA123',
+            secretAccessKey: 'secret',
+          },
+          pathPrefix: 'runs/demo',
+          publicUrl: 'https://cdn.example.com/artifacts',
+        },
+      },
     });
 
     const result = await component.execute(params, context);
@@ -137,11 +156,9 @@ describe('core.file.writer component', () => {
     const commandInput = (s3SendMock.mock.calls[0][0] as { input: Record<string, unknown> }).input;
     expect(commandInput.Bucket).toBe('shipsec-artifacts');
     expect(commandInput.Key).toBe('runs/demo/report.json');
-    expect(uploadMock).toHaveBeenCalledTimes(1);
 
-    const metadata = uploadMock.mock.calls[0][0].metadata;
-    expect(metadata?.remoteUploads).toHaveLength(1);
-    expect(metadata?.remoteUploads?.[0]).toMatchObject({
+    expect(result.remoteUploads).toHaveLength(1);
+    expect(result.remoteUploads?.[0]).toMatchObject({
       bucket: 'shipsec-artifacts',
       key: 'runs/demo/report.json',
       url: 'https://cdn.example.com/artifacts/runs/demo/report.json',
@@ -149,5 +166,6 @@ describe('core.file.writer component', () => {
     });
 
     expect(result.remoteUploads?.[0].uri).toBe('s3://shipsec-artifacts/runs/demo/report.json');
+    expect(result.artifactId).toBeUndefined();
   });
 });
