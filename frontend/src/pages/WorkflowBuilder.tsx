@@ -692,33 +692,39 @@ function WorkflowBuilderContent() {
     }
   }, [canManageWorkflows, edges, metadata, nodes, toast])
 
-  const handleSave = async () => {
+  const handleSave = async (showToast: boolean = true) => {
     if (!canManageWorkflows) {
-      toast({
-        variant: 'destructive',
-        title: 'Insufficient permissions',
-        description: 'Only administrators can save workflow changes.',
-      })
+      if (showToast) {
+        toast({
+          variant: 'destructive',
+          title: 'Insufficient permissions',
+          description: 'Only administrators can save workflow changes.',
+        })
+      }
       return
     }
 
     try {
       // Defensive check for undefined nodes/edges
       if (!nodes || !Array.isArray(nodes) || nodes.length === 0) {
-        toast({
-          variant: 'destructive',
-          title: 'Cannot save workflow',
-          description: 'Add at least one component before saving.',
-        })
+        if (showToast) {
+          toast({
+            variant: 'destructive',
+            title: 'Cannot save workflow',
+            description: 'Add at least one component before saving.',
+          })
+        }
         return
       }
 
       if (!edges || !Array.isArray(edges)) {
-        toast({
-          variant: 'destructive',
-          title: 'Cannot save workflow',
-          description: 'Invalid workflow edges data.',
-        })
+        if (showToast) {
+          toast({
+            variant: 'destructive',
+            title: 'Cannot save workflow',
+            description: 'Invalid workflow edges data.',
+          })
+        }
         return
       }
 
@@ -757,11 +763,13 @@ function WorkflowBuilderContent() {
           edge_count: edges.length,
         })
 
-        toast({
-          variant: 'success',
-          title: 'Workflow created',
-          description: 'Your workflow has been saved and is ready to run.',
-        })
+        if (showToast) {
+          toast({
+            variant: 'success',
+            title: 'Workflow created',
+            description: 'Your workflow has been saved and is ready to run.',
+          })
+        }
       } else {
         // Update existing workflow
         const payload = serializeWorkflowForUpdate(
@@ -789,44 +797,54 @@ function WorkflowBuilderContent() {
           edge_count: edges.length,
         })
 
-        toast({
-          variant: 'success',
-          title: 'Workflow saved',
-          description: 'All changes have been saved.',
-        })
+        if (showToast) {
+          toast({
+            variant: 'success',
+            title: 'Workflow saved',
+            description: 'All changes have been saved.',
+          })
+        }
       }
     } catch (error) {
       console.error('Failed to save workflow:', error)
 
+      // Always show error toasts, even for auto-save
       // Check if it's a network error (backend not available)
       const isNetworkError = error instanceof Error &&
         (error.message.includes('Network Error') || error.message.includes('ECONNREFUSED'))
 
       if (isNetworkError) {
-        toast({
-          variant: 'destructive',
-          title: 'Cannot connect to backend',
-          description: `Ensure the backend is running at ${API_BASE_URL}. Your workflow remains available locally.`,
-        })
+        if (showToast) {
+          toast({
+            variant: 'destructive',
+            title: 'Cannot connect to backend',
+            description: `Ensure the backend is running at ${API_BASE_URL}. Your workflow remains available locally.`,
+          })
+        }
       } else {
-        toast({
-          variant: 'destructive',
-          title: 'Failed to save workflow',
-          description: error instanceof Error ? error.message : 'Unknown error',
-        })
+        if (showToast) {
+          toast({
+            variant: 'destructive',
+            title: 'Failed to save workflow',
+            description: error instanceof Error ? error.message : 'Unknown error',
+          })
+        }
       }
     }
   }
 
-  // Auto-save functionality - debounced save after 3 seconds of inactivity
+  // Track auto-save state for UI feedback
+  const [isAutoSaving, setIsAutoSaving] = useState(false)
+
+  // Auto-save functionality - debounced save after 2 seconds of inactivity
   useEffect(() => {
     // Don't auto-save if:
     // - Not dirty (no changes)
     // - New workflow (needs manual save first)
-    // - Currently loading
+    // - Currently loading or already auto-saving
     // - No permission to manage workflows
     // - No nodes (empty workflow)
-    if (!isDirty || isNewWorkflow || isLoading || !canManageWorkflows || !nodes || nodes.length === 0) {
+    if (!isDirty || isNewWorkflow || isLoading || isAutoSaving || !canManageWorkflows || !nodes || nodes.length === 0) {
       return
     }
 
@@ -835,20 +853,27 @@ function WorkflowBuilderContent() {
       return
     }
 
-    const autoSaveTimer = setTimeout(() => {
+    const autoSaveTimer = setTimeout(async () => {
       // Only auto-save if still dirty (user might have manually saved)
-      if (isDirty && metadata.id && !isNewWorkflow) {
-        handleSave().catch((error) => {
+      if (isDirty && metadata.id && !isNewWorkflow && !isAutoSaving) {
+        setIsAutoSaving(true)
+        try {
+          // Pass false to suppress toast notifications for auto-save
+          await handleSave(false)
+        } catch (error) {
           console.error('Auto-save failed:', error)
           // Don't show toast for auto-save failures to avoid annoying the user
-        })
+        } finally {
+          setIsAutoSaving(false)
+        }
       }
-    }, 3000) // 3 seconds delay
+    }, 2000) // 2 seconds delay
 
     return () => {
       clearTimeout(autoSaveTimer)
     }
-  }, [isDirty, isNewWorkflow, isLoading, canManageWorkflows, nodes, metadata.id, handleSave])
+  }, [isDirty, isNewWorkflow, isLoading, isAutoSaving, canManageWorkflows, nodes, metadata.id, handleSave])
+
 
   const handleInspectorResizeStart = useCallback((event: React.MouseEvent) => {
     if (mode !== 'execution') {
@@ -926,6 +951,7 @@ function WorkflowBuilderContent() {
         onExport={handleExportWorkflow}
         canManageWorkflows={canManageWorkflows}
         isExecuting={isLoading}
+        isAutoSaving={isAutoSaving}
       />
       {mode === 'design' && (
         <Button

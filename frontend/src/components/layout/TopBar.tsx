@@ -26,6 +26,7 @@ interface TopBarProps {
   onExport?: () => void
   canManageWorkflows?: boolean
   isExecuting?: boolean
+  isAutoSaving?: boolean
 }
 
 export function TopBar({
@@ -35,6 +36,7 @@ export function TopBar({
   onExport,
   canManageWorkflows = true,
   isExecuting = false,
+  isAutoSaving = false,
 }: TopBarProps) {
   const navigate = useNavigate()
   const [isSaving, setIsSaving] = useState(false)
@@ -224,9 +226,19 @@ export function TopBar({
         </div>
 
         <div className="flex gap-2">
-          {isDirty && (
+          {isAutoSaving && (
+            <span className="text-xs text-blue-600 self-center animate-pulse">
+              Auto-saving...
+            </span>
+          )}
+          {isDirty && !isAutoSaving && (
             <span className="text-xs text-muted-foreground self-center">
               Unsaved changes
+            </span>
+          )}
+          {!isDirty && !isRunning && !isAutoSaving && (
+            <span className="text-xs text-green-600 self-center">
+              All changes saved
             </span>
           )}
           <Button

@@ -210,7 +210,7 @@ export function Sidebar({ canManageWorkflows = true }: SidebarProps) {
                   <AccordionItem 
                     key={category} 
                     value={category} 
-                    className="border border-border/50 rounded-lg bg-muted/30 px-3 py-1 hover:bg-muted/50 transition-colors"
+                    className="border border-border/50 rounded-lg  px-3 py-1 hover:bg-muted/50 transition-colors"
                   >
                     <AccordionTrigger className={cn(
                       'py-3 px-0 hover:no-underline [&[data-state=open]]:text-foreground',
@@ -224,13 +224,11 @@ export function Sidebar({ canManageWorkflows = true }: SidebarProps) {
                           )}>
                             {categoryConfig?.label ?? category}
                           </h3>
-                          <span className="text-xs text-muted-foreground bg-background/50 px-2 py-0.5 rounded-full">
-                            {components.length}
-                          </span>
+
                         </div>
-                        <p className="text-xs text-muted-foreground">
+                        {/* <p className="text-xs text-muted-foreground">
                           {categoryConfig?.description ?? `${category} components`}
-                        </p>
+                        </p> */}
                       </div>
                     </AccordionTrigger>
                     <AccordionContent className="pt-2 pb-4 px-0">

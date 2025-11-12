@@ -149,7 +149,7 @@ export function WorkflowList() {
           </p>
         </div>
 
-        <div className="mb-6 flex flex-wrap gap-3">
+        {/* <div className="mb-6 flex flex-wrap gap-3">
           <Button
             onClick={() => navigate('/workflows/new')}
             size="lg"
@@ -159,7 +159,7 @@ export function WorkflowList() {
             <Plus className="h-5 w-5" />
             New Workflow
           </Button>
-        </div>
+        </div> */}
 
         {isLoading ? (
           <div className="text-center py-12">
