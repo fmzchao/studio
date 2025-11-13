@@ -7,7 +7,10 @@ import {
 } from '@shipsec/component-sdk';
 
 const inputSchema = z.object({
-  secretId: z.string().uuid().describe('Secret ID from the ShipSec secret store'),
+  secretId: z
+    .string()
+    .min(1, 'Secret identifier is required')
+    .describe('Secret name or UUID from the ShipSec secret store'),
   version: z
     .number()
     .int()
@@ -91,7 +94,7 @@ const definition: ComponentDefinition<Input, Output> = {
         label: 'Secret ID',
         type: 'secret',
         required: true,
-        description: 'Secret identifier from the platform store.',
+        description: 'Secret name or UUID from the platform store.',
       },
       {
         id: 'version',

@@ -4,13 +4,43 @@ import { render, screen } from '@testing-library/react'
 import type { components } from '@shipsec/backend-client'
 
 import { WorkflowList } from '@/pages/WorkflowList'
-import { useAuthStore, DEFAULT_ORG_ID } from '@/store/authStore'
 
 type WorkflowResponseDto = components['schemas']['WorkflowResponseDto']
 
 const mockWorkflows: WorkflowResponseDto[] = []
 
 const listWorkflowsMock = mock(async () => mockWorkflows)
+
+// Create mock auth store state for testing
+const createMockAuthStoreState = () => ({
+  roles: ['ADMIN'],
+  token: null,
+  userId: null,
+  organizationId: 'local-dev',
+  provider: 'local' as const,
+  adminUsername: null,
+  adminPassword: null,
+  setRoles: mock(() => {}),
+  clear: mock(() => {}),
+  setToken: mock(() => {}),
+  setUserId: mock(() => {}),
+  setOrganizationId: mock(() => {}),
+  setProvider: mock(() => {}),
+  setAdminCredentials: mock(() => {}),
+  setAuthContext: mock(() => {}),
+})
+
+let mockAuthStoreState = createMockAuthStoreState()
+
+mock.module('@/store/authStore', () => ({
+  useAuthStore: (selector?: (state: ReturnType<typeof createMockAuthStoreState>) => any) => {
+    if (selector) {
+      return selector(mockAuthStoreState)
+    }
+    return mockAuthStoreState
+  },
+  DEFAULT_ORG_ID: 'local-dev',
+}))
 
 mock.module('@/services/api', () => ({
   api: {
@@ -21,17 +51,7 @@ mock.module('@/services/api', () => ({
 }))
 
 async function resetAuthStore() {
-  const persist = (useAuthStore as typeof useAuthStore & { persist?: { clearStorage?: () => Promise<void> } }).persist
-  if (persist?.clearStorage) {
-    await persist.clearStorage()
-  }
-  useAuthStore.setState({
-    token: null,
-    userId: null,
-    organizationId: DEFAULT_ORG_ID,
-    roles: ['ADMIN'],
-    provider: 'local',
-  })
+  mockAuthStoreState = createMockAuthStoreState()
 }
 
 const renderList = () =>
@@ -45,18 +65,27 @@ describe('WorkflowList role gating', () => {
   beforeEach(async () => {
     await resetAuthStore()
     listWorkflowsMock.mockResolvedValue([])
+    // Clean up DOM between tests
+    document.body.innerHTML = ''
+  })
+
+  afterEach(() => {
+    // Clean up after each test
+    document.body.innerHTML = ''
   })
 
   it('enables workflow creation for admins', async () => {
     renderList()
-    const createButton = await screen.findByRole('button', { name: /create workflow/i })
+    const createButton = await screen.findByRole('button', { name: /Create Workflow/i })
     expect(createButton).toBeEnabled()
   })
 
   it('disables workflow creation for members', async () => {
-    useAuthStore.setState({ roles: ['MEMBER'] })
+    // Change the roles for this test
+    mockAuthStoreState.roles = ['MEMBER']
+
     renderList()
-    const createButton = await screen.findByRole('button', { name: /create workflow/i })
+    const createButton = await screen.findByRole('button', { name: /Create Workflow/i })
     expect(createButton).toBeDisabled()
   })
 })

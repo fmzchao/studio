@@ -234,8 +234,8 @@ describe('core.ai.agent component', () => {
       chatModel: {
         provider: 'openai',
         modelId: 'gpt-4o-mini',
-        apiKeySecretId: OPENAI_SECRET_ID,
       },
+      modelApiKey: 'sk-legacy-openai-test-key',
       conversationState: {
         sessionId: 'session-123',
         messages: [
@@ -295,7 +295,7 @@ describe('core.ai.agent component', () => {
       totalTokens: 96,
     });
     expect(openAiFactoryMock.mock.calls[0][0]).toEqual(
-      expect.objectContaining({ apiKey: 'sk-openai-from-secret' }),
+      expect.objectContaining({ apiKey: 'sk-legacy-openai-test-key' }),
     );
   });
 
@@ -376,8 +376,8 @@ describe('core.ai.agent component', () => {
         chatModel: {
           provider: 'openai',
           modelId: 'gpt-4o-mini',
-          apiKeySecretId: OPENAI_SECRET_ID,
         },
+        modelApiKey: 'sk-legacy-openai-test-key',
       });
 
       const result = await aiAgent.execute(params, runContext, {
@@ -399,7 +399,7 @@ describe('core.ai.agent component', () => {
       );
 
       expect(openAiFactoryMock.mock.calls[0][0]).toEqual(
-        expect.objectContaining({ apiKey: 'sk-openai-from-secret' }),
+        expect.objectContaining({ apiKey: 'sk-legacy-openai-test-key' }),
       );
 
       expect(result.toolInvocations).toHaveLength(1);

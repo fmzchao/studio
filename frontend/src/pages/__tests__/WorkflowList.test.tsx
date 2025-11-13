@@ -1,4 +1,4 @@
-import { describe, it, beforeEach, afterAll, expect, vi, mock } from 'bun:test'
+import { describe, it, beforeEach, afterEach, afterAll, expect, vi, mock } from 'bun:test'
 import { render, screen, fireEvent, within, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import type { ReactNode } from 'react'
@@ -58,6 +58,29 @@ import {
   type WorkflowMetadataNormalized,
 } from '@/schemas/workflow'
 
+// Mock the auth store to provide admin roles for testing
+const mockAuthStore = {
+  roles: ['ADMIN'],
+  token: null,
+  userId: null,
+  organizationId: 'local-dev',
+  provider: 'local' as const,
+  adminUsername: null,
+  adminPassword: null,
+  setRoles: vi.fn(),
+  clear: vi.fn(),
+  setToken: vi.fn(),
+  setUserId: vi.fn(),
+  setOrganizationId: vi.fn(),
+  setProvider: vi.fn(),
+  setAdminCredentials: vi.fn(),
+  setAuthContext: vi.fn(),
+}
+
+mock.module('@/store/authStore', () => ({
+  useAuthStore: (selector: (state: typeof mockAuthStore) => any) => selector(mockAuthStore),
+}))
+
 const ISO = '2024-01-01T00:00:00.000Z'
 
 const makeWorkflow = (id: string, name: string): WorkflowMetadataNormalized =>
@@ -93,6 +116,13 @@ describe('WorkflowList delete workflow flow', () => {
   beforeEach(() => {
     listMock.mockReset()
     deleteMock.mockReset()
+    // Clean up any existing dialogs
+    document.body.innerHTML = ''
+  })
+
+  afterEach(() => {
+    // Clean up after each test
+    document.body.innerHTML = ''
   })
 
   it('opens confirmation dialog with workflow details when delete is clicked', async () => {
