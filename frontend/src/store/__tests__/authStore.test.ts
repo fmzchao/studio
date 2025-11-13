@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, mock } from 'bun:test'
 import { useAuthStore, DEFAULT_ORG_ID } from '../authStore'
 
 // Mock the auth store for testing
-const mockStoreState = {
+const mockStoreState: any = {
   token: null,
   userId: null,
   organizationId: DEFAULT_ORG_ID,
