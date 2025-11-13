@@ -155,6 +155,8 @@ export async function runComponentActivity(
       })
     : undefined;
 
+  const allowSecrets = component.requiresSecrets === true;
+
   const context = createExecutionContext({
     runId: input.runId,
     componentRef: action.ref,
@@ -168,7 +170,7 @@ export async function runComponentActivity(
       failure,
     },
     storage: globalStorage,
-    secrets: globalSecrets,
+    secrets: allowSecrets ? globalSecrets : undefined,
     artifacts: scopedArtifacts,
     trace: globalTrace,
     logCollector: globalLogs

@@ -48,6 +48,10 @@ function secret(options: PrimitiveOptions = {}): PrimitivePortType {
   return primitive('secret', options);
 }
 
+function credential(options: PrimitiveOptions = {}): PrimitivePortType {
+  return primitive('credential', options);
+}
+
 function file(): PrimitivePortType {
   return primitive('file');
 }
@@ -87,6 +91,7 @@ export const port = Object.freeze({
   number,
   boolean,
   secret,
+  credential,
   file,
   json,
   any,
@@ -181,6 +186,18 @@ function coercePrimitive(
         }
       }
       return { ok: false, error: 'Secret values must be strings or JSON objects' };
+    }
+    case 'credential': {
+      if (value === undefined || value === null) {
+        return { ok: true, value };
+      }
+      if (typeof value === 'string') {
+        return { ok: true, value };
+      }
+      if (typeof value === 'object') {
+        return { ok: true, value };
+      }
+      return { ok: false, error: 'Credential values must be objects or JSON strings' };
     }
     case 'file':
     case 'json': {

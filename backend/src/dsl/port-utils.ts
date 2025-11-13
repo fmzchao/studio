@@ -26,8 +26,8 @@ function canCoercePrimitive(source: PrimitivePort, target: PrimitivePort): boole
     return true;
   }
 
-  // 'secret' and 'file' types cannot be coerced from other types
-  if (source.name === 'secret' || source.name === 'file') {
+  // 'secret', 'credential', and 'file' types cannot be coerced from other types
+  if (source.name === 'secret' || source.name === 'credential' || source.name === 'file') {
     return false;
   }
 
@@ -101,6 +101,8 @@ export function runtimeInputTypeToPortDataType(type: string): PortDataType {
       return { kind: 'primitive', name: 'boolean' };
     case 'secret':
       return { kind: 'primitive', name: 'secret' };
+    case 'credential':
+      return { kind: 'primitive', name: 'credential' };
     case 'file':
       return { kind: 'primitive', name: 'file' };
     case 'json':
@@ -128,6 +130,8 @@ export function createPlaceholderForPort(dataType?: PortDataType): unknown {
         return '__placeholder__';
       case 'secret':
         return 'secret-placeholder';
+      case 'credential':
+        return 'credential-placeholder';
       case 'number':
         return 1;
       case 'boolean':

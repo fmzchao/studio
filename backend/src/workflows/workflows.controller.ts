@@ -12,6 +12,7 @@ import {
   UseGuards,
   BadRequestException,
   HttpException,
+  StreamableFile,
 } from '@nestjs/common';
 import {
   ApiCreatedResponse,

@@ -152,8 +152,8 @@ describe('core.ai.agent component', () => {
       chatModel: {
         provider: 'openai',
         modelId: 'gpt-4o-mini',
-        apiKeySecretId: OPENAI_SECRET_ID,
       },
+      modelApiKey: 'sk-openai-from-secret',
       mcp: {
         endpoint: '',
       },
@@ -280,12 +280,12 @@ describe('core.ai.agent component', () => {
       const params = {
         userInput: 'What does the MCP tool return?',
         conversationState: undefined,
-        chatModel: {
-          provider: 'gemini',
-          modelId: 'gemini-2.5-flash',
-          baseUrl: 'https://generativelanguage.googleapis.com/v1beta',
-          apiKeySecretId: GEMINI_SECRET_ID,
-        },
+      chatModel: {
+        provider: 'gemini',
+        modelId: 'gemini-2.5-flash',
+        baseUrl: 'https://generativelanguage.googleapis.com/v1beta',
+      },
+      modelApiKey: 'gm-gemini-from-secret',
         mcp: {
           endpoint: 'https://mcp.test/api',
         },

@@ -49,8 +49,8 @@ const inputSchema = z.object({
     .describe('Optional override for the OpenRouter API base URL.'),
   apiKey: z
     .string()
-    .optional()
-    .describe('Secret ID containing an OpenRouter API key. A secret must be supplied at runtime.'),
+    .min(1, 'API key is required')
+    .describe('Resolved OpenRouter API key supplied via a Secret Loader node.'),
   httpReferer: z
     .string()
     .default(DEFAULT_HTTP_REFERER)
@@ -66,8 +66,6 @@ type Input = z.infer<typeof inputSchema>;
 type OpenRouterChatModelConfig = {
   provider: 'openrouter';
   modelId: string;
-  apiKey?: string;
-  apiKeySecretId?: string;
   baseUrl?: string;
   headers?: Record<string, string>;
 };
@@ -88,8 +86,6 @@ const outputSchema = z.object({
   chatModel: z.object({
     provider: z.literal('openrouter'),
     modelId: z.string(),
-    apiKey: z.string().optional(),
-    apiKeySecretId: z.string().optional(),
     baseUrl: z.string().optional(),
     headers: z.record(z.string(), z.string()).optional(),
   }),
@@ -129,6 +125,13 @@ const definition: ComponentDefinition<Input, Output> = {
         dataType: port.text(),
         required: true,
         description: 'User input that will be sent to OpenRouter.',
+      },
+      {
+        id: 'apiKey',
+        label: 'API Key',
+        dataType: port.secret(),
+        required: true,
+        description: 'Connect the Secret Loader output containing the OpenRouter API key.',
       },
     ],
     outputs: [
@@ -175,16 +178,6 @@ const definition: ComponentDefinition<Input, Output> = {
           { label: 'Gemini 2.5 Flash Lite', value: 'google/gemini-2.5-flash-lite' },
           { label: 'Llama 4 Maverick', value: 'meta-llama/llama-4-maverick' },
         ],
-      },
-      {
-        id: 'apiKey',
-        label: 'API Key Override',
-        type: 'secret',
-        required: true,
-        default: '',
-        placeholder: 'Select stored secret…',
-        description: 'Secret containing an OpenRouter API key for this invocation.',
-        helpText: 'Store your OpenRouter API key via the secrets adapter and select it here.',
       },
       {
         id: 'temperature',
@@ -252,29 +245,9 @@ const definition: ComponentDefinition<Input, Output> = {
       appTitle,
     } = params;
 
-    const apiKeySecretId = apiKey?.trim() ?? '';
-    if (apiKeySecretId.length === 0) {
-      throw new Error('OpenRouter API key secret is required but was not provided.');
-    }
-
-    if (!context.secrets) {
-      throw new Error(
-        'OpenRouter Chat component requires the secrets service when an API key secret is provided.',
-      );
-    }
-
-    context.emitProgress('Resolving OpenRouter API key from secret storage...');
-    const secret = await context.secrets.get(apiKeySecretId);
-
-    if (!secret || !secret.value) {
-      throw new Error(
-        `OpenRouter API key secret "${apiKeySecretId}" was not found or does not contain a value.`,
-      );
-    }
-
-    const resolvedApiKey = secret.value.trim();
-    if (resolvedApiKey.length === 0) {
-      throw new Error(`OpenRouter API key secret "${apiKeySecretId}" is empty.`);
+    const resolvedApiKey = apiKey.trim();
+    if (!resolvedApiKey) {
+      throw new Error('OpenRouter API key is required but was not provided.');
     }
 
     const baseURL = apiBaseUrl?.trim() ? apiBaseUrl.trim() : process.env.OPENROUTER_BASE_URL ?? DEFAULT_BASE_URL;
@@ -316,7 +289,6 @@ const definition: ComponentDefinition<Input, Output> = {
       const chatModelConfig: OpenRouterChatModelConfig = {
         provider: 'openrouter',
         modelId: model,
-        ...(apiKeySecretId.length > 0 ? { apiKeySecretId } : {}),
         ...(baseURL ? { baseUrl: baseURL } : {}),
         ...(Object.keys(sanitizedHeaders).length > 0 ? { headers: sanitizedHeaders } : {}),
       };

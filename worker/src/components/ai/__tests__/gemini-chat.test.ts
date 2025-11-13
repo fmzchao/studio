@@ -63,21 +63,17 @@ beforeEach(() => {
 import '../gemini-chat';
 
 describe('core.gemini.chat component', () => {
-  it('resolves API key from secrets and calls the provider', async () => {
+  it('uses provided API key and calls the provider', async () => {
     const definition = componentRegistry.get<any, any>('core.gemini.chat');
     expect(definition).toBeDefined();
 
-    const secretsGet = mock(async () => ({ value: 'gm-secret-from-store', version: 1 }));
     const context: ExecutionContext = {
       runId: 'test-run',
       componentRef: 'node-1',
       logger: { info: mock(() => {}), error: mock(() => {}) },
       emitProgress: mock(() => {}),
       metadata: { runId: 'test-run', componentRef: 'node-1' },
-      secrets: {
-        get: secretsGet,
-        list: mock(async () => []),
-      },
+      secrets: undefined,
     };
 
     const result = await (definition!.execute as any)(
@@ -88,7 +84,7 @@ describe('core.gemini.chat component', () => {
         temperature: 0.7,
         maxTokens: 512,
         apiBaseUrl: '',
-        apiKey: '9b4ce843-4c0a-4d6c-9a27-123456789abc',
+        apiKey: 'gm-live-api-key',
       },
       context,
       {
@@ -97,9 +93,8 @@ describe('core.gemini.chat component', () => {
       }
     );
 
-    expect(secretsGet).toHaveBeenCalledWith('9b4ce843-4c0a-4d6c-9a27-123456789abc');
     expect(createGeminiMock).toHaveBeenCalledWith(
-      expect.objectContaining({ apiKey: 'gm-secret-from-store' }),
+      expect.objectContaining({ apiKey: 'gm-live-api-key' }),
     );
     expect(generateTextCalls).toHaveLength(1);
     expect(generateTextCalls[0]).toEqual(
@@ -113,27 +108,21 @@ describe('core.gemini.chat component', () => {
       expect.objectContaining({
         provider: 'gemini',
         modelId: 'gemini-2.5-flash',
-        apiKeySecretId: '9b4ce843-4c0a-4d6c-9a27-123456789abc',
       }),
     );
-    expect(result.chatModel.apiKey).toBeUndefined();
   });
 
-  it('throws when secret cannot be resolved', async () => {
+  it('throws when API key is empty', async () => {
     const definition = componentRegistry.get<any, any>('core.gemini.chat');
     expect(definition).toBeDefined();
 
-    const secretsGet = mock(async () => null);
     const context: ExecutionContext = {
       runId: 'test-run',
       componentRef: 'node-1',
       logger: { info: mock(() => {}), error: mock(() => {}) },
       emitProgress: mock(() => {}),
       metadata: { runId: 'test-run', componentRef: 'node-1' },
-      secrets: {
-        get: secretsGet,
-        list: mock(async () => []),
-      },
+      secrets: undefined,
     };
 
     await expect(
@@ -145,7 +134,7 @@ describe('core.gemini.chat component', () => {
           temperature: 0.7,
           maxTokens: 512,
           apiBaseUrl: '',
-          apiKey: 'missing-secret',
+          apiKey: '  ',
         },
         context,
         {
@@ -153,6 +142,6 @@ describe('core.gemini.chat component', () => {
           createGoogleGenerativeAI: createGeminiMock,
         }
       ),
-    ).rejects.toThrow(/secret \"missing-secret\" was not found/i);
+    ).rejects.toThrow(/API key is required/i);
   });
 });

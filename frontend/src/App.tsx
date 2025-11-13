@@ -39,14 +39,7 @@ function App() {
                       </ProtectedRoute>
                     }
                   />
-                  <Route
-                    path="/secrets"
-                    element={
-                      <ProtectedRoute roles={['ADMIN']}>
-                        <SecretsManager />
-                      </ProtectedRoute>
-                    }
-                  />
+                  <Route path="/secrets" element={<SecretsManager />} />
                   <Route path="/integrations" element={<IntegrationsManager />} />
                   <Route path="/artifacts" element={<ArtifactLibrary />} />
                   <Route

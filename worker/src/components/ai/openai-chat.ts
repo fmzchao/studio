@@ -48,8 +48,8 @@ const inputSchema = z.object({
     .describe('Optional override for the OpenAI-compatible API base URL.'),
   apiKey: z
     .string()
-    .optional()
-    .describe('Secret ID containing an OpenAI-compatible API key. A secret must be supplied at runtime.'),
+    .min(1, 'API key is required')
+    .describe('Resolved OpenAI-compatible API key supplied via a Secret Loader node.'),
 });
 
 type Input = z.infer<typeof inputSchema>;
@@ -58,7 +58,6 @@ type OpenAIChatModelConfig = {
   provider: 'openai';
   modelId: string;
   apiKey?: string;
-  apiKeySecretId?: string;
   baseUrl?: string;
 };
 
@@ -119,6 +118,13 @@ const definition: ComponentDefinition<Input, Output> = {
         required: true,
         description: 'User input that will be sent to the assistant.',
       },
+      {
+        id: 'apiKey',
+        label: 'API Key',
+        dataType: port.secret(),
+        required: true,
+        description: 'Connect the Secret Loader output containing the OpenAI-compatible API key.',
+      },
     ],
     outputs: [
       {
@@ -163,16 +169,6 @@ const definition: ComponentDefinition<Input, Output> = {
         ],
       },
       {
-        id: 'apiKey',
-        label: 'API Key Override',
-        type: 'secret',
-        required: true,
-        default: '',
-        placeholder: 'Select stored secret…',
-        description: 'Secret containing an OpenAI-compatible API key for this invocation.',
-        helpText: 'Store your OpenAI-compatible API key via the secrets adapter and select it here.',
-      },
-      {
         id: 'temperature',
         label: 'Temperature',
         type: 'number',
@@ -214,35 +210,10 @@ const definition: ComponentDefinition<Input, Output> = {
   ) {
     const { systemPrompt, userPrompt, model, temperature, maxTokens, apiBaseUrl, apiKey } = params;
 
-    const apiKeySecretId = apiKey?.trim() ?? '';
-    let resolvedApiKey = '';
-
-    if (apiKeySecretId.length === 0) {
-      throw new Error('OpenAI API key secret is required but was not provided.');
+    const effectiveApiKey = apiKey.trim();
+    if (!effectiveApiKey) {
+      throw new Error('OpenAI API key is required but was not provided.');
     }
-
-    if (!context.secrets) {
-      throw new Error(
-        'OpenAI Chat component requires the secrets service when an API key secret is provided.',
-      );
-    }
-
-    context.emitProgress('Resolving OpenAI API key from secret storage...');
-    const secret = await context.secrets.get(apiKeySecretId);
-
-    if (!secret || !secret.value) {
-      throw new Error(
-        `OpenAI API key secret "${apiKeySecretId}" was not found or does not contain a value.`,
-      );
-    }
-
-    resolvedApiKey = secret.value.trim();
-
-    if (resolvedApiKey.length === 0) {
-      throw new Error(`OpenAI API key secret "${apiKeySecretId}" is empty.`);
-    }
-
-    const effectiveApiKey = resolvedApiKey;
 
     const baseURL = apiBaseUrl?.trim() ? apiBaseUrl.trim() : process.env.OPENAI_BASE_URL;
     
@@ -270,12 +241,11 @@ const definition: ComponentDefinition<Input, Output> = {
 
       context.emitProgress('Received response from OpenAI-compatible provider');
 
-      const chatModelConfig: OpenAIChatModelConfig = {
-        provider: 'openai',
-        modelId: model,
-        ...(apiKeySecretId.length > 0 ? { apiKeySecretId } : {}),
-        ...(baseURL ? { baseUrl: baseURL } : {}),
-      };
+    const chatModelConfig: OpenAIChatModelConfig = {
+      provider: 'openai',
+      modelId: model,
+      ...(baseURL ? { baseUrl: baseURL } : {}),
+    };
 
       return {
         responseText: result.text,
