@@ -36,6 +36,7 @@ import {
   UpdateWorkflowRequestDto,
   WorkflowResponseDto,
   ServiceWorkflowResponse,
+  WorkflowVersionResponseDto,
 } from './dto/workflow-graph.dto';
 import { TraceService } from '../trace/trace.service';
 import { WorkflowsService } from './workflows.service';
@@ -287,6 +288,16 @@ export class WorkflowsController {
   ): Promise<WorkflowResponseDto> {
     const serviceResponse = await this.workflowsService.findById(id, auth);
     return this.transformServiceResponseToApi(serviceResponse);
+  }
+
+  @Get(':workflowId/versions/:versionId')
+  @ApiOkResponse({ type: WorkflowVersionResponseDto })
+  async findVersion(
+    @CurrentAuth() auth: AuthContext | null,
+    @Param('workflowId') workflowId: string,
+    @Param('versionId') versionId: string,
+  ): Promise<WorkflowVersionResponseDto> {
+    return this.workflowsService.getWorkflowVersion(workflowId, versionId, auth);
   }
 
   @Delete(':id')

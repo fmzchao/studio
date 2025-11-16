@@ -74,6 +74,7 @@ export interface TimelineState {
   selectedRunId: string | null
   isLoadingRuns: boolean
   runsLoadedAt: number | null
+  runsLoadedWorkflowId: string | null
 
   // Timeline state
   events: TimelineEvent[]
@@ -102,7 +103,7 @@ export interface TimelineState {
 
 export interface TimelineActions {
   // Run management
-  loadRuns: (options?: { force?: boolean }) => Promise<void>
+  loadRuns: (options?: { workflowId?: string | null; force?: boolean }) => Promise<void>
   selectRun: (runId: string) => Promise<void>
 
   // Timeline loading
@@ -423,6 +424,7 @@ const INITIAL_STATE: TimelineState = {
   selectedRunId: null,
   isLoadingRuns: false,
   runsLoadedAt: null,
+  runsLoadedWorkflowId: null,
   events: [],
   dataFlows: [],
   totalDuration: 0,
@@ -446,19 +448,23 @@ export const useExecutionTimelineStore = create<TimelineStore>()(
     ...INITIAL_STATE,
 
     loadRuns: async (options) => {
+      const workflowId = options?.workflowId ?? null
       const force = options?.force ?? false
-      const { isLoadingRuns, runsLoadedAt } = get()
+      const { isLoadingRuns, runsLoadedAt, runsLoadedWorkflowId } = get()
       if (isLoadingRuns) {
         return
       }
-      if (!force && runsLoadedAt !== null) {
+      if (!force && runsLoadedAt !== null && runsLoadedWorkflowId === workflowId) {
         return
       }
 
       set({ isLoadingRuns: true })
 
       try {
-        const response = await api.executions.listRuns({ limit: 50 })
+        const response = await api.executions.listRuns({
+          limit: 50,
+          workflowId: workflowId ?? undefined,
+        })
 
         if (!response.runs) {
           set({ availableRuns: [] })
@@ -485,7 +491,11 @@ export const useExecutionTimelineStore = create<TimelineStore>()(
           workflowVersion: typeof run.workflowVersion === 'number' ? run.workflowVersion : null,
         }))
 
-        set({ availableRuns: runs, runsLoadedAt: Date.now() })
+        set({
+          availableRuns: runs,
+          runsLoadedAt: Date.now(),
+          runsLoadedWorkflowId: workflowId,
+        })
       } catch (error) {
         console.error('Failed to load runs:', error)
       } finally {
