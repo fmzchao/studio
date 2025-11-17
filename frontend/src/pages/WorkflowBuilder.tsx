@@ -85,7 +85,8 @@ function WorkflowBuilderContent() {
   const selectedRunId = useExecutionTimelineStore((state) => state.selectedRunId)
   const fetchRuns = useRunStore((state) => state.fetchRuns)
   const workflowCacheKey = metadata.id ?? '__global__'
-  const runs = useRunStore((state) => state.cache[workflowCacheKey]?.runs ?? [])
+  const scopedRuns = useRunStore((state) => state.cache[workflowCacheKey]?.runs)
+  const runs = scopedRuns ?? []
   const { toast } = useToast()
   const layoutRef = useRef<HTMLDivElement | null>(null)
   const inspectorResizingRef = useRef(false)

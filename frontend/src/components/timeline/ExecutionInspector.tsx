@@ -68,7 +68,8 @@ export function ExecutionInspector({ onRerunRun }: ExecutionInspectorProps = {})
     (state) => state.metadata
   )
   const workflowCacheKey = workflowId ?? '__global__'
-  const runs = useRunStore((state) => state.cache[workflowCacheKey]?.runs ?? [])
+  const scopedRuns = useRunStore((state) => state.cache[workflowCacheKey]?.runs)
+  const runs = scopedRuns ?? []
   const { logs } = useExecutionStore()
   const { inspectorTab, setInspectorTab } = useWorkflowUiStore()
   const fetchRunArtifacts = useArtifactStore((state) => state.fetchRunArtifacts)

@@ -26,7 +26,8 @@ export function ReviewInspector() {
   } = useExecutionTimelineStore()
   const { id: workflowId } = useWorkflowStore((state) => state.metadata)
   const workflowCacheKey = workflowId ?? '__global__'
-  const runs = useRunStore((state) => state.cache[workflowCacheKey]?.runs ?? [])
+  const scopedRuns = useRunStore((state) => state.cache[workflowCacheKey]?.runs)
+  const runs = scopedRuns ?? []
   const { logs } = useExecutionStore()
   const { inspectorTab, setInspectorTab } = useWorkflowUiStore()
 
