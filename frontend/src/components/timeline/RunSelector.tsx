@@ -68,9 +68,11 @@ export function RunSelector({ onRerun }: RunSelectorProps = {}) {
     (state) => state.metadata
   )
   const workflowCacheKey = workflowId ?? '__global__'
-  const runs = useRunStore((state) => state.cache[workflowCacheKey]?.runs ?? [])
+  const scopedRuns = useRunStore((state) => state.cache[workflowCacheKey]?.runs)
+  const runs = scopedRuns ?? []
   const fetchRuns = useRunStore((state) => state.fetchRuns)
-  const isLoadingRuns = useRunStore((state) => state.cache[workflowCacheKey]?.isLoading ?? false)
+  const isLoadingRuns =
+    useRunStore((state) => state.cache[workflowCacheKey]?.isLoading) ?? false
 
   const {
     runId: currentLiveRunId,
