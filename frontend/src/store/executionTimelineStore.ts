@@ -74,6 +74,7 @@ export interface TimelineState {
   selectedRunId: string | null
   isLoadingRuns: boolean
   runsLoadedAt: number | null
+  runsLoadedWorkflowId: string | null
 
   // Timeline state
   events: TimelineEvent[]
@@ -97,11 +98,12 @@ export interface TimelineState {
   showTimeline: boolean
   showEventInspector: boolean
   timelineZoom: number // 1.0 - 100.0
+  isLiveFollowing: boolean
 }
 
 export interface TimelineActions {
   // Run management
-  loadRuns: (options?: { force?: boolean }) => Promise<void>
+  loadRuns: (options?: { workflowId?: string | null; force?: boolean }) => Promise<void>
   selectRun: (runId: string) => Promise<void>
 
   // Timeline loading
@@ -128,6 +130,9 @@ export interface TimelineActions {
   updateFromLiveEvent: (event: ExecutionLog) => void
   switchToLiveMode: () => void
   appendDataFlows: (packets: RawDataPacket[]) => void
+
+  goLive: () => void
+  tickLiveClock: () => void
 
   // Cleanup
   reset: () => void
@@ -419,6 +424,7 @@ const INITIAL_STATE: TimelineState = {
   selectedRunId: null,
   isLoadingRuns: false,
   runsLoadedAt: null,
+  runsLoadedWorkflowId: null,
   events: [],
   dataFlows: [],
   totalDuration: 0,
@@ -434,6 +440,7 @@ const INITIAL_STATE: TimelineState = {
   showTimeline: true,
   showEventInspector: false,
   timelineZoom: 1,
+  isLiveFollowing: false,
 }
 
 export const useExecutionTimelineStore = create<TimelineStore>()(
@@ -441,19 +448,23 @@ export const useExecutionTimelineStore = create<TimelineStore>()(
     ...INITIAL_STATE,
 
     loadRuns: async (options) => {
+      const workflowId = options?.workflowId ?? null
       const force = options?.force ?? false
-      const { isLoadingRuns, runsLoadedAt } = get()
+      const { isLoadingRuns, runsLoadedAt, runsLoadedWorkflowId } = get()
       if (isLoadingRuns) {
         return
       }
-      if (!force && runsLoadedAt !== null) {
+      if (!force && runsLoadedAt !== null && runsLoadedWorkflowId === workflowId) {
         return
       }
 
       set({ isLoadingRuns: true })
 
       try {
-        const response = await api.executions.listRuns({ limit: 50 })
+        const response = await api.executions.listRuns({
+          limit: 50,
+          workflowId: workflowId ?? undefined,
+        })
 
         if (!response.runs) {
           set({ availableRuns: [] })
@@ -480,7 +491,11 @@ export const useExecutionTimelineStore = create<TimelineStore>()(
           workflowVersion: typeof run.workflowVersion === 'number' ? run.workflowVersion : null,
         }))
 
-        set({ availableRuns: runs, runsLoadedAt: Date.now() })
+        set({
+          availableRuns: runs,
+          runsLoadedAt: Date.now(),
+          runsLoadedWorkflowId: workflowId,
+        })
       } catch (error) {
         console.error('Failed to load runs:', error)
       } finally {
@@ -497,7 +512,10 @@ export const useExecutionTimelineStore = create<TimelineStore>()(
         totalDuration: 0,
         currentTime: 0,
         timelineStartTime: null,
-        nodeStates: {}
+        nodeStates: {},
+        playbackMode: 'replay',
+        isPlaying: false,
+        isLiveFollowing: false,
       })
       await get().loadTimeline(runId)
     },
@@ -541,7 +559,11 @@ export const useExecutionTimelineStore = create<TimelineStore>()(
           totalDuration,
         )
 
-        const initialCurrentTime = get().playbackMode === 'live' ? totalDuration : 0
+        const state = get()
+        const isLiveMode = state.playbackMode === 'live'
+        const initialCurrentTime = isLiveMode
+          ? (state.isLiveFollowing ? totalDuration : Math.min(state.currentTime, totalDuration))
+          : 0
 
         set({
           events,
@@ -567,11 +589,13 @@ export const useExecutionTimelineStore = create<TimelineStore>()(
     },
 
     seek: (timeMs: number) => {
-      const clampedTime = Math.max(0, Math.min(timeMs, get().totalDuration))
-      set({
+      const state = get()
+      const clampedTime = Math.max(0, Math.min(timeMs, state.totalDuration))
+      set((prev) => ({
         currentTime: clampedTime,
-        isSeeking: true
-      })
+        isSeeking: true,
+        isLiveFollowing: prev.playbackMode === 'live' ? false : prev.isLiveFollowing,
+      }))
 
       // Recalculate node states for new time
       const { events, dataFlows, timelineStartTime } = get()
@@ -659,6 +683,38 @@ export const useExecutionTimelineStore = create<TimelineStore>()(
       })
     },
 
+    goLive: () => {
+      const state = get()
+      if (!state.selectedRunId) return
+      set({
+        playbackMode: 'live',
+        isLiveFollowing: true,
+        currentTime: state.totalDuration,
+      })
+    },
+
+    tickLiveClock: () => {
+      const state = get()
+      if (state.playbackMode !== 'live' || !state.timelineStartTime) {
+        return
+      }
+      const now = Date.now()
+      if (liveTickTimestamp && now - liveTickTimestamp < 200) {
+        return
+      }
+      liveTickTimestamp = now
+      const elapsed = Math.max(0, now - state.timelineStartTime)
+      const nextDuration = Math.max(state.totalDuration, elapsed)
+      const nextCurrent = state.isLiveFollowing ? nextDuration : Math.min(state.currentTime, nextDuration)
+      if (nextDuration === state.totalDuration && nextCurrent === state.currentTime) {
+        return
+      }
+      set({
+        totalDuration: nextDuration,
+        currentTime: nextCurrent,
+      })
+    },
+
     updateFromLiveEvent: (event: ExecutionLog) => {
       const { events, playbackMode } = get()
       if (playbackMode !== 'live') return
@@ -673,15 +729,20 @@ export const useExecutionTimelineStore = create<TimelineStore>()(
         totalDuration,
         timelineStartTime
       } = prepareTimelineEvents(combinedEvents)
-      const currentTime = totalDuration
 
-      set((state) => ({
-        events: preparedEvents,
-        totalDuration,
-        timelineStartTime,
-        currentTime,
-        nodeStates: calculateNodeStates(preparedEvents, state.dataFlows, currentTime, timelineStartTime)
-      }))
+      set((state) => {
+        const resolvedStart = timelineStartTime ?? state.timelineStartTime ?? null
+        const nextTotal = Math.max(totalDuration, state.totalDuration)
+        const shouldFollow = state.isLiveFollowing
+        const nextCurrent = shouldFollow ? nextTotal : Math.min(state.currentTime, nextTotal)
+        return {
+          events: preparedEvents,
+          totalDuration: nextTotal,
+          timelineStartTime: resolvedStart,
+          currentTime: nextCurrent,
+          nodeStates: calculateNodeStates(preparedEvents, state.dataFlows, nextCurrent, resolvedStart),
+        }
+      })
     },
 
     switchToLiveMode: () => {
@@ -691,7 +752,8 @@ export const useExecutionTimelineStore = create<TimelineStore>()(
       set({
         playbackMode: 'live',
         currentTime: totalDuration,
-        isPlaying: false // Live mode doesn't need play controls
+        isPlaying: false, // Live mode doesn't need play controls
+        isLiveFollowing: true,
       })
 
       get().loadTimeline(selectedRunId)
@@ -705,6 +767,7 @@ export const useExecutionTimelineStore = create<TimelineStore>()(
 
 // Subscribe to execution store for live updates
 let unsubscribeExecutionStore: (() => void) | null = null
+let liveTickTimestamp: number | null = null
 
 export const initializeTimelineStore = () => {
   if (unsubscribeExecutionStore) {

@@ -148,3 +148,13 @@ export const WorkflowResponseSchema = z.object({
 });
 
 export class WorkflowResponseDto extends createZodDto(WorkflowResponseSchema) {}
+
+export const WorkflowVersionResponseSchema = z.object({
+  id: z.string(),
+  workflowId: z.string(),
+  version: z.number().int().positive(),
+  graph: WorkflowGraphSchema,
+  createdAt: z.string(),
+})
+
+export class WorkflowVersionResponseDto extends createZodDto(WorkflowVersionResponseSchema) {}

@@ -68,6 +68,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workflows/{workflowId}/versions/{versionId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["WorkflowsController_findVersion"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workflows/{id}/commit": {
         parameters: {
             query?: never;
@@ -757,6 +773,44 @@ export interface components {
                 zoom: number;
             };
         };
+        WorkflowVersionResponseDto: {
+            id: string;
+            workflowId: string;
+            version: number;
+            graph: {
+                id?: string;
+                name: string;
+                description?: string;
+                nodes: {
+                    id: string;
+                    type: string;
+                    position: {
+                        x: number;
+                        y: number;
+                    };
+                    data: {
+                        label: string;
+                        /** @default {} */
+                        config: {
+                            [key: string]: unknown;
+                        };
+                    };
+                }[];
+                edges: {
+                    id: string;
+                    source: string;
+                    target: string;
+                    sourceHandle?: string;
+                    targetHandle?: string;
+                }[];
+                viewport: {
+                    x: number;
+                    y: number;
+                    zoom: number;
+                };
+            };
+            createdAt: string;
+        };
         RunWorkflowRequestDto: {
             inputs?: {
                 [key: string]: unknown;
@@ -783,9 +837,25 @@ export interface components {
                 mimeType: string;
                 size: number;
                 destinations: ("run" | "library")[];
-                metadata?: {
+                metadata?: ({
+                    remoteUploads?: {
+                        /** @enum {string} */
+                        type: "s3" | "gcs";
+                        bucket: string;
+                        key: string;
+                        uri: string;
+                        region?: string;
+                        size?: number;
+                        etag?: string;
+                        /** Format: uri */
+                        url?: string;
+                        metadata?: {
+                            [key: string]: unknown;
+                        };
+                    }[];
+                } & {
                     [key: string]: unknown;
-                } | null;
+                }) | null;
                 organizationId?: string | null;
                 /** Format: date-time */
                 createdAt: string;
@@ -808,9 +878,25 @@ export interface components {
                 mimeType: string;
                 size: number;
                 destinations: ("run" | "library")[];
-                metadata?: {
+                metadata?: ({
+                    remoteUploads?: {
+                        /** @enum {string} */
+                        type: "s3" | "gcs";
+                        bucket: string;
+                        key: string;
+                        uri: string;
+                        region?: string;
+                        size?: number;
+                        etag?: string;
+                        /** Format: uri */
+                        url?: string;
+                        metadata?: {
+                            [key: string]: unknown;
+                        };
+                    }[];
+                } & {
                     [key: string]: unknown;
-                } | null;
+                }) | null;
                 organizationId?: string | null;
                 /** Format: date-time */
                 createdAt: string;
@@ -1127,6 +1213,28 @@ export interface operations {
                             duration?: number;
                         }[];
                     };
+                };
+            };
+        };
+    };
+    WorkflowsController_findVersion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workflowId: string;
+                versionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowVersionResponseDto"];
                 };
             };
         };

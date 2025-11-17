@@ -75,6 +75,12 @@ export class ShipSecApiClient {
     });
   }
 
+  async getWorkflowVersion(workflowId: string, versionId: string) {
+    return this.client.GET('/api/v1/workflows/{workflowId}/versions/{versionId}', {
+      params: { path: { workflowId, versionId } },
+    });
+  }
+
   async createWorkflow(workflow: CreateWorkflowPayload) {
     return this.client.POST('/api/v1/workflows', {
       body: workflow,

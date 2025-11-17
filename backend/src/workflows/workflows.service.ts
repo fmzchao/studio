@@ -543,6 +543,29 @@ export class WorkflowsService {
     };
   }
 
+  async getWorkflowVersion(
+    workflowId: string,
+    versionId: string,
+    auth?: AuthContext | null,
+  ) {
+    const organizationId = this.requireOrganizationId(auth);
+    const version = await this.versionRepository.findById(versionId, { organizationId });
+    if (!version || version.workflowId !== workflowId) {
+      throw new NotFoundException(
+        `Workflow version ${versionId} not found for workflow ${workflowId}`,
+      );
+    }
+
+    return {
+      id: version.id,
+      workflowId: version.workflowId,
+      version: version.version,
+      graph: version.graph,
+      createdAt:
+        version.createdAt instanceof Date ? version.createdAt.toISOString() : version.createdAt,
+    };
+  }
+
   async cancelRun(runId: string, temporalRunId?: string, auth?: AuthContext | null): Promise<void> {
     this.logger.warn(
       `Cancelling workflow run ${runId} (temporalRunId=${temporalRunId ?? 'latest'})`,

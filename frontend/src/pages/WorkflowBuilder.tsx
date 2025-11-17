@@ -5,6 +5,8 @@ import {
   ReactFlowProvider,
   useNodesState,
   useEdgesState,
+  type Node as ReactFlowNode,
+  type Edge as ReactFlowEdge,
 } from 'reactflow'
 import { TopBar } from '@/components/layout/TopBar'
 import { Sidebar } from '@/components/layout/Sidebar'
@@ -33,6 +35,20 @@ import { useAuthStore } from '@/store/authStore'
 import { hasAdminRole } from '@/utils/auth'
 import { WorkflowImportSchema, DEFAULT_WORKFLOW_VIEWPORT } from '@/schemas/workflow'
 import { track, Events } from '@/features/analytics/events'
+
+const cloneNodes = (nodes: ReactFlowNode<FrontendNodeData>[]) =>
+  nodes.map((node) => ({
+    ...node,
+    position: { ...node.position },
+    data: {
+      ...node.data,
+      parameters: node.data?.parameters ? { ...node.data.parameters } : {},
+      config: node.data?.config ? { ...node.data.config } : {},
+      inputs: node.data?.inputs ? { ...node.data.inputs } : {},
+    },
+  }))
+
+const cloneEdges = (edges: ReactFlowEdge[]) => edges.map((edge) => ({ ...edge }))
 
 function WorkflowBuilderContent() {
   const { id } = useParams<{ id: string }>()
@@ -67,11 +83,27 @@ function WorkflowBuilderContent() {
   const selectRun = useExecutionTimelineStore((state) => state.selectRun)
   const switchToLiveMode = useExecutionTimelineStore((state) => state.switchToLiveMode)
   const availableRuns = useExecutionTimelineStore((state) => state.availableRuns)
+  const selectedRunId = useExecutionTimelineStore((state) => state.selectedRunId)
   const { toast } = useToast()
   const layoutRef = useRef<HTMLDivElement | null>(null)
   const inspectorResizingRef = useRef(false)
   const isLibraryVisible = libraryOpen && mode === 'design'
   const [showLibraryContent, setShowLibraryContent] = useState(isLibraryVisible)
+  const [historicalVersionId, setHistoricalVersionId] = useState<string | null>(null)
+  const historicalGraphRef = useRef<{
+    nodes: ReactFlowNode<FrontendNodeData>[]
+    edges: ReactFlowEdge[]
+  } | null>(null)
+  const nodesRef = useRef(nodes)
+  const edgesRef = useRef(edges)
+
+  useEffect(() => {
+    nodesRef.current = nodes
+  }, [nodes])
+
+  useEffect(() => {
+    edgesRef.current = edges
+  }, [edges])
   const mostRecentRunId = useMemo(
     () => (availableRuns.length > 0 ? availableRuns[0].id : null),
     [availableRuns],
@@ -84,8 +116,86 @@ function WorkflowBuilderContent() {
   }, [isNewWorkflow, setMode])
 
   useEffect(() => {
-    loadRuns().catch(() => undefined)
-  }, [loadRuns])
+    if (!metadata.id) {
+      useExecutionTimelineStore.getState().reset()
+      return
+    }
+    loadRuns({ workflowId: metadata.id }).catch(() => undefined)
+  }, [loadRuns, metadata.id])
+
+  useEffect(() => {
+    if (!metadata.id) {
+      return
+    }
+
+    const run = availableRuns.find((candidate) => candidate.id === selectedRunId)
+    const versionId = run?.workflowVersionId ?? null
+
+    if (!run || !versionId || versionId === metadata.currentVersionId) {
+      if (historicalVersionId && historicalGraphRef.current) {
+        setNodes(cloneNodes(historicalGraphRef.current.nodes))
+        setEdges(cloneEdges(historicalGraphRef.current.edges))
+        historicalGraphRef.current = null
+      }
+      setHistoricalVersionId(null)
+      return
+    }
+
+    if (versionId === historicalVersionId) {
+      return
+    }
+
+    let cancelled = false
+
+    const previewHistoricalVersion = async () => {
+      try {
+        if (!historicalVersionId && !historicalGraphRef.current) {
+          historicalGraphRef.current = {
+            nodes: cloneNodes(nodesRef.current),
+            edges: cloneEdges(edgesRef.current),
+          }
+        }
+
+        const workflowIdForRun = run.workflowId ?? metadata.id
+        if (!workflowIdForRun) {
+          return
+        }
+
+        const version = await api.workflows.getVersion(workflowIdForRun, versionId)
+        if (cancelled) return
+
+        const versionNodes = deserializeNodes(version)
+        const versionEdges = deserializeEdges(version)
+
+        setNodes(versionNodes)
+        setEdges(versionEdges)
+        setHistoricalVersionId(versionId)
+      } catch (error) {
+        if (cancelled) return
+        console.error('Failed to load workflow version:', error)
+        toast({
+          variant: 'destructive',
+          title: 'Failed to load workflow version',
+          description: error instanceof Error ? error.message : 'Unknown error',
+        })
+      }
+    }
+
+    previewHistoricalVersion()
+
+    return () => {
+      cancelled = true
+    }
+  }, [
+    metadata.id,
+    metadata.currentVersionId,
+    availableRuns,
+    selectedRunId,
+    historicalVersionId,
+    setNodes,
+    setEdges,
+    toast,
+  ])
 
   useEffect(() => {
     if (!runDialogOpen) {
@@ -101,6 +211,8 @@ function WorkflowBuilderContent() {
         resetWorkflow()
         setNodes([])
         setEdges([])
+        historicalGraphRef.current = null
+        setHistoricalVersionId(null)
         track(Events.WorkflowBuilderLoaded, { is_new: true })
         return
       }
@@ -126,6 +238,11 @@ function WorkflowBuilderContent() {
 
         setNodes(workflowNodes)
         setEdges(workflowEdges)
+        historicalGraphRef.current = {
+          nodes: cloneNodes(workflowNodes),
+          edges: cloneEdges(workflowEdges),
+        }
+        setHistoricalVersionId(null)
 
         // Mark as clean (no unsaved changes)
         markClean()
@@ -246,7 +363,10 @@ function WorkflowBuilderContent() {
           node_count: nodes.length,
         })
         setMode('execution')
-        await loadRuns({ force: true }).catch(() => undefined)
+        await loadRuns({
+          workflowId: metadata.id,
+          force: true,
+        }).catch(() => undefined)
         let selected = true
         try {
           await selectRun(runId)

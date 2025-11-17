@@ -20,6 +20,7 @@ type CompleteOAuthRequest = components['schemas']['CompleteOAuthDto']
 type RefreshConnectionRequest = components['schemas']['RefreshConnectionDto']
 type DisconnectConnectionRequest = components['schemas']['DisconnectConnectionDto']
 type UpsertProviderConfigRequest = components['schemas']['UpsertProviderConfigDto']
+type WorkflowVersionResponse = components['schemas']['WorkflowVersionResponseDto']
 
 export type IntegrationProvider = IntegrationProviderResponse
 export type IntegrationConnection = IntegrationConnectionResponse
@@ -145,6 +146,14 @@ export const api = {
       const response = await apiClient.getWorkflow(id)
       if (response.error) throw new Error('Failed to fetch workflow')
       if (!response.data) throw new Error('Workflow not found')
+      return response.data
+    },
+
+    getVersion: async (workflowId: string, versionId: string): Promise<WorkflowVersionResponse> => {
+      const response = await apiClient.getWorkflowVersion(workflowId, versionId)
+      if (response.error || !response.data) {
+        throw new Error('Failed to fetch workflow version')
+      }
       return response.data
     },
 

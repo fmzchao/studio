@@ -71,12 +71,15 @@ export function RunSelector({ onRerun }: RunSelectorProps = {}) {
     status: _currentLiveStatus,
     workflowId: _currentWorkflowId,
   } = useExecutionStore()
-  const currentWorkflowVersion = useWorkflowStore((state) => state.metadata.currentVersion)
+  const { id: workflowId, currentVersion: currentWorkflowVersion } = useWorkflowStore((state) => state.metadata)
 
   // Load runs on mount
   useEffect(() => {
-    loadRuns()
-  }, [loadRuns])
+    if (!workflowId) {
+      return
+    }
+    loadRuns({ workflowId })
+  }, [loadRuns, workflowId])
 
   // Auto-load current live run if it exists
   useEffect(() => {
