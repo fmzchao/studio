@@ -14,9 +14,13 @@ ShipSec Studio bundles everything you need to design security workflows: a visua
 
 | Workflow Builder | Live Execution Timeline | Secrets & Integrations |
 | --- | --- | --- |
-| ![Workflow Builder](docs/media/workflow-builder.png) | ![Execution Timeline](docs/media/live-timeline.png) | ![Secrets & Integrations](docs/media/secrets-vault.png) |
+| ![Workflow Builder](docs/media/workflow-sample.png) | ![Execution Timeline](docs/media/workflow-execution.png) | ![Secrets & Integrations](docs/media/secret-manager.png) |
 
-> 📸 Drop fresh PNG/WebP screenshots into `docs/media/` (same filenames) to update this gallery without touching the README.
+| Connections Catalog | Org Dashboard |
+| --- | --- |
+| ![Connections Catalog](docs/media/connections-screen.png) | ![Org Dashboard](docs/media/dashboard.png) |
+
+> 📸 Gallery assets live under `docs/media/`. Replace the existing `workflow-sample.png`, `workflow-execution.png`, `secret-manager.png`, `connections-screen.png`, or `dashboard.png` files to refresh the screenshots without editing the README.
 
 ---
 
