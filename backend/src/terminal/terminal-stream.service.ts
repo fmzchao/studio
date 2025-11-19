@@ -25,12 +25,50 @@ export interface TerminalFetchResult {
   chunks: TerminalChunk[];
 }
 
+export interface TerminalStreamDescriptor {
+  nodeRef: string;
+  stream: string;
+  key: string;
+}
+
 @Injectable()
 export class TerminalStreamService implements OnModuleDestroy {
   constructor(@Inject(TERMINAL_REDIS) private readonly redis: Redis | null) {}
 
   async onModuleDestroy() {
     await this.redis?.quit();
+  }
+
+  async listStreams(runId: string): Promise<TerminalStreamDescriptor[]> {
+    if (!this.redis) {
+      return [];
+    }
+    const pattern = `terminal:${runId}:*`;
+    const keys = await this.scanKeys(pattern);
+    const seen = new Map<string, TerminalStreamDescriptor>();
+    for (const key of keys) {
+      const { nodeRef, stream } = this.parseKey(key);
+      const dedupeKey = `${nodeRef}:${stream}`;
+      if (!seen.has(dedupeKey)) {
+        seen.set(dedupeKey, { nodeRef, stream, key });
+      }
+    }
+    return Array.from(seen.values());
+  }
+
+  async deleteStreams(runId: string, options: TerminalFetchOptions = {}): Promise<number> {
+    if (!this.redis) {
+      return 0;
+    }
+
+    const nodePattern = options.nodeRef ? this.sanitizeNode(options.nodeRef) : '*';
+    const streamPattern = options.stream ?? '*';
+    const pattern = `terminal:${runId}:${nodePattern}:${streamPattern}`;
+    const keys = await this.scanKeys(pattern);
+    if (keys.length === 0) {
+      return 0;
+    }
+    return this.redis!.del(...keys);
   }
 
   async fetchChunks(runId: string, options: TerminalFetchOptions = {}): Promise<TerminalFetchResult> {

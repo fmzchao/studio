@@ -62,6 +62,14 @@ import { RunArtifactsResponseDto } from '../storage/dto/artifact.dto';
 import { ArtifactIdParamDto, ArtifactIdParamSchema } from '../storage/dto/artifacts.dto';
 import type { WorkflowTerminalRecord } from '../database/schema';
 
+const TERMINAL_COMPLETION_STATUSES = new Set([
+  'COMPLETED',
+  'FAILED',
+  'CANCELLED',
+  'TERMINATED',
+  'TIMED_OUT',
+]);
+
 const traceFailureSchema = {
   type: 'object',
   properties: {
@@ -467,7 +475,13 @@ export class WorkflowsController {
     @Query(new ZodValidationPipe(TemporalRunQuerySchema)) query: TemporalRunQueryDto,
     @CurrentAuth() auth: AuthContext | null,
   ) {
-    return this.workflowsService.getRunStatus(runId, query.temporalRunId, auth);
+    const result = await this.workflowsService.getRunStatus(runId, query.temporalRunId, auth);
+    if (TERMINAL_COMPLETION_STATUSES.has(result.status)) {
+      this.terminalArchiveService.archiveRun(auth, runId).catch((error) => {
+        console.warn(`Failed to archive terminal after status fetch for run ${runId}`, error);
+      });
+    }
+    return result;
   }
 
   @Get('/runs/:runId/result')
@@ -600,14 +614,6 @@ export class WorkflowsController {
       lastSequence = 0;
     }
 
-    const terminalStatuses = new Set([
-      'COMPLETED',
-      'FAILED',
-      'CANCELLED',
-      'TERMINATED',
-      'TIMED_OUT',
-    ]);
-
     let active = true;
     let lastStatusSignature: string | null = null;
     let intervalId: NodeJS.Timeout | undefined;
@@ -705,7 +711,10 @@ export class WorkflowsController {
         if (signature !== lastStatusSignature) {
           lastStatusSignature = signature;
           send('status', status);
-          if (terminalStatuses.has(status.status)) {
+          if (TERMINAL_COMPLETION_STATUSES.has(status.status)) {
+            this.terminalArchiveService.archiveRun(auth, runId).catch((error) => {
+              console.warn(`Failed to archive terminal for run ${runId}`, error);
+            });
             send('complete', { runId, status: status.status });
             cleanup();
           }
@@ -830,7 +839,21 @@ export class WorkflowsController {
       nodeRef: query.nodeRef,
       stream: query.stream,
     });
-    return { runId, ...result };
+    if (result.chunks.length > 0 || !query.nodeRef) {
+      return { runId, ...result };
+    }
+
+    try {
+      const archived = await this.terminalArchiveService.replay(auth, runId, {
+        nodeRef: query.nodeRef,
+        stream: query.stream,
+        cursor: query.cursor,
+      });
+      return { runId, ...archived };
+    } catch (error) {
+      console.warn(`Failed to replay archived terminal for ${runId}`, error);
+      return { runId, ...result };
+    }
   }
 
   @Post('/runs/:runId/terminal/archive')

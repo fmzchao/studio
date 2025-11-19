@@ -32,6 +32,17 @@ class MockRedis {
     return aseq - bseq;
   }
 
+  async del(...keys: string[]) {
+    let removed = 0;
+    for (const key of keys) {
+      if (this.entries[key]) {
+        delete this.entries[key];
+        removed += 1;
+      }
+    }
+    return removed;
+  }
+
   async quit() {}
 }
 
@@ -53,5 +64,34 @@ describe('TerminalStreamService', () => {
     const result = await service.fetchChunks('run-2', { cursor: '{"foo":"1-0"}' });
     expect(result.chunks).toHaveLength(0);
     expect(result.cursor).toBe('{"foo":"1-0"}');
+  });
+
+  it('lists available streams', async () => {
+    const redis = new MockRedis({
+      'terminal:run-3:node.one:pty': [],
+      'terminal:run-3:node.two:stderr': [],
+    }) as unknown as Redis;
+    const service = new TerminalStreamService(redis);
+
+    const streams = await service.listStreams('run-3');
+
+    expect(streams).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ nodeRef: 'node.one', stream: 'pty' }),
+        expect.objectContaining({ nodeRef: 'node.two', stream: 'stderr' }),
+      ]),
+    );
+  });
+
+  it('deletes streams by run', async () => {
+    const redis = new MockRedis({
+      'terminal:run-4:node.one:pty': [],
+      'terminal:run-4:node.two:stderr': [],
+    }) as unknown as Redis;
+    const service = new TerminalStreamService(redis);
+
+    const removed = await service.deleteStreams('run-4');
+
+    expect(removed).toBe(2);
   });
 });

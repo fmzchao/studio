@@ -162,6 +162,17 @@ export class WorkflowsService {
     return this.requireRunAccess(runId, auth);
   }
 
+  async resolveRunWithoutAuth(runId: string) {
+    const run = await this.runRepository.findByRunId(runId);
+    if (!run) {
+      throw new NotFoundException(`Workflow run ${runId} not found`);
+    }
+    return {
+      organizationId: run.organizationId ?? null,
+      run,
+    };
+  }
+
   async ensureRunAccess(
     runId: string,
     auth?: AuthContext | null,

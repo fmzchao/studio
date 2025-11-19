@@ -58,7 +58,7 @@ Goal: deliver low-latency, PTY-accurate Docker console streaming with archival r
 - Backend streams PTY chunks with <150 ms latency in dev stack.
 - API consumers can request historical chunks via REST without touching Redis directly.
 
-## Phase 4 – Cast File Archival & Indexing
+## Phase 4 – Cast File Archival & Indexing ✅ *Completed*
 
 **Objectives**
 - Persist per-node replay files (cast-like JSON) to object storage (MinIO/S3) while runs execute.

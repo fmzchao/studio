@@ -5,7 +5,6 @@ import 'xterm/css/xterm.css'
 import { X } from 'lucide-react'
 import { useExecutionStore } from '@/store/executionStore'
 import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
 
 interface NodeTerminalPanelProps {
   nodeId: string
@@ -58,8 +57,6 @@ export function NodeTerminalPanel({ nodeId, stream = 'pty', onClose }: NodeTermi
 
   const sessionKey = useMemo(() => terminalKey(nodeId, stream), [nodeId, stream])
   const session = useExecutionStore((state) => state.terminalStreams[sessionKey])
-  const streamingMode = useExecutionStore((state) => state.streamingMode)
-  const runId = useExecutionStore((state) => state.runId)
 
   useEffect(() => {
     if (!containerRef.current) {
