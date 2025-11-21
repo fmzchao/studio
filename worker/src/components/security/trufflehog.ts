@@ -445,12 +445,35 @@ const definition: ComponentDefinition<Input, Output> = {
       };
 
       // Execute TruffleHog
-      const rawResult = await runComponentWithRunner(
-        runnerConfig,
-        async () => ({}) as Output,
-        effectiveInput,
-        context,
-      );
+      // Note: TruffleHog exits with code 183 when secrets are found and --fail is used
+      // This is not an error, so we need to handle it specially
+      let rawResult: unknown;
+      try {
+        rawResult = await runComponentWithRunner(
+          runnerConfig,
+          async () => ({}) as Output,
+          effectiveInput,
+          context,
+        );
+      } catch (error) {
+        // Check if this is a TruffleHog exit code 183 (secrets found with --fail)
+        const errorMessage = error instanceof Error ? error.message : String(error);
+
+        // If it's exit code 183, this means secrets were found (not an error)
+        // We should still parse and return the output
+        if (errorMessage.includes('exit code 183') || errorMessage.includes('exited with code 183')) {
+          context.logger.info('[TruffleHog] Exit code 183: secrets found (--fail flag)');
+
+          // Try to extract output from error if available
+          // For now, we'll re-throw to surface the failure as requested
+          // The caller can handle exit code 183 as needed
+          throw error;
+        }
+
+        // For any other error, propagate it
+        context.logger.error(`[TruffleHog] Scan failed: ${errorMessage}`);
+        throw error;
+      }
 
       // Parse the raw output
       const output = typeof rawResult === 'string'

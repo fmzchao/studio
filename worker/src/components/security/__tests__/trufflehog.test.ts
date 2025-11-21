@@ -287,4 +287,45 @@ describe('trufflehog component', () => {
       'filesystemContent can only be used with scanType=filesystem'
     );
   });
+
+  it('should propagate exit code 183 when secrets found with --fail flag', async () => {
+    const component = componentRegistry.get<TruffleHogInput, TruffleHogOutput>('shipsec.trufflehog.scan');
+    if (!component) throw new Error('Component not registered');
+
+    const context = sdk.createExecutionContext({
+      runId: 'test-run',
+      componentRef: 'trufflehog-test',
+    });
+
+    const params = component.inputSchema.parse({
+      scanTarget: 'https://github.com/test/repo',
+      scanType: 'git',
+      customFlags: '--fail',
+    });
+
+    const error = new Error('Container exited with code 183');
+    vi.spyOn(sdk, 'runComponentWithRunner').mockRejectedValue(error);
+
+    await expect(component.execute(params, context)).rejects.toThrow('Container exited with code 183');
+  });
+
+  it('should propagate other error exit codes', async () => {
+    const component = componentRegistry.get<TruffleHogInput, TruffleHogOutput>('shipsec.trufflehog.scan');
+    if (!component) throw new Error('Component not registered');
+
+    const context = sdk.createExecutionContext({
+      runId: 'test-run',
+      componentRef: 'trufflehog-test',
+    });
+
+    const params = component.inputSchema.parse({
+      scanTarget: 'https://github.com/test/repo',
+      scanType: 'git',
+    });
+
+    const error = new Error('Container exited with code 1: auth failed');
+    vi.spyOn(sdk, 'runComponentWithRunner').mockRejectedValue(error);
+
+    await expect(component.execute(params, context)).rejects.toThrow('auth failed');
+  });
 });
