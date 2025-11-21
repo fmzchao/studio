@@ -427,14 +427,16 @@ export class WorkflowsController {
         statusCode: 400,
       };
 
-      // Include stack trace in development
-      if (error instanceof Error && error.stack) {
-        errorDetails.stack = error.stack;
-      }
+      // Include stack trace and cause only in development to avoid leaking internal details
+      const isDevelopment = process.env.NODE_ENV !== 'production';
+      if (isDevelopment) {
+        if (error instanceof Error && error.stack) {
+          errorDetails.stack = error.stack;
+        }
 
-      // Include cause if available
-      if (error instanceof Error && (error as any).cause) {
-        errorDetails.cause = (error as any).cause;
+        if (error instanceof Error && (error as any).cause) {
+          errorDetails.cause = (error as any).cause;
+        }
       }
 
       throw new BadRequestException(errorDetails);
