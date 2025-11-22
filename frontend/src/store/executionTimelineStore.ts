@@ -715,9 +715,27 @@ export const initializeTimelineStore = () => {
   void import('./executionStore')
     .then(({ useExecutionStore }) => {
       unsubscribeExecutionStore = useExecutionStore.subscribe((state) => {
-        const { logs, runId } = state;
+        const { logs, runId, status, runStatus } = state;
         const timelineStore = useExecutionTimelineStore.getState()
+        
+        // Check if workflow has completed or failed
+        const isTerminalStatus = runStatus && ['COMPLETED', 'FAILED', 'CANCELLED', 'TERMINATED', 'TIMED_OUT'].includes(runStatus.status)
+        const isTerminalLifecycle = status === 'completed' || status === 'failed'
+        
+        // If workflow is done and we're in live mode, switch to replay mode
         if (timelineStore.playbackMode === 'live' && timelineStore.selectedRunId === runId) {
+          if (isTerminalStatus || isTerminalLifecycle) {
+            // Workflow completed/failed - switch to replay mode
+            useExecutionTimelineStore.setState({
+              playbackMode: 'replay',
+              isLiveFollowing: false,
+              isPlaying: false,
+            })
+            console.log('[TimelineStore] Workflow completed/failed, switching from live to replay mode')
+            return
+          }
+          
+          // Continue updating timeline with new logs
           const {
             events,
             totalDuration,
