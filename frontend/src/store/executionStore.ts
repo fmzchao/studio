@@ -160,8 +160,21 @@ export const useExecutionStore = create<ExecutionStore>((set, get) => ({
     version?: number
   }) => {
     try {
-      get().reset()
-      set({ status: 'queued', workflowId })
+      // Stop previous run if any, but don't reset everything to avoid full re-render
+      const currentRunId = get().runId
+      if (currentRunId) {
+        get().stopPolling()
+      }
+      
+      set({ 
+        status: 'queued', 
+        workflowId,
+        // Clear only what's needed for new run, keep terminal streams if same workflow
+        logs: [],
+        nodeStates: {},
+        cursor: null,
+        terminalCursor: null,
+      })
 
       const { executionId } = await api.executions.start(workflowId, options)
       if (!executionId) {
@@ -172,10 +185,7 @@ export const useExecutionStore = create<ExecutionStore>((set, get) => ({
       set({
         runId: executionId,
         status: 'running',
-        logs: [],
-        nodeStates: {},
-        cursor: null,
-        terminalCursor: null,
+        // Terminal streams will be populated as new run progresses
         terminalStreams: {},
       })
 
