@@ -142,15 +142,15 @@ const definition: ComponentDefinition<Input, Output> = {
         id: 'seeds',
         label: 'Subdomains to Resolve',
         dataType: port.list(port.text()),
-        required: false,
-        description: 'Full subdomains to validate in resolve mode (e.g., www.example.com, api.example.com)'
+        required: true,
+        description: 'Full subdomains to validate in resolve mode (e.g., www.example.com, api.example.com). Required when mode is Resolve.'
       },
       {
         id: 'words',
         label: 'Wordlist',
         dataType: port.list(port.text()),
         required: false,
-        description: 'Words for bruteforce mode (e.g., www, api, admin)'
+        description: 'Words for bruteforce mode (e.g., www, api, admin). Required when mode is Bruteforce.'
       },
       {
         id: 'resolvers',
