@@ -27,7 +27,7 @@ const STATUS_ICONS = {
 export const WorkflowNode = memo(({ data, selected, id }: NodeProps<NodeData>) => {
   const { getComponent, loading } = useComponentStore()
   const { getNodes, getEdges } = useReactFlow()
-  const { nodeStates, selectedRunId, selectNode, isPlaying } = useExecutionTimelineStore()
+  const { nodeStates, selectedRunId, selectNode, isPlaying, playbackMode } = useExecutionTimelineStore()
   const { mode } = useWorkflowUiStore()
   const [isHovered, setIsHovered] = useState(false)
   const prefetchTerminal = useExecutionStore((state) => state.prefetchTerminal)
@@ -339,7 +339,12 @@ export const WorkflowNode = memo(({ data, selected, id }: NodeProps<NodeData>) =
               <div className="flex items-center gap-2 mt-1">
                 {visualState.status === 'running' && (
                   <div className="flex items-center gap-1 text-xs text-blue-600">
-                    {isPlaying ? (
+                    {playbackMode === 'live' ? (
+                      <>
+                        <Activity className="h-3 w-3 animate-pulse" />
+                        Live
+                      </>
+                    ) : isPlaying ? (
                       <>
                         <Activity className="h-3 w-3" />
                         Running

@@ -1,7 +1,9 @@
 import { create } from 'zustand'
 import { subscribeWithSelector } from 'zustand/middleware'
+
+const TERMINAL_STATUSES = ['COMPLETED', 'FAILED', 'CANCELLED', 'TERMINATED', 'TIMED_OUT'] as const
 import { api } from '@/services/api'
-import type { ExecutionLog } from '@/schemas/execution'
+import type { ExecutionLog, ExecutionStatusResponse } from '@/schemas/execution'
 import type { NodeStatus } from '@/schemas/node'
 
 // Types for the visual timeline system
@@ -485,9 +487,11 @@ export const useExecutionTimelineStore = create<TimelineStore>()(
 
         const state = get()
         const isLiveMode = state.playbackMode === 'live'
+        // In replay mode, default to end position (for completed workflows)
+        // In live mode, use current position or end if following
         const initialCurrentTime = isLiveMode
           ? (state.isLiveFollowing ? totalDuration : Math.min(state.currentTime, totalDuration))
-          : 0
+          : totalDuration // Replay mode defaults to end position
 
         set({
           events,
@@ -701,24 +705,83 @@ export const initializeTimelineStore = () => {
 
   void import('./executionStore')
     .then(({ useExecutionStore }) => {
+      // Track previous runStatus to detect completion
+      let prevRunStatus: ExecutionStatusResponse | null = null
+      
       unsubscribeExecutionStore = useExecutionStore.subscribe((state) => {
         const { logs, runId, status, runStatus } = state;
         const timelineStore = useExecutionTimelineStore.getState()
         
         // Check if workflow has completed or failed
-        const isTerminalStatus = runStatus && ['COMPLETED', 'FAILED', 'CANCELLED', 'TERMINATED', 'TIMED_OUT'].includes(runStatus.status)
+        const isTerminalStatus = runStatus && TERMINAL_STATUSES.includes(runStatus.status as any)
         const isTerminalLifecycle = status === 'completed' || status === 'failed'
+        
+        // Check if status changed from non-terminal to terminal (workflow just completed)
+        const statusJustChanged = prevRunStatus && runStatus && 
+          !TERMINAL_STATUSES.includes(prevRunStatus.status as any) && 
+          TERMINAL_STATUSES.includes(runStatus.status as any)
+        
+        // Update prevRunStatus for next comparison
+        prevRunStatus = runStatus
         
         // If workflow is done and we're in live mode, switch to replay mode
         if (timelineStore.playbackMode === 'live' && timelineStore.selectedRunId === runId) {
-          if (isTerminalStatus || isTerminalLifecycle) {
+          if (isTerminalStatus || isTerminalLifecycle || statusJustChanged) {
             // Workflow completed/failed - switch to replay mode
+            // Reload timeline to ensure all final events are loaded, then position at end
+            if (!runId) return
+            
+            console.log('[TimelineStore] Workflow completed/failed detected, switching from live to replay mode', {
+              isTerminalStatus,
+              isTerminalLifecycle,
+              statusJustChanged,
+              runStatus: runStatus?.status,
+              status,
+            })
+            
+            // Update run in run store to mark it as completed (removes from live runs)
+            if (runStatus) {
+              void import('./runStore').then(({ useRunStore }) => {
+                const runStore = useRunStore.getState()
+                const existingRun = runStore.getRunById(runId)
+                if (existingRun) {
+                  // Update run with final status and endTime
+                  const endTime = runStatus.completedAt || runStatus.updatedAt || new Date().toISOString()
+                  runStore.upsertRun({
+                    ...existingRun,
+                    status: runStatus.status,
+                    endTime,
+                    duration: existingRun.startTime
+                      ? new Date(endTime).getTime() - new Date(existingRun.startTime).getTime()
+                      : existingRun.duration,
+                    isLive: false, // Explicitly mark as not live
+                  })
+                }
+              })
+            }
+            
             useExecutionTimelineStore.setState({
               playbackMode: 'replay',
               isLiveFollowing: false,
               isPlaying: false,
             })
-            console.log('[TimelineStore] Workflow completed/failed, switching from live to replay mode')
+            // Reload timeline to get all final events, then position at end
+            useExecutionTimelineStore.getState().loadTimeline(runId).then(() => {
+              const finalState = useExecutionTimelineStore.getState()
+              useExecutionTimelineStore.setState({
+                currentTime: finalState.totalDuration, // Position at the end, ready for replay
+                nodeStates: calculateNodeStates(
+                  finalState.events,
+                  finalState.dataFlows,
+                  finalState.totalDuration,
+                  finalState.timelineStartTime
+                ),
+              })
+              console.log('[TimelineStore] Successfully switched to replay mode at end position', {
+                totalDuration: finalState.totalDuration,
+                eventsCount: finalState.events.length,
+              })
+            })
             return
           }
           
