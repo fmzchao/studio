@@ -202,17 +202,6 @@ export const WorkflowNode = memo(({ data, selected, id }: NodeProps<NodeData>) =
       ? `${events}/${totalEvents} events`
       : `${events} ${events === 1 ? 'event' : 'events'}`
 
-    if (import.meta.env.DEV) {
-      console.debug('[WorkflowNode] progress', {
-        nodeId: id,
-        events,
-        totalEvents,
-        normalizedProgress,
-        normalizedFromEvents,
-        width,
-      })
-    }
-
     return (
       <div className="space-y-1">
         <div className="flex items-center justify-between text-[11px] text-muted-foreground">

@@ -78,10 +78,11 @@ async function runComponentInDocker<I, O>(
     if (!dockerArgs.includes('-t')) {
       dockerArgs.splice(2, 0, '-t');
     }
+    // NEVER write JSON to stdin in PTY mode - it pollutes the terminal output
     return runDockerWithPty(dockerArgs, params, context, timeoutSeconds);
   }
 
-  return runDockerWithStandardIO(dockerArgs, params, context, timeoutSeconds);
+  return runDockerWithStandardIO(dockerArgs, params, context, timeoutSeconds, stdinJson);
 }
 
 function runDockerWithStandardIO<I, O>(
@@ -89,6 +90,7 @@ function runDockerWithStandardIO<I, O>(
   params: I,
   context: ExecutionContext,
   timeoutSeconds: number,
+  stdinJson?: boolean,
 ): Promise<O> {
   return new Promise<O>((resolve, reject) => {
     const stdoutEmitter = createTerminalChunkEmitter(context, 'stdout');
@@ -178,14 +180,20 @@ function runDockerWithStandardIO<I, O>(
       }
     });
 
-    try {
-      const input = JSON.stringify(params);
-      proc.stdin.write(input);
+    if (stdinJson !== false) {
+      // Only write JSON to stdin if stdinJson is true or undefined (default behavior)
+      try {
+        const input = JSON.stringify(params);
+        proc.stdin.write(input);
+        proc.stdin.end();
+      } catch (e) {
+        clearTimeout(timeout);
+        proc.kill();
+        reject(new Error(`Failed to write input to Docker container: ${e}`));
+      }
+    } else {
+      // Close stdin immediately if stdinJson is false
       proc.stdin.end();
-    } catch (e) {
-      clearTimeout(timeout);
-      proc.kill();
-      reject(new Error(`Failed to write input to Docker container: ${e}`));
     }
   });
 }
@@ -228,15 +236,8 @@ async function runDockerWithPty<I, O>(
       reject(new Error(`Docker container timed out after ${timeoutSeconds}s`));
     }, timeoutSeconds * 1000);
 
-    try {
-      const input = JSON.stringify(params);
-      ptyProcess.write(input);
-      ptyProcess.write('\x04');
-    } catch (error) {
-      ptyProcess.kill();
-      reject(new Error(`Failed to write input to Docker PTY: ${error instanceof Error ? error.message : String(error)}`));
-      return;
-    }
+    // NEVER write JSON to stdin in PTY mode - it pollutes the terminal output
+    // Components should use environment variables or command-line arguments instead
 
     ptyProcess.onData((data) => {
       emitChunk(data);
@@ -268,16 +269,6 @@ async function runDockerWithPty<I, O>(
         resolve(stdout.trim() as any);
       }
     });
-
-    try {
-      const input = JSON.stringify(params);
-      ptyProcess.write(`${input}\n`);
-      ptyProcess.write('\x04');
-    } catch (error) {
-      clearTimeout(timeout);
-      ptyProcess.kill();
-      reject(new Error(`Failed to write input to Docker PTY: ${error}`));
-    }
   });
 }
 

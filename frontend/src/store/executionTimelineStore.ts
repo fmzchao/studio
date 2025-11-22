@@ -341,19 +341,6 @@ const calculateNodeStates = (
     const progress = completedEvents.length > 0 ? 100 :
       progressEvents.length > 0 ? (relevantEvents.length / sortedEvents.length) * 100 : 0
 
-    if (import.meta.env.DEV) {
-      console.debug('[TimelineStore] node progress calculation', {
-        nodeId,
-        status,
-        progress,
-        relevantEvents: relevantEvents.length,
-        totalEvents: sortedEvents.length,
-        progressEvents: progressEvents.length,
-        completedEvents: completedEvents.length,
-        lastEvent: lastEvent.type,
-      })
-    }
-
     states[nodeId] = {
       status,
       progress,

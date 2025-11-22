@@ -95,6 +95,258 @@ Goal: deliver low-latency, PTY-accurate Docker console streaming with archival r
 - Users can watch live docker output with colour/TTY fidelity and replay completed nodes from stored files.
 - UI gracefully handles reconnects and cross-node navigation.
 
+### **✅ Phase 5 Achievements (Beyond Original Scope)**
+- Interactive Node.js terminal component with carriage return progress bars
+- Redis infrastructure for reliable terminal streaming
+- **Timing-aware dual-mode rendering**: Live (immediate) vs Replay (deltaMs delays)
+- Comprehensive terminal streaming tests and validation
+- 44 PTY chunks with perfect timing preservation (200ms progress intervals)
+- Proper carriage return handling for line rewriting animations
+
+## Phase 6 – Timeline-Terminal Synchronization (Magic Experience) 🚧 *Next Phase*
+
+**Objective**: Enable **timeline-synchronized terminal playback** where users can scrub through the execution timeline and see terminal output dynamically update to match the exact point in time.
+
+### 🎯 Core Experience Goals
+
+1. **Scrubbing Through Time**: When users drag the timeline scrubber, terminal output instantly updates to show what was being printed at that exact moment
+2. **Progress Bar Animation**: Timeline playback animates progress bars in perfect sync with the original execution timing
+3. **Multi-Node Coordination**: Each workflow node's terminal updates independently based on its own timeline position
+4. **Seamless Integration**: Timeline and terminal systems work together without conflicts
+
+### 📋 Technical Implementation Plan
+
+#### **Phase 6.1 – Time Mapping Foundation (Week 1)**
+
+**Objective**: Create unified time system between timeline and terminal data
+
+**Tasks**:
+1. **Timeline-Absolute Time Mapping**
+   ```typescript
+   // Map timeline relative time to absolute timestamps
+   const getAbsoluteTimeFromTimeline = (timelineMs: number, workflowStart: Date): Date => {
+     return new Date(workflowStart.getTime() + timelineMs);
+   };
+
+   // Map timeline position to terminal query range
+   const getTerminalQueryRange = (timelineMs: number, windowMs: number = 5000): {
+     startTime: Date,
+     endTime: Date,
+   } => {
+     const workflowStart = executionTimeline[0]?.timestamp;
+     const absoluteTime = getAbsoluteTimeFromTimeline(timelineMs, workflowStart);
+
+     return {
+       startTime: new Date(absoluteTime.getTime() - windowMs),
+       endTime: absoluteTime,
+     };
+   };
+   ```
+
+2. **Enhanced Terminal API**
+   - Extend `/api/v1/workflows/runs/{runId}/terminal` with time range parameters
+   - Add `startTime` and `endTime` query parameters
+   - Implement efficient time-based filtering in backend
+   ```typescript
+   // New API endpoint
+   GET /api/v1/workflows/runs/{runId}/terminal?nodeRef={nodeRef}&stream={stream}&startTime={iso}&endTime={iso}
+   ```
+
+3. **Terminal Time Index**
+   - Create database index on `recordedAt` timestamps for fast time-range queries
+   - Optimize terminal chunk retrieval by time window
+   - Add caching for frequently accessed time ranges
+
+#### **Phase 6.2 – Event Coordination System (Week 2)**
+
+**Objective**: Connect timeline position changes to terminal updates
+
+**Tasks**:
+1. **Timeline Event System**
+   ```typescript
+   // Timeline position change events
+   interface TimelineSeekEvent {
+     type: 'timeline:seek';
+     currentTimeMs: number;
+     isPlaying: boolean;
+   }
+
+   // Terminal update coordination
+   interface TerminalUpdateEvent {
+     type: 'terminal:update';
+     nodeRef: string;
+     stream: 'pty' | 'stdout' | 'stderr';
+     timeRange: { startTime: Date; endTime: Date };
+   }
+   ```
+
+2. **Pub/Sub Integration**
+   - Implement event bus between timeline and terminal components
+   - Use React Context or custom event emitter for coordination
+   - Add debouncing to prevent excessive terminal updates during scrubbing
+
+3. **Terminal Panel Extensions**
+   ```typescript
+   // Extend NodeTerminalPanel to support time-aware mode
+   interface NodeTerminalPanelProps {
+     nodeId: string;
+     runId: string | null;
+     timelinePosition?: number; // New: timeline sync position
+     timelineMode?: boolean; // New: enable timeline-aware mode
+     onClose: () => void;
+   }
+   ```
+
+#### **Phase 6.3 – Dynamic Terminal Filtering (Week 3)**
+
+**Objective**: Implement time-based terminal content filtering and rendering
+
+**Tasks**:
+1. **Timeline-Aware Terminal Hook**
+   ```typescript
+   // New hook for timeline-synchronized terminals
+   export function useTimelineTerminalStream({
+     runId,
+     nodeId,
+     stream = 'pty',
+     timelineMs,
+     windowMs = 5000,
+   }: {
+     runId: string;
+     nodeId: string;
+     stream?: 'pty' | 'stdout' | 'stderr';
+     timelineMs: number;
+     windowMs?: number;
+   }): {
+     chunks: TerminalChunk[];
+     isLoading: boolean;
+     error: string | null;
+   }
+   ```
+
+2. **Smart Content Windowing**
+   - Show terminal content from `timelineMs - windowMs` to `timelineMs`
+   - Implement configurable window size (default: 5 seconds)
+   - Add "context" around current time for better user experience
+
+3. **Scroll Position Management**
+   - Auto-scroll to show content at timeline position
+   - Maintain scroll position relative to timeline
+   - Add manual scroll override options
+
+#### **Phase 6.4 – Performance Optimizations (Week 4)**
+
+**Objective**: Ensure smooth timeline scrubbing performance
+
+**Tasks**:
+1. **Intelligent Caching**
+   - Cache terminal chunks by time ranges
+   - Pre-fetch adjacent time windows during playback
+   - Implement LRU cache for terminal time windows
+
+2. **Debouncing and Throttling**
+   - Debounce timeline position changes during rapid scrubbing
+   - Throttle terminal API calls to prevent overload
+   - Add progressive loading for large terminal sessions
+
+3. **Memory Management**
+   - Limit terminal buffer size during timeline mode
+   - Implement virtual scrolling for very large terminal outputs
+   - Clean up unused time ranges from cache
+
+### 🎮 User Experience Flow
+
+#### **Timeline Scrubbing Experience**:
+1. **User drags timeline scrubber** → Timeline position updates
+2. **Timeline emits seek event** → All terminal panels receive update
+3. **Each terminal queries chunks for its time range** → Backend filters by `recordedAt`
+4. **Terminal updates instantly** → Progress bars show state at timeline position
+5. **Smooth transitions** → Carriage returns work perfectly during scrubbing
+
+#### **Timeline Playback Experience**:
+1. **User hits play** → Timeline starts advancing
+2. **Terminal panels animate in sync** → Progress bars update with real timing
+3. **Multi-node coordination** → Each terminal updates based on its own schedule
+4. **Pause/Resume** → Timeline and terminals pause/resume together
+
+### 🔧 Implementation Architecture
+
+```
+Timeline Component
+    ↓ (currentTimeMs changes)
+Event Bus (timeline:seek events)
+    ↓ (time range calculation)
+Terminal Panels
+    ↓ (API calls with time ranges)
+Backend API
+    ↓ (filter by recordedAt timestamps)
+Database (indexed by recordedAt)
+    ↓ (filtered chunks)
+Frontend Rendering (carriage returns + timing)
+```
+
+### 📊 Success Metrics
+
+#### **Technical Metrics**:
+- **Sub-100ms response time** for timeline position → terminal update
+- **Smooth 60fps timeline scrubbing** without terminal lag
+- **Memory usage < 100MB** for large terminal sessions
+- **API response time < 200ms** for time-range queries
+
+#### **User Experience Metrics**:
+- **Instant visual feedback** during timeline scrubbing
+- **Perfect progress bar synchronization** with original execution
+- **Intuitive timeline-terminal coordination**
+- **No jarring transitions** between different time positions
+
+### 🚀 Acceptance Criteria
+
+#### **Core Functionality**:
+- [ ] Timeline scrubbing instantly updates terminal output
+- [ ] Progress bars animate smoothly during timeline playback
+- [ ] Carriage returns work perfectly during time navigation
+- [ ] Multiple nodes update independently based on timeline position
+
+#### **Performance Requirements**:
+- [ ] Timeline scrubbing maintains 60fps performance
+- [ ] Terminal updates complete within 100ms of timeline change
+- [ ] Memory usage scales linearly with terminal content size
+- [ ] No memory leaks during extended timeline scrubbing sessions
+
+#### **Edge Cases**:
+- [ ] Empty terminal content before first timeline event
+- [ ] Terminal content after last timeline event
+- [ ] Rapid timeline scrubbing (debouncing works)
+- [ ] Timeline jumps to distant time positions
+- [ ] Network failures during timeline-terminal sync
+
+#### **Integration Requirements**:
+- [ ] Timeline controls work seamlessly with terminal updates
+- [ ] Existing live/replay modes continue to work
+- [ ] Terminal export/download functions work in timeline mode
+- [ ] Multi-stream (pty/stdout/stderr) switching works during timeline mode
+
+### 💭 Future Enhancements
+
+#### **Phase 6.5 – Advanced Timeline Features** (Future)
+
+1. **Time Machine Mode**
+   - Full terminal state at any timeline position
+   - Rewind/fast-forward with perfect preservation
+   - Branching timeline support
+
+2. **Comparative Timeline Analysis**
+   - Side-by-side terminal comparison for different runs
+   - Timeline synchronization across multiple workflow executions
+   - Diff visualization between terminal states
+
+3. **Interactive Timeline Debugging**
+   - Click on terminal output to jump to corresponding timeline position
+   - Timeline annotations linked to terminal events
+   - Performance metrics overlay on timeline
+
+**This phase transforms terminal viewing from static replay into an interactive, timeline-synchronized experience that provides unprecedented insight into workflow execution dynamics.** 🎯
+
 ## Phase 6 – Hardening & Observability
 
 **Objectives**

@@ -13,90 +13,103 @@ const inputSchema = z.object({
     .trim()
     .min(1)
     .max(120)
-    .default('ShipSec terminal demo')
+    .default('Hello from ShipSec Terminal!')
     .describe('Message to display in the terminal.'),
-  count: z
+  durationSeconds: z
     .number()
     .int()
-    .min(1)
-    .max(20)
-    .default(5)
-    .describe('How many progress steps to show.'),
+    .min(5)
+    .max(60)
+    .default(20)
+    .describe('Total duration of the demo in seconds.'),
 });
 
 const outputSchema = z.object({
   message: z.string(),
   stepsCompleted: z.number(),
+  durationSeconds: z.number(),
   rawOutput: z.string(),
 });
 
 export type TerminalDemoInput = z.infer<typeof inputSchema>;
 export type TerminalDemoOutput = z.infer<typeof outputSchema>;
 
-const nodeScript = String.raw`const readline = require('readline');
+// Simple Node.js script that shows a progress bar
+// Note: We don't read from stdin to avoid JSON input appearing in terminal
+const nodeScript = String.raw`// Close stdin immediately to prevent any input from appearing
+process.stdin.setRawMode && process.stdin.setRawMode(false);
+process.stdin.resume();
+process.stdin.on('data', () => {}); // Consume any stdin data silently
 
-function showInteractiveProgress() {
-  const steps = 10;
-  const barWidth = 30;
-  let current = 0;
+const message = process.env.MESSAGE || 'Hello from ShipSec Terminal!';
+const durationSeconds = parseInt(process.env.DURATION_SECONDS || '20', 10);
 
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout
-  });
+// ANSI colors
+const green = '\x1b[32m';
+const yellow = '\x1b[33m';
+const cyan = '\x1b[36m';
+const reset = '\x1b[0m';
+const bright = '\x1b[1m';
 
-  console.log('🚀 Starting interactive terminal demo...');
-  console.log('📊 Watch the progress bar update in real-time!');
-  console.log('');
+console.log('');
+console.log(bright + cyan + '╔════════════════════════════════════════╗' + reset);
+console.log(bright + cyan + '║' + reset + '     ShipSec Terminal Demo     ' + bright + cyan + '║' + reset);
+console.log(bright + cyan + '╚════════════════════════════════════════╝' + reset);
+console.log('');
+console.log('Message: ' + yellow + message + reset);
+console.log('Duration: ' + durationSeconds + ' seconds');
+console.log('');
 
-  const interval = setInterval(() => {
-    if (current <= steps) {
-      const progress = current;
-      const filled = Math.floor((progress / steps) * barWidth);
-      const empty = barWidth - filled;
-      const bar = '='.repeat(filled) + '.'.repeat(empty);
-      const percentage = Math.floor((progress / steps) * 100);
-      const spinner = '|/-\\'[Math.floor(Date.now() / 250) % 4];
+const startTime = Date.now();
+const endTime = startTime + (durationSeconds * 1000);
+const barWidth = 40;
+const updateInterval = 200; // Update every 200ms for smooth animation
 
-      process.stdout.write('\\r[' + progress.toString().padStart(2) + '/' + steps + '] [' + bar + '] ' + percentage.toString().padStart(3) + '% ' + spinner);
+const interval = setInterval(() => {
+  const now = Date.now();
+  const elapsed = now - startTime;
+  const total = endTime - startTime;
+  const progress = Math.min(elapsed / total, 1);
+  
+  if (progress >= 1) {
+    clearInterval(interval);
+    // Clear the progress line using actual carriage return
+    const cr = String.fromCharCode(0x0D);
+    process.stdout.write(cr + ' '.repeat(80) + cr);
+    console.log('');
+    console.log(green + '✓' + reset + ' Demo completed successfully!');
+    console.log('');
+    
+    // Don't output JSON at all - the component will use the captured output
+    // JSON output pollutes the PTY stream, so we avoid it entirely
+    process.exit(0);
+    return;
+  }
 
-      if (current < steps) {
-        current++;
-      } else {
-        clearInterval(interval);
-        console.log('\\n✅ Interactive demo completed successfully!');
-        console.log('🎯 This demonstrates:');
-        console.log('   • Real-time progress updates');
-        console.log('   • Carriage return for line rewriting');
-        console.log('   • PTY terminal capabilities');
+  const filled = Math.floor(progress * barWidth);
+  const empty = barWidth - filled;
+  const bar = green + '█'.repeat(filled) + reset + '░'.repeat(empty);
+  const percentage = Math.floor(progress * 100);
+  const elapsedSeconds = (elapsed / 1000).toFixed(1);
+  const spinner = '|/-\\'[Math.floor(Date.now() / 200) % 4];
 
-        const result = {
-          message: "Interactive terminal demo",
-          stepsCompleted: steps,
-          interactive: true,
-          rawOutput: "Demo completed with " + steps + " interactive steps using carriage returns"
-        };
-        console.log(JSON.stringify(result));
-
-        rl.close();
-      }
-    }
-  }, 200);
-}
-
-console.log('🔧 Initializing interactive demo...');
-setTimeout(() => {
-  showInteractiveProgress();
-}, 1000);`;
+  // Use actual carriage return character (0x0D) instead of escaped string
+  const cr = String.fromCharCode(0x0D);
+  process.stdout.write(cr + bright + '[' + elapsedSeconds.padStart(5) + 's] ' + 
+    '[' + bar + '] ' + percentage.toString().padStart(3) + '% ' + spinner + reset);
+}, updateInterval);`;
 
 const runner: DockerRunnerConfig = {
   kind: 'docker',
   image: 'node:18-alpine',
   entrypoint: 'node',
   command: ['-e', nodeScript],
-  env: {},
+  env: {
+    MESSAGE: '{{message}}',
+    DURATION_SECONDS: '{{durationSeconds}}',
+  },
   network: 'none',
-  timeoutSeconds: 15,
+  timeoutSeconds: 30,
 };
 
 const definition: ComponentDefinition<TerminalDemoInput, TerminalDemoOutput> = {
@@ -108,11 +121,11 @@ const definition: ComponentDefinition<TerminalDemoInput, TerminalDemoOutput> = {
   outputSchema,
   metadata: {
     slug: 'terminal-stream-demo',
-    version: '1.0.0',
+    version: '2.1.0',
     type: 'process',
     category: 'security',
     documentation:
-      'Launches an interactive Node.js demo with real-time progress bar updates using carriage returns to test PTY terminal streaming capabilities.',
+      'A simple terminal demo that displays a progress bar with ANSI colors. Perfect for testing PTY terminal streaming capabilities.',
     documentationUrl: 'https://asciinema.org/',
     icon: 'Terminal',
     author: {
@@ -122,7 +135,7 @@ const definition: ComponentDefinition<TerminalDemoInput, TerminalDemoOutput> = {
     isLatest: true,
     deprecated: false,
     example:
-      'Use this component while building terminal-aware workflows—when executed, it prints a looping progress bar.',
+      'Displays a colorful progress bar that updates in real-time, demonstrating PTY terminal streaming with carriage returns and ANSI colors.',
     inputs: [
       {
         id: 'message',
@@ -132,70 +145,127 @@ const definition: ComponentDefinition<TerminalDemoInput, TerminalDemoOutput> = {
         description: 'Message to display in the terminal demo.',
       },
       {
-        id: 'count',
-        label: 'Steps',
+        id: 'durationSeconds',
+        label: 'Duration (seconds)',
         dataType: port.number(),
         required: false,
-        description: 'Number of progress steps to show.',
+        description: 'Total duration of the demo in seconds.',
       },
     ],
     outputs: [
       {
+        id: 'message',
+        label: 'Message',
+        dataType: port.text(),
+        description: 'The message that was displayed.',
+      },
+      {
+        id: 'stepsCompleted',
+        label: 'Steps Completed',
+        dataType: port.number(),
+        description: 'Number of progress updates that were completed.',
+      },
+      {
+        id: 'durationSeconds',
+        label: 'Duration (seconds)',
+        dataType: port.number(),
+        description: 'Total duration of the demo in seconds.',
+      },
+      {
         id: 'rawOutput',
         label: 'Raw Output',
         dataType: port.text(),
-        description: 'Captured terminal stream emitted by the Docker container.',
+        description: 'Captured terminal stream output.',
       },
     ],
-    examples: ['Verify PTY streaming by running this component inside a workflow.'],
+    examples: ['Run this component to see a live progress bar in the terminal viewer.'],
     parameters: [
       {
-        id: 'count',
-        label: 'Steps',
+        id: 'message',
+        label: 'Message',
+        type: 'text',
+        default: 'Hello from ShipSec Terminal!',
+      },
+      {
+        id: 'durationSeconds',
+        label: 'Duration (seconds)',
         type: 'number',
-        min: 1,
-        max: 20,
-        default: 5,
+        min: 5,
+        max: 60,
+        default: 20,
       },
     ],
   },
   async execute(input, context) {
-    const params = inputSchema.parse(input)
+    const params = inputSchema.parse(input);
 
     context.emitProgress({
-      message: 'Launching terminal demo…',
+      message: `Starting terminal demo for ${params.durationSeconds} seconds...`,
       level: 'info',
       data: {
         message: params.message,
-        count: params.count,
+        durationSeconds: params.durationSeconds,
       },
     });
 
+    // Replace template variables in env vars
+    const runnerWithEnv = {
+      ...this.runner,
+      env: {
+        MESSAGE: params.message,
+        DURATION_SECONDS: params.durationSeconds.toString(),
+      },
+    };
+
     const raw = await runComponentWithRunner<typeof params, any>(
-      this.runner,
-      async () => ({ message: params.message, stepsCompleted: 0, rawOutput: 'No output' }),
+      runnerWithEnv,
+      async () => ({
+        message: params.message,
+        stepsCompleted: 0,
+        rawOutput: 'No output',
+      }),
       params,
       context,
     );
 
-    // Parse the JSON output from the Python script
-    let parsedOutput = { message: params.message, stepsCompleted: params.count, rawOutput: 'Demo completed' };
+    // Parse the JSON output from stderr (script writes result to stderr to avoid PTY pollution)
+    let parsedOutput: any = {
+      message: params.message,
+      stepsCompleted: Math.floor(params.durationSeconds * 5), // ~5 updates per second
+      durationSeconds: params.durationSeconds,
+      rawOutput: 'Demo completed',
+    };
+
     if (typeof raw === 'string') {
       try {
-        parsedOutput = JSON.parse(raw);
+        // Try to find JSON in the output (script writes to stderr, but it may be in stdout)
+        const jsonMatch = raw.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          parsedOutput = { ...parsedOutput, ...JSON.parse(jsonMatch[0]) };
+        } else {
+          parsedOutput.rawOutput = raw.trim();
+        }
       } catch (e) {
-        // If parsing fails, use the raw string as output
-        parsedOutput.rawOutput = raw;
+        // If parsing fails, use the raw string as output (but filter out any JSON input that leaked)
+        const cleaned = raw.replace(/\{"target".*?\}/g, '').replace(/\{"message".*?\}/g, '').trim();
+        parsedOutput.rawOutput = cleaned || 'Demo completed';
       }
     } else if (raw && typeof raw === 'object') {
-      parsedOutput = raw;
+      parsedOutput = { ...parsedOutput, ...raw };
     }
 
     const result: TerminalDemoOutput = {
       message: parsedOutput.message || params.message,
-      stepsCompleted: parsedOutput.stepsCompleted || params.count,
-      rawOutput: parsedOutput.rawOutput || (typeof raw === 'string' ? raw : JSON.stringify(raw)),
+      stepsCompleted: parsedOutput.stepsCompleted ?? Math.floor(params.durationSeconds * 5),
+      durationSeconds: parsedOutput.durationSeconds ?? params.durationSeconds,
+      rawOutput: parsedOutput.rawOutput || 'Demo completed',
     };
+
+    context.emitProgress({
+      message: `Demo completed: ${result.stepsCompleted} steps`,
+      level: 'info',
+      data: result,
+    });
 
     return outputSchema.parse(result);
   },

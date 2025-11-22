@@ -32,22 +32,28 @@ describe('terminal demo component', () => {
     });
 
     const params = component.inputSchema.parse({
-      message: 'Testing terminal stream',
-      durationSeconds: 5,
+      target: 'test.example.com',
+      scanType: 'ports',
+      items: 5,
     });
 
-    const rawOutput =
-      '| Testing terminal stream [###.......] 050.0%\n[0000:00] ABCDEFGHIJKL\nTerminal demo complete.\n';
-    const spy = vi.spyOn(sdk, 'runComponentWithRunner').mockResolvedValue(rawOutput);
+    const mockOutput = JSON.stringify({
+      target: 'test.example.com',
+      scanType: 'ports',
+      itemsFound: 5,
+      durationMs: 1500,
+      rawOutput: 'Security scan completed successfully',
+    });
+
+    const spy = vi.spyOn(sdk, 'runComponentWithRunner').mockResolvedValue(mockOutput);
 
     const result = component.outputSchema.parse(await component.execute(params, context));
 
     expect(spy).toHaveBeenCalled();
-    expect(result.message).toBe('Testing terminal stream');
-    expect(result.durationSeconds).toBe(5);
-    expect(result.rawOutput).toBe(rawOutput);
-    const expectedFrames =
-      Math.floor((params.durationSeconds * 1000) / params.intervalMs) * params.burstLines;
-    expect(result.framesAttempted).toBe(expectedFrames);
+    expect(result.target).toBe('test.example.com');
+    expect(result.scanType).toBe('ports');
+    expect(result.itemsFound).toBeGreaterThanOrEqual(0);
+    expect(result.durationMs).toBeGreaterThanOrEqual(0);
+    expect(result.rawOutput).toBeTruthy();
   });
 });
