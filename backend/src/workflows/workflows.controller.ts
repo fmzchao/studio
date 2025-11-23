@@ -838,6 +838,8 @@ export class WorkflowsController {
       cursor: query.cursor,
       nodeRef: query.nodeRef,
       stream: query.stream,
+      startTime: query.startTime ? new Date(query.startTime) : undefined,
+      endTime: query.endTime ? new Date(query.endTime) : undefined,
     });
     if (result.chunks.length > 0 || !query.nodeRef) {
       return { runId, ...result };

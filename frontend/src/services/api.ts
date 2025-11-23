@@ -404,12 +404,14 @@ export const api = {
       return response.data || []
     },
 
-    getTerminalChunks: async (executionId: string, params?: { nodeRef?: string; stream?: string; cursor?: string }): Promise<TerminalChunkResponse> => {
+    getTerminalChunks: async (executionId: string, params?: { nodeRef?: string; stream?: string; cursor?: string; startTime?: Date; endTime?: Date }): Promise<TerminalChunkResponse> => {
       const headers = await getAuthHeaders()
       const url = new URL(`${API_BASE_URL}/api/v1/workflows/runs/${executionId}/terminal`)
       if (params?.nodeRef) url.searchParams.set('nodeRef', params.nodeRef)
       if (params?.stream) url.searchParams.set('stream', params.stream)
       if (params?.cursor) url.searchParams.set('cursor', params.cursor)
+      if (params?.startTime) url.searchParams.set('startTime', params.startTime.toISOString())
+      if (params?.endTime) url.searchParams.set('endTime', params.endTime.toISOString())
       const response = await fetch(url.toString(), { headers })
       if (!response.ok) {
         throw new Error('Failed to fetch terminal chunks')

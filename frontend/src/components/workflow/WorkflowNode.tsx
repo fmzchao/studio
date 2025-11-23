@@ -360,6 +360,7 @@ export const WorkflowNode = memo(({ data, selected, id }: NodeProps<NodeData>) =
                           nodeId={id}
                           runId={selectedRunId}
                           onClose={() => setIsTerminalOpen(false)}
+                          timelineSync={mode === 'execution' && playbackMode !== 'live'}
                         />
                       </div>
                     )}

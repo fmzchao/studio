@@ -1,26 +1,21 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Terminal } from 'xterm'
 import { FitAddon } from 'xterm-addon-fit'
 import 'xterm/css/xterm.css'
 import { Download, Loader2, PlugZap, Radio, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { useTerminalStream } from '@/hooks/useTerminalStream'
-
-type TerminalChunk = {
-  nodeRef: string;
-  stream: string;
-  chunkIndex: number;
-  payload: string;
-  recordedAt: string;
-  deltaMs?: number;
-  origin?: string;
-  runnerKind?: string;
-};
+import { useTimelineTerminalStream } from '@/hooks/useTimelineTerminalStream'
+import { useExecutionTimelineStore } from '@/store/executionTimelineStore'
 
 interface NodeTerminalPanelProps {
   nodeId: string
   runId: string | null
   onClose: () => void
+  /**
+   * Enable timeline synchronization mode.
+   * When enabled, terminal will update based on timeline position.
+   */
+  timelineSync?: boolean
 }
 
 const decodePayload = (payload: string): Uint8Array => {
@@ -44,40 +39,48 @@ export function NodeTerminalPanel({
   nodeId,
   runId,
   onClose,
+  timelineSync = false,
 }: NodeTerminalPanelProps) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const terminalRef = useRef<Terminal | null>(null)
   const fitAddonRef = useRef<FitAddon | null>(null)
   const lastRenderedChunkIndex = useRef<number>(-1)
+  const lastTimelineTimeRef = useRef<number | null>(null)
+  const [terminalKey, setTerminalKey] = useState(0)
 
-  const { chunks, isHydrating, isStreaming, error, mode, exportText } = useTerminalStream({
+  // Use separate selectors to avoid creating new objects on every render
+  const currentTime = useExecutionTimelineStore((state) => state.currentTime)
+  const timelineStartTime = useExecutionTimelineStore((state) => state.timelineStartTime)
+
+  const { chunks, isHydrating, isStreaming, error, mode, exportText, isTimelineSync, isFetchingTimeline } = useTimelineTerminalStream({
     runId,
     nodeId,
     stream: 'pty', // Always use PTY stream
-    autoConnect: true, // Enable automatic SSE connection for live streaming
+    autoConnect: true, // Always enable autoConnect - hook handles timeline sync logic
+    timelineSync,
   })
 
-  // Timing-aware rendering refs
-  const replayTimeoutRef = useRef<NodeJS.Timeout | null>(null)
-  const replayQueueRef = useRef<TerminalChunk[]>([])
-  const isReplayingRef = useRef(false)
-
+  // Memoize session to avoid unnecessary re-renders
+  // Only depend on chunks length and last chunk index, not the entire chunks array
+  const chunksLength = chunks.length
+  const lastChunkIndex = chunks[chunksLength - 1]?.chunkIndex ?? -1
   const session = useMemo(
     () => {
       console.debug('[NodeTerminalPanel] session memo updated', {
-        chunksCount: chunks.length,
-        lastChunkIndex: chunks[chunks.length - 1]?.chunkIndex,
+        chunksCount: chunksLength,
+        lastChunkIndex,
         mode,
         isStreaming,
+        isTimelineSync,
       })
       return {
         chunks,
       }
     },
-    [chunks, mode, isStreaming],
+    [chunks, chunksLength, lastChunkIndex, mode, isStreaming, isTimelineSync],
   )
 
-
+  // Initialize terminal
   useEffect(() => {
     if (!containerRef.current) {
       return
@@ -100,7 +103,7 @@ export function NodeTerminalPanel({
       },
       fontFamily: 'Menlo, Monaco, "Courier New", monospace',
     })
-    
+
     // Disable mouse events completely to prevent selection mode
     term.options.macOptionIsMeta = false
     term.options.macOptionClickForcesSelection = false
@@ -125,141 +128,82 @@ export function NodeTerminalPanel({
       term.dispose()
       terminalRef.current = null
       fitAddonRef.current = null
-
-      // Clear any pending replay timeouts
-      if (replayTimeoutRef.current) {
-        clearTimeout(replayTimeoutRef.current)
-        replayTimeoutRef.current = null
-      }
     }
-  }, [])
+  }, [terminalKey])
 
-  // Clear any pending replay timeouts when mode changes (not chunks, to avoid interrupting live updates)
-  useEffect(() => {
-    if (replayTimeoutRef.current) {
-      clearTimeout(replayTimeoutRef.current)
-      replayTimeoutRef.current = null
-    }
-    replayQueueRef.current = []
-    isReplayingRef.current = false
-  }, [mode]) // Only clear on mode change, not chunks change
 
-  // Use chunks directly instead of session.chunks to ensure effect triggers
+  // SINGLE RENDERING LOGIC: Simple forward/backward detection
   useEffect(() => {
     if (!terminalRef.current) {
-      console.debug('[NodeTerminalPanel] terminal ref not ready, skipping chunk write')
       return
     }
-    
+
+    // Detect if we're seeking backward (timeline position went backwards)
+    const isSeekingBackward = timelineSync &&
+      lastTimelineTimeRef.current !== null &&
+      currentTime < lastTimelineTimeRef.current
+
+    const shouldFilterByTimelineTime = timelineSync && timelineStartTime !== null
+    const targetAbsoluteTime =
+      shouldFilterByTimelineTime && timelineStartTime !== null
+        ? timelineStartTime + currentTime
+        : null
+
+    if (isSeekingBackward) {
+      // Seeking backward: Recreate terminal to ensure clean state
+      // This avoids artifacts where cleared terminal still has pending writes
+      console.debug('[NodeTerminalPanel] Seeking backward - recreating terminal', {
+        from: lastTimelineTimeRef.current,
+        to: currentTime,
+      })
+
+      setTerminalKey(k => k + 1)
+      lastRenderedChunkIndex.current = -1
+      lastTimelineTimeRef.current = currentTime
+      return
+    }
+
+    // Forward streaming or forward seek: incremental rendering
     if (!chunks || chunks.length === 0) {
+      lastTimelineTimeRef.current = currentTime
       return
     }
 
-    const newChunks = chunks.filter(
-      (chunk) => chunk.chunkIndex > lastRenderedChunkIndex.current,
-    )
-    console.debug('[NodeTerminalPanel] chunks effect triggered', {
-      totalChunks: chunks.length,
-      newChunksCount: newChunks.length,
-      lastRenderedIndex: lastRenderedChunkIndex.current,
-      mode,
-      isStreaming,
-      terminalReady: !!terminalRef.current,
-    })
+    const newChunks = chunks.filter((chunk) => chunk.chunkIndex > lastRenderedChunkIndex.current)
+
     if (newChunks.length === 0) {
+      lastTimelineTimeRef.current = currentTime
       return
     }
 
-    const processChunk = (chunk: TerminalChunk) => {
-      if (!terminalRef.current) return
-
+    // Render only new chunks (incremental, no clear)
+    for (const chunk of newChunks) {
+      if (!terminalRef.current) break
+      const chunkTime = new Date(chunk.recordedAt).getTime()
+      if (shouldFilterByTimelineTime && targetAbsoluteTime !== null && chunkTime > targetAbsoluteTime) {
+        continue
+      }
       const bytes = decodePayload(chunk.payload)
-      // Write raw bytes directly to preserve control characters like \r
+      if (bytes.length === 0) continue
       terminalRef.current.write(bytes)
       lastRenderedChunkIndex.current = chunk.chunkIndex
-
-      // Process next chunk in queue if exists
-      if (replayQueueRef.current.length > 0) {
-        const nextChunk = replayQueueRef.current.shift()
-        if (nextChunk) {
-          const delay = nextChunk.deltaMs || 100 // Default 100ms if no deltaMs
-          replayTimeoutRef.current = setTimeout(() => processChunk(nextChunk), delay)
-        }
-      } else {
-        // No more chunks, replay complete
-        isReplayingRef.current = false
-      }
-
-      fitAddonRef.current?.fit()
     }
 
-    // Always write chunks in live mode, regardless of isStreaming status
-    // Chunks can come from hydration or SSE, both should be displayed
-    if (mode === 'live') {
-      // Live mode: display chunks immediately
-      // Write all chunks at once for immediate rendering
-      console.debug('[NodeTerminalPanel] writing chunks in live mode', {
-        chunksToWrite: newChunks.length,
-        terminalExists: !!terminalRef.current,
-        isStreaming,
-        mode,
-      })
-      for (const chunk of newChunks) {
-        if (!terminalRef.current) {
-          console.warn('[NodeTerminalPanel] terminal ref is null, cannot write chunk', chunk.chunkIndex)
-          break
-        }
-        const bytes = decodePayload(chunk.payload)
-        if (bytes.length === 0) {
-          console.warn('[NodeTerminalPanel] decoded bytes are empty for chunk', chunk.chunkIndex)
-          continue
-        }
-        terminalRef.current.write(bytes)
-        lastRenderedChunkIndex.current = chunk.chunkIndex
-        console.debug('[NodeTerminalPanel] wrote chunk', {
-          chunkIndex: chunk.chunkIndex,
-          bytesLength: bytes.length,
-          payloadPreview: chunk.payload.substring(0, 50),
-        })
-      }
-      fitAddonRef.current?.fit()
-    } else if (isStreaming && (mode === 'idle' || mode === 'replay')) {
-      // If streaming but not in live mode, still write chunks immediately
-      console.debug('[NodeTerminalPanel] writing chunks while streaming', {
-        chunksToWrite: newChunks.length,
-        mode,
-        isStreaming,
-      })
-      for (const chunk of newChunks) {
-        if (!terminalRef.current) break
-        const bytes = decodePayload(chunk.payload)
-        if (bytes.length === 0) continue
-        terminalRef.current.write(bytes)
-        lastRenderedChunkIndex.current = chunk.chunkIndex
-      }
-      fitAddonRef.current?.fit()
-    } else if (mode === 'replay' && !isReplayingRef.current) {
-      // Replay mode: display chunks with timing delays
-      isReplayingRef.current = true
-      replayQueueRef.current = [...newChunks] // Copy array
+    lastTimelineTimeRef.current = currentTime
+    fitAddonRef.current?.fit()
+  }, [chunks, timelineSync, currentTime, timelineStartTime, terminalKey])
 
-      // Start replay with first chunk
-      const firstChunk = replayQueueRef.current.shift()
-      if (firstChunk) {
-        const delay = firstChunk.deltaMs || 100 // Default 100ms if no deltaMs
-        replayTimeoutRef.current = setTimeout(() => processChunk(firstChunk), delay)
-      }
-    }
-  }, [chunks, mode, isStreaming]) // Use chunks directly, not session.chunks
-
-
-  const streamBadge = isStreaming ? (
+  const streamBadge = isTimelineSync ? (
+    <span className="flex items-center gap-1 text-xs text-purple-400">
+      <PlugZap className="h-3 w-3" /> Timeline Sync
+    </span>
+  ) : isStreaming ? (
     <span className="flex items-center gap-1 text-xs text-green-400">
       <Radio className="h-3 w-3 animate-pulse" /> Live
     </span>
   ) : mode === 'replay' ? (
     <span className="flex items-center gap-1 text-xs text-blue-400">
-      <PlugZap className="h-3 w-3" /> {isReplayingRef.current ? 'Playing...' : 'Replay'}
+      <PlugZap className="h-3 w-3" /> Replay
     </span>
   ) : (
     <span className="flex items-center gap-1 text-xs text-slate-400">
@@ -290,10 +234,10 @@ export function NodeTerminalPanel({
           </Button>
         </div>
       </div>
-      {isHydrating && (
+      {(isHydrating || isFetchingTimeline) && (
         <div className="border-b border-slate-800 px-3 py-1 flex items-center gap-2 text-[11px] text-slate-400">
           <Loader2 className="h-3 w-3 animate-spin" />
-          <span>Loading terminal output...</span>
+          <span>{isFetchingTimeline ? 'Syncing with timeline...' : 'Loading terminal output...'}</span>
         </div>
       )}
       <div className="relative bg-slate-950">
@@ -301,7 +245,7 @@ export function NodeTerminalPanel({
         {!session?.chunks?.length && (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
             <div className="text-xs text-slate-500 space-y-2 text-center p-4">
-              <div>{isHydrating ? 'Hydrating output…' : 'Waiting for terminal output…'}</div>
+              <div>{isHydrating || isFetchingTimeline ? 'Loading output…' : 'Waiting for terminal output…'}</div>
               <div className="font-mono text-[10px] opacity-50">
                 {nodeId} • pty
               </div>
