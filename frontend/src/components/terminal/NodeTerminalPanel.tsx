@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Terminal } from 'xterm'
 import { FitAddon } from 'xterm-addon-fit'
 import 'xterm/css/xterm.css'
@@ -6,17 +6,6 @@ import { Download, Loader2, PlugZap, Radio, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useTimelineTerminalStream } from '@/hooks/useTimelineTerminalStream'
 import { useExecutionTimelineStore } from '@/store/executionTimelineStore'
-
-type TerminalChunk = {
-  nodeRef: string;
-  stream: string;
-  chunkIndex: number;
-  payload: string;
-  recordedAt: string;
-  deltaMs?: number;
-  origin?: string;
-  runnerKind?: string;
-};
 
 interface NodeTerminalPanelProps {
   nodeId: string
@@ -57,6 +46,7 @@ export function NodeTerminalPanel({
   const fitAddonRef = useRef<FitAddon | null>(null)
   const lastRenderedChunkIndex = useRef<number>(-1)
   const lastTimelineTimeRef = useRef<number | null>(null)
+  const [terminalKey, setTerminalKey] = useState(0)
 
   // Use separate selectors to avoid creating new objects on every render
   const currentTime = useExecutionTimelineStore((state) => state.currentTime)
@@ -69,11 +59,6 @@ export function NodeTerminalPanel({
     autoConnect: true, // Always enable autoConnect - hook handles timeline sync logic
     timelineSync,
   })
-
-  // Timing-aware rendering refs
-  const replayTimeoutRef = useRef<NodeJS.Timeout | null>(null)
-  const replayQueueRef = useRef<TerminalChunk[]>([])
-  const isReplayingRef = useRef(false)
 
   // Memoize session to avoid unnecessary re-renders
   // Only depend on chunks length and last chunk index, not the entire chunks array
@@ -118,7 +103,7 @@ export function NodeTerminalPanel({
       },
       fontFamily: 'Menlo, Monaco, "Courier New", monospace',
     })
-    
+
     // Disable mouse events completely to prevent selection mode
     term.options.macOptionIsMeta = false
     term.options.macOptionClickForcesSelection = false
@@ -143,218 +128,70 @@ export function NodeTerminalPanel({
       term.dispose()
       terminalRef.current = null
       fitAddonRef.current = null
-
-      // Clear any pending replay timeouts
-      if (replayTimeoutRef.current) {
-        clearTimeout(replayTimeoutRef.current)
-        replayTimeoutRef.current = null
-      }
     }
-  }, [])
+  }, [terminalKey])
 
-  // Clear any pending replay timeouts when mode changes
-  useEffect(() => {
-    if (replayTimeoutRef.current) {
-      clearTimeout(replayTimeoutRef.current)
-      replayTimeoutRef.current = null
-    }
-    replayQueueRef.current = []
-    isReplayingRef.current = false
-  }, [mode])
 
-  // TIMELINE SYNC: Handle timeline position changes (asciinema-style full rebuild)
+  // SINGLE RENDERING LOGIC: Simple forward/backward detection
   useEffect(() => {
-    if (!isTimelineSync || !terminalRef.current) {
+    if (!terminalRef.current) {
       return
     }
 
-    // Detect if we're seeking backward (like asciinema does)
-    const isSeekingBackward = lastTimelineTimeRef.current !== null && currentTime < lastTimelineTimeRef.current
+    // Detect if we're seeking backward (timeline position went backwards)
+    const isSeekingBackward = timelineSync &&
+      lastTimelineTimeRef.current !== null &&
+      currentTime < lastTimelineTimeRef.current
+
+    const shouldFilterByTimelineTime = timelineSync && timelineStartTime !== null
+    const targetAbsoluteTime =
+      shouldFilterByTimelineTime && timelineStartTime !== null
+        ? timelineStartTime + currentTime
+        : null
 
     if (isSeekingBackward) {
-      // Seeking backward: Clear terminal and rebuild from scratch (asciinema approach)
-      console.debug('[NodeTerminalPanel] Seeking backward - clearing terminal', {
+      // Seeking backward: Recreate terminal to ensure clean state
+      // This avoids artifacts where cleared terminal still has pending writes
+      console.debug('[NodeTerminalPanel] Seeking backward - recreating terminal', {
         from: lastTimelineTimeRef.current,
         to: currentTime,
       })
-      terminalRef.current.clear() // Equivalent to asciinema's feed("\x1bc")
+
+      setTerminalKey(k => k + 1)
       lastRenderedChunkIndex.current = -1
+      lastTimelineTimeRef.current = currentTime
+      return
+    }
+
+    // Forward streaming or forward seek: incremental rendering
+    if (!chunks || chunks.length === 0) {
+      lastTimelineTimeRef.current = currentTime
+      return
+    }
+
+    const newChunks = chunks.filter((chunk) => chunk.chunkIndex > lastRenderedChunkIndex.current)
+
+    if (newChunks.length === 0) {
+      lastTimelineTimeRef.current = currentTime
+      return
+    }
+
+    // Render only new chunks (incremental, no clear)
+    for (const chunk of newChunks) {
+      if (!terminalRef.current) break
+      const chunkTime = new Date(chunk.recordedAt).getTime()
+      if (shouldFilterByTimelineTime && targetAbsoluteTime !== null && chunkTime > targetAbsoluteTime) {
+        continue
+      }
+      const bytes = decodePayload(chunk.payload)
+      if (bytes.length === 0) continue
+      terminalRef.current.write(bytes)
+      lastRenderedChunkIndex.current = chunk.chunkIndex
     }
 
     lastTimelineTimeRef.current = currentTime
-  }, [isTimelineSync, currentTime])
-
-  // Render chunks to terminal
-  useEffect(() => {
-    if (!terminalRef.current) {
-      console.debug('[NodeTerminalPanel] terminal ref not ready, skipping chunk write')
-      return
-    }
-    
-    if (!chunks || chunks.length === 0) {
-      return
-    }
-
-    // In timeline sync mode, always rebuild from scratch (fast-forward, no delays)
-    if (isTimelineSync) {
-      // Clear terminal if we haven't rendered anything yet
-      if (lastRenderedChunkIndex.current === -1) {
-        terminalRef.current.clear()
-      }
-
-      // Fast-forward: apply all chunks up to current position (no timing delays)
-      const chunksToRender = chunks.filter(
-        (chunk) => chunk.chunkIndex > lastRenderedChunkIndex.current,
-      )
-
-      // Calculate target absolute time for comparison
-      const targetAbsoluteTime = timelineStartTime ? timelineStartTime + currentTime : null
-      
-      console.log('[NodeTerminalPanel] Timeline sync - fast-forward rendering', {
-        totalChunks: chunks.length,
-        chunksToRender: chunksToRender.length,
-        lastRenderedIndex: lastRenderedChunkIndex.current,
-        currentTimeMs: currentTime,
-        timelineStartTime: timelineStartTime ? new Date(timelineStartTime).toISOString() : null,
-        targetAbsoluteTime: targetAbsoluteTime ? new Date(targetAbsoluteTime).toISOString() : null,
-        chunkIndices: chunksToRender.map(c => c.chunkIndex),
-        allChunkTimestamps: chunks.map(c => {
-          const chunkTime = new Date(c.recordedAt).getTime()
-          const isBeforeTarget = targetAbsoluteTime ? chunkTime <= targetAbsoluteTime : true
-          return {
-            chunkIndex: c.chunkIndex,
-            recordedAt: c.recordedAt,
-            timestamp: new Date(c.recordedAt).toISOString(),
-            timestampMs: chunkTime,
-            isBeforeTarget,
-            deltaFromTarget: targetAbsoluteTime ? chunkTime - targetAbsoluteTime : null,
-          }
-        }),
-        chunksToRenderTimestamps: chunksToRender.map(c => {
-          const chunkTime = new Date(c.recordedAt).getTime()
-          const isBeforeTarget = targetAbsoluteTime ? chunkTime <= targetAbsoluteTime : true
-          return {
-            chunkIndex: c.chunkIndex,
-            recordedAt: c.recordedAt,
-            timestamp: new Date(c.recordedAt).toISOString(),
-            timestampMs: chunkTime,
-            isBeforeTarget,
-            deltaFromTarget: targetAbsoluteTime ? chunkTime - targetAbsoluteTime : null,
-          }
-        }),
-      })
-
-      for (const chunk of chunksToRender) {
-        if (!terminalRef.current) break
-        const bytes = decodePayload(chunk.payload)
-        if (bytes.length === 0) continue
-        terminalRef.current.write(bytes)
-        lastRenderedChunkIndex.current = chunk.chunkIndex
-      }
-
-      fitAddonRef.current?.fit()
-      return
-    }
-
-    // Regular live/replay mode (existing logic)
-    const newChunks = chunks.filter(
-      (chunk) => chunk.chunkIndex > lastRenderedChunkIndex.current,
-    )
-
-    console.debug('[NodeTerminalPanel] chunks effect triggered', {
-      totalChunks: chunks.length,
-      newChunksCount: newChunks.length,
-      lastRenderedIndex: lastRenderedChunkIndex.current,
-      mode,
-      isStreaming,
-      isTimelineSync,
-      terminalReady: !!terminalRef.current,
-    })
-
-    if (newChunks.length === 0) {
-      return
-    }
-
-    const processChunk = (chunk: TerminalChunk) => {
-      if (!terminalRef.current) return
-
-      const bytes = decodePayload(chunk.payload)
-      // Write raw bytes directly to preserve control characters like \r
-      terminalRef.current.write(bytes)
-      lastRenderedChunkIndex.current = chunk.chunkIndex
-
-      // Process next chunk in queue if exists
-      if (replayQueueRef.current.length > 0) {
-        const nextChunk = replayQueueRef.current.shift()
-        if (nextChunk) {
-          const delay = nextChunk.deltaMs || 100 // Default 100ms if no deltaMs
-          replayTimeoutRef.current = setTimeout(() => processChunk(nextChunk), delay)
-        }
-      } else {
-        // No more chunks, replay complete
-        isReplayingRef.current = false
-      }
-
-      fitAddonRef.current?.fit()
-    }
-
-    // Always write chunks in live mode, regardless of isStreaming status
-    // Chunks can come from hydration or SSE, both should be displayed
-    if (mode === 'live') {
-      // Live mode: display chunks immediately
-      console.debug('[NodeTerminalPanel] writing chunks in live mode', {
-        chunksToWrite: newChunks.length,
-        terminalExists: !!terminalRef.current,
-        isStreaming,
-        mode,
-      })
-      for (const chunk of newChunks) {
-        if (!terminalRef.current) {
-          console.warn('[NodeTerminalPanel] terminal ref is null, cannot write chunk', chunk.chunkIndex)
-          break
-        }
-        const bytes = decodePayload(chunk.payload)
-        if (bytes.length === 0) {
-          console.warn('[NodeTerminalPanel] decoded bytes are empty for chunk', chunk.chunkIndex)
-          continue
-        }
-        terminalRef.current.write(bytes)
-        lastRenderedChunkIndex.current = chunk.chunkIndex
-        console.debug('[NodeTerminalPanel] wrote chunk', {
-          chunkIndex: chunk.chunkIndex,
-          bytesLength: bytes.length,
-          payloadPreview: chunk.payload.substring(0, 50),
-        })
-      }
-      fitAddonRef.current?.fit()
-    } else if (isStreaming && (mode === 'idle' || mode === 'replay')) {
-      // If streaming but not in live mode, still write chunks immediately
-      console.debug('[NodeTerminalPanel] writing chunks while streaming', {
-        chunksToWrite: newChunks.length,
-        mode,
-        isStreaming,
-      })
-      for (const chunk of newChunks) {
-        if (!terminalRef.current) break
-        const bytes = decodePayload(chunk.payload)
-        if (bytes.length === 0) continue
-        terminalRef.current.write(bytes)
-        lastRenderedChunkIndex.current = chunk.chunkIndex
-      }
-      fitAddonRef.current?.fit()
-    } else if (mode === 'replay' && !isReplayingRef.current) {
-      // Replay mode: display chunks with timing delays
-      isReplayingRef.current = true
-      replayQueueRef.current = [...newChunks] // Copy array
-
-      // Start replay with first chunk
-      const firstChunk = replayQueueRef.current.shift()
-      if (firstChunk) {
-        const delay = firstChunk.deltaMs || 100 // Default 100ms if no deltaMs
-        replayTimeoutRef.current = setTimeout(() => processChunk(firstChunk), delay)
-      }
-    }
-  }, [chunks, mode, isStreaming, isTimelineSync, currentTime])
+    fitAddonRef.current?.fit()
+  }, [chunks, timelineSync, currentTime, timelineStartTime, terminalKey])
 
   const streamBadge = isTimelineSync ? (
     <span className="flex items-center gap-1 text-xs text-purple-400">
@@ -366,7 +203,7 @@ export function NodeTerminalPanel({
     </span>
   ) : mode === 'replay' ? (
     <span className="flex items-center gap-1 text-xs text-blue-400">
-      <PlugZap className="h-3 w-3" /> {isReplayingRef.current ? 'Playing...' : 'Replay'}
+      <PlugZap className="h-3 w-3" /> Replay
     </span>
   ) : (
     <span className="flex items-center gap-1 text-xs text-slate-400">
