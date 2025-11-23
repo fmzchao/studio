@@ -101,8 +101,6 @@ function WorkflowBuilderContent() {
   const inspectorWidth = useWorkflowUiStore((state) => state.inspectorWidth)
   const setInspectorWidth = useWorkflowUiStore((state) => state.setInspectorWidth)
   const setMode = useWorkflowUiStore((state) => state.setMode)
-  const selectRun = useExecutionTimelineStore((state) => state.selectRun)
-  const switchToLiveMode = useExecutionTimelineStore((state) => state.switchToLiveMode)
   const selectedRunId = useExecutionTimelineStore((state) => state.selectedRunId)
   const fetchRuns = useRunStore((state) => state.fetchRuns)
   const workflowCacheKey = metadata.id ?? '__global__'
@@ -363,14 +361,19 @@ function WorkflowBuilderContent() {
     const workflowId = metadata.id
     if (!workflowId) return
 
-    setIsLoading(true)
+    // Don't set isLoading - that's only for initial workflow load
+    // Running a workflow shouldn't show the "Loading workflow..." screen
     try {
       const shouldCommitBeforeRun =
         !options?.versionId &&
         (isDirty || !metadata.currentVersionId)
 
       if (shouldCommitBeforeRun) {
+        // Commit workflow - this creates a new version
+        // We don't need to reload the workflow, just mark as clean
+        // The currentVersionId will be updated when workflow is next loaded
         await api.workflows.commit(workflowId)
+        markClean()
       }
 
       const runId = await useExecutionStore.getState().startExecution(
@@ -388,18 +391,22 @@ function WorkflowBuilderContent() {
           run_id: runId,
           node_count: nodes.length,
         })
-        setMode('execution')
+        // Don't force mode change - inspector will appear automatically when run is selected
+        // This prevents full UI re-render and allows smooth transition
         await fetchRuns({ workflowId, force: true }).catch(() => undefined)
-        let selected = true
-        try {
-          await selectRun(runId)
-        } catch (error) {
-          selected = false
+        useExecutionTimelineStore.setState({ 
+          selectedRunId: runId,
+          playbackMode: 'live',
+          isLiveFollowing: true,
+          isPlaying: false,
+        })
+        // Optionally switch to execution mode smoothly (user can still switch back)
+        // Only switch if we're in design mode to avoid jarring transitions
+        if (mode === 'design') {
+          // Use setTimeout to allow state updates to settle first
+          setTimeout(() => setMode('execution'), 0)
         }
-        if (!selected) {
-          useExecutionTimelineStore.setState({ selectedRunId: runId })
-        }
-        switchToLiveMode()
+        // Timeline will be populated by live updates from execution store subscription
         toast({
           variant: 'success',
           title: 'Workflow started',
@@ -515,7 +522,7 @@ function WorkflowBuilderContent() {
         ),
       })
     } finally {
-      setIsLoading(false)
+      // Don't reset isLoading here - it wasn't set
       setPendingVersionId(null)
       setPrefilledRuntimeValues({})
     }
@@ -971,7 +978,9 @@ function WorkflowBuilderContent() {
     }
   }, [mode, setInspectorWidth])
 
-  const isInspectorVisible = mode === 'execution'
+  // Show inspector if there's an active run OR if mode is execution
+  // This allows smooth transition without forcing mode change
+  const isInspectorVisible = mode === 'execution' || (selectedRunId !== null && mode !== 'design')
   // Delay rendering sidebar contents until the expand animation completes to avoid mid-transition layout shifts.
   useEffect(() => {
     let timeoutId: ReturnType<typeof setTimeout> | undefined

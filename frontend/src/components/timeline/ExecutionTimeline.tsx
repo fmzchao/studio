@@ -272,7 +272,7 @@ export function ExecutionTimeline() {
                 variant="outline"
                 size="icon"
                 onClick={stepBackward}
-                disabled={playbackMode === 'live' || currentTime <= 0}
+                disabled={currentTime <= 0}
               >
                 <SkipBack className="h-4 w-4" />
               </Button>
@@ -288,7 +288,7 @@ export function ExecutionTimeline() {
                 variant="outline"
                 size="icon"
                 onClick={stepForward}
-                disabled={playbackMode === 'live' || currentTime >= totalDuration}
+                disabled={currentTime >= totalDuration}
               >
                 <SkipForward className="h-4 w-4" />
               </Button>

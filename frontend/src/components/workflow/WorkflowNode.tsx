@@ -1,12 +1,15 @@
-import { memo, useState } from 'react'
+import { memo, useEffect, useState } from 'react'
 import { Handle, Position, type NodeProps, useReactFlow } from 'reactflow'
-import { Loader2, CheckCircle, XCircle, Clock, Activity, AlertCircle, Pause } from 'lucide-react'
+import { Loader2, CheckCircle, XCircle, Clock, Activity, AlertCircle, Pause, Terminal as TerminalIcon } from 'lucide-react'
 import * as LucideIcons from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useComponentStore } from '@/store/componentStore'
+import { useExecutionStore } from '@/store/executionStore'
 import { useExecutionTimelineStore, type NodeVisualState } from '@/store/executionTimelineStore'
 import { getNodeStyle, getTypeBorderColor } from './nodeStyles'
+import { NodeTerminalPanel } from '../terminal/NodeTerminalPanel'
 import type { NodeData } from '@/schemas/node'
+import type { NodeStatus } from '@/schemas/node'
 import type { InputPort } from '@/schemas/component'
 import { useWorkflowUiStore } from '@/store/workflowUiStore'
 import { inputSupportsManualValue, runtimeInputTypeToPortDataType } from '@/utils/portUtils'
@@ -25,9 +28,26 @@ const STATUS_ICONS = {
 export const WorkflowNode = memo(({ data, selected, id }: NodeProps<NodeData>) => {
   const { getComponent, loading } = useComponentStore()
   const { getNodes, getEdges } = useReactFlow()
-  const { nodeStates, selectedRunId, selectNode, isPlaying } = useExecutionTimelineStore()
+  const { nodeStates, selectedRunId, selectNode, isPlaying, playbackMode } = useExecutionTimelineStore()
   const { mode } = useWorkflowUiStore()
   const [isHovered, setIsHovered] = useState(false)
+  const prefetchTerminal = useExecutionStore((state) => state.prefetchTerminal)
+  const terminalSession = useExecutionStore((state) => state.getTerminalSession(id, 'pty'))
+  const [isTerminalOpen, setIsTerminalOpen] = useState(false)
+  const [isTerminalLoading, setIsTerminalLoading] = useState(false)
+
+  useEffect(() => {
+    if (!isTerminalOpen) {
+      return
+    }
+
+    setIsTerminalLoading(true)
+    prefetchTerminal(id, 'pty', selectedRunId ?? undefined)
+      .catch((error) => {
+        console.error('Failed to prefetch terminal output', error)
+      })
+      .finally(() => setIsTerminalLoading(false))
+  }, [id, isTerminalOpen, prefetchTerminal, selectedRunId])
 
   // Cast to access extended frontend fields (componentId, componentSlug, status, etc.)
   const nodeData = data as any
@@ -38,6 +58,7 @@ export const WorkflowNode = memo(({ data, selected, id }: NodeProps<NodeData>) =
     progress: 0,
     startTime: 0,
     eventCount: 0,
+    totalEvents: 0,
     lastEvent: null,
     dataFlow: { input: [], output: [] }
   }
@@ -81,7 +102,6 @@ export const WorkflowNode = memo(({ data, selected, id }: NodeProps<NodeData>) =
 
   // Enhanced styling for timeline visualization
   const isTimelineActive = mode === 'execution' && selectedRunId && visualState.status !== 'idle'
-  const shouldShowProgress = isTimelineActive && visualState.status === 'running' && visualState.progress > 0
   const hasEvents = isTimelineActive && visualState.eventCount > 0
 
   // Display label (custom or component name)
@@ -148,45 +168,98 @@ export const WorkflowNode = memo(({ data, selected, id }: NodeProps<NodeData>) =
     })
 
   // Progress ring component
-  const ProgressRing = ({ progress, size = 32 }: { progress: number; size?: number }) => (
-    <div className="relative" style={{ width: size, height: size }}>
-      <svg
-        className="transform -rotate-90"
-        width={size}
-        height={size}
-      >
-        <circle
-          cx={size / 2}
-          cy={size / 2}
-          r={size / 2 - 2}
-          stroke="currentColor"
-          strokeWidth="2"
-          fill="none"
-          className="text-muted opacity-30"
-        />
-        <circle
-          cx={size / 2}
-          cy={size / 2}
-          r={size / 2 - 2}
-          stroke="currentColor"
-          strokeWidth="2"
-          fill="none"
-          strokeDasharray={`${(progress / 100) * (Math.PI * (size - 4))} ${Math.PI * (size - 4)}`}
-          className={cn(
-            "transition-all duration-300",
-            effectiveStatus === 'running'
-              ? isPlaying
-                ? "text-blue-500 animate-pulse"
-                : "text-blue-400"
-              : "text-green-500"
-          )}
-        />
-      </svg>
-      <div className="absolute inset-0 flex items-center justify-center text-xs font-medium">
-        {Math.round(progress)}%
+  const ProgressBar = ({
+    progress,
+    events,
+    totalEvents,
+    isRunning,
+    status,
+  }: {
+    progress: number
+    events: number
+    totalEvents: number
+    isRunning: boolean
+    status: NodeStatus
+  }) => {
+    const clampPercent = (value?: number) => {
+      if (!Number.isFinite(value)) return undefined
+      return Math.max(0, Math.min(value!, 100))
+    }
+    const normalizedProgress = clampPercent(progress)
+    const normalizedFromEvents =
+      totalEvents > 0 && Number.isFinite(events) && Number.isFinite(totalEvents)
+        ? clampPercent((events / totalEvents) * 100)
+        : undefined
+    const fallbackWidth = isRunning ? 5 : 0
+    
+    // Calculate width - prefer normalizedFromEvents for accurate event-based progress
+    // This ensures the bar shows the actual event progress (e.g., 4/10 = 40%)
+    let calculatedWidth: number
+    if (status === 'success') {
+      calculatedWidth = 100
+    } else if (normalizedFromEvents !== undefined && Number.isFinite(normalizedFromEvents)) {
+      // Use event-based calculation (most accurate)
+      calculatedWidth = normalizedFromEvents
+    } else if (normalizedProgress !== undefined && Number.isFinite(normalizedProgress)) {
+      // Fall back to progress prop
+      calculatedWidth = normalizedProgress
+    } else if (totalEvents > 0 && events > 0) {
+      // Fallback: calculate directly from events/totalEvents
+      calculatedWidth = Math.min(100, (events / totalEvents) * 100)
+    } else {
+      // Fall back to minimum width
+      calculatedWidth = fallbackWidth
+    }
+    
+    // Ensure width is clamped between 0 and 100, and is always a valid number
+    const width = Number.isFinite(calculatedWidth) 
+      ? Math.max(0, Math.min(100, calculatedWidth))
+      : 0
+    const eventLabel = totalEvents > 0
+      ? `${events}/${totalEvents} events`
+      : `${events} ${events === 1 ? 'event' : 'events'}`
+    
+    // Determine bar color based on status
+    // IMPORTANT: Only show green when status is 'success', otherwise use blue for progress visibility
+    const getBarColor = () => {
+      if (status === 'success') {
+        return 'bg-green-500'
+      }
+      if (status === 'error') {
+        return 'bg-red-600'
+      }
+      // For running/idle states, use solid blue to show progress (better contrast and visibility)
+      // Use solid color instead of gradient for better browser compatibility
+      if (isRunning) {
+        return 'bg-blue-500 animate-pulse'
+      }
+      return 'bg-blue-500'
+    }
+    
+    // Ensure width is always a string with % for the style
+    const widthStyle = `${width}%`
+
+    return (
+      <div className="space-y-1">
+        <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+          <span>Events observed</span>
+          <span>{eventLabel}</span>
+        </div>
+        <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden relative">
+          <div
+            className={cn(
+              'absolute left-0 top-0 h-full rounded-full transition-all duration-500',
+              getBarColor(),
+            )}
+            style={{ 
+              width: widthStyle,
+              minWidth: width > 0 ? '2px' : '0px', // Ensure minimum 2px for visibility
+            }}
+          />
+        </div>
       </div>
-    </div>
-  )
+    )
+  }
 
   // Event count badge
   const EventBadge = ({ count }: { count: number }) => (
@@ -260,8 +333,37 @@ export const WorkflowNode = memo(({ data, selected, id }: NodeProps<NodeData>) =
                       'h-4 w-4 flex-shrink-0',
                       nodeStyle.iconClass,
                       isTimelineActive && effectiveStatus === 'running' && isPlaying && 'animate-spin',
+                      isTimelineActive && effectiveStatus === 'error' && 'animate-bounce',
                     )}
                   />
+                )}
+                {mode === 'execution' && selectedRunId && (
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setIsTerminalOpen((prev) => !prev)}
+                      className={cn(
+                        'flex items-center gap-1 rounded-full px-2 py-1 text-[11px] border transition-colors',
+                        isTerminalOpen ? 'bg-blue-600 text-white border-blue-500' : 'bg-slate-900/60 text-slate-100 border-slate-700',
+                      )}
+                    >
+                      <TerminalIcon className="h-3 w-3" />
+                      <span>Terminal</span>
+                      {isTerminalLoading && <span className="animate-pulse">…</span>}
+                      {!isTerminalLoading && terminalSession?.chunks?.length ? (
+                        <span className="w-2 h-2 rounded-full bg-green-400" />
+                      ) : null}
+                    </button>
+                    {isTerminalOpen && (
+                      <div className="absolute bottom-full right-0 mb-2 z-[60]">
+                        <NodeTerminalPanel
+                          nodeId={id}
+                          runId={selectedRunId}
+                          onClose={() => setIsTerminalOpen(false)}
+                        />
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
             </div>
@@ -271,7 +373,12 @@ export const WorkflowNode = memo(({ data, selected, id }: NodeProps<NodeData>) =
               <div className="flex items-center gap-2 mt-1">
                 {visualState.status === 'running' && (
                   <div className="flex items-center gap-1 text-xs text-blue-600">
-                    {isPlaying ? (
+                    {playbackMode === 'live' ? (
+                      <>
+                        <Activity className="h-3 w-3 animate-pulse" />
+                        Live
+                      </>
+                    ) : isPlaying ? (
                       <>
                         <Activity className="h-3 w-3" />
                         Running
@@ -296,9 +403,6 @@ export const WorkflowNode = memo(({ data, selected, id }: NodeProps<NodeData>) =
                     Failed
                   </div>
                 )}
-                <span className="text-xs text-muted-foreground">
-                  {visualState.eventCount} events
-                </span>
               </div>
             )}
           </div>
@@ -307,6 +411,19 @@ export const WorkflowNode = memo(({ data, selected, id }: NodeProps<NodeData>) =
 
       {/* Body - Input/Output Ports */}
       <div className="px-3 py-3 space-y-2">
+        {isTimelineActive && (
+          <>
+            <ProgressBar
+              progress={Number.isFinite(visualState.progress) ? visualState.progress : 0}
+              events={visualState.eventCount}
+              totalEvents={visualState.totalEvents}
+              isRunning={visualState.status === 'running'}
+              status={visualState.status}
+            />
+            <div className="border-t border-border/50 my-1" />
+          </>
+        )}
+
         {/* Input Ports */}
         {componentInputs.length > 0 && (
           <div className="space-y-1.5">
@@ -469,12 +586,6 @@ export const WorkflowNode = memo(({ data, selected, id }: NodeProps<NodeData>) =
         {/* Enhanced Execution Status Messages */}
         {isTimelineActive && (
           <div className="pt-2 border-t border-border/50">
-            {shouldShowProgress && (
-              <div className="flex items-center justify-center py-2">
-                <ProgressRing progress={visualState.progress} size={40} />
-              </div>
-            )}
-
             {visualState.lastEvent && (
               <div className="text-xs text-muted-foreground mt-2">
                 <div className="font-medium">
