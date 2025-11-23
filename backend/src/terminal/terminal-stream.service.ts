@@ -18,6 +18,8 @@ export interface TerminalFetchOptions {
   cursor?: string;
   nodeRef?: string;
   stream?: string;
+  startTime?: Date;
+  endTime?: Date;
 }
 
 export interface TerminalFetchResult {
@@ -100,6 +102,16 @@ export class TerminalStreamService implements OnModuleDestroy {
       for (const [id, fields] of entries) {
         const payload = this.extractPayload(key, fields);
         if (payload) {
+          // Filter by time range if provided
+          if (options.startTime || options.endTime) {
+            const recordedAt = new Date(payload.recordedAt);
+            if (options.startTime && recordedAt < options.startTime) {
+              continue; // Skip chunks before startTime
+            }
+            if (options.endTime && recordedAt > options.endTime) {
+              continue; // Skip chunks after endTime
+            }
+          }
           chunks.push(payload);
         }
         nextState[key] = id;

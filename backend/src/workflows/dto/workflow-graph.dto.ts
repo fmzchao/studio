@@ -119,6 +119,8 @@ export const TerminalChunksQuerySchema = z.object({
   nodeRef: z.string().trim().min(1).optional(),
   stream: z.enum(['stdout', 'stderr', 'pty']).optional(),
   cursor: z.string().trim().optional(),
+  startTime: z.string().datetime().optional(), // ISO 8601 datetime string
+  endTime: z.string().datetime().optional(), // ISO 8601 datetime string
 });
 
 export class TerminalChunksQueryDto extends createZodDto(TerminalChunksQuerySchema) {}
