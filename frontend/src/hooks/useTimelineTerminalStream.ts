@@ -181,21 +181,62 @@ export function useTimelineTerminalStream(
         ? Math.abs(currentTime - lastFetchTimeRef.current)
         : Infinity
 
+      const targetAbsoluteTime = getAbsoluteTimeFromTimeline(currentTime)
+      const startAbsoluteTime = timelineStartTime ? new Date(timelineStartTime) : null
+
+      console.log('[useTimelineTerminalStream] Timeline seek detected', {
+        currentTimeMs: currentTime,
+        timelineStartTime: timelineStartTime,
+        targetAbsoluteTime: targetAbsoluteTime?.toISOString(),
+        startAbsoluteTime: startAbsoluteTime?.toISOString(),
+        timeDiff,
+        willFetch: timeDiff > 100 || lastFetchTimeRef.current === null,
+        availableChunksCount: terminalChunksRef.current.length,
+      })
+
       // Fetch if timeline moved more than 100ms or this is the first fetch
       if (timeDiff > 100 || lastFetchTimeRef.current === null) {
+        console.log('[useTimelineTerminalStream] Fetching chunks from API', {
+          currentTimeMs: currentTime,
+          targetAbsoluteTime: targetAbsoluteTime?.toISOString(),
+        })
         void fetchChunksUpToTime(currentTime)
         lastFetchTimeRef.current = currentTime
       } else {
         // Use cached/filtered chunks for small movements
-        const targetAbsoluteTime = getAbsoluteTimeFromTimeline(currentTime)
-        if (targetAbsoluteTime && timelineStartTime) {
-          const startAbsoluteTime = new Date(timelineStartTime)
+        if (targetAbsoluteTime && startAbsoluteTime) {
           // Get current chunks from ref (avoid dependency issues)
           const currentChunks = terminalChunksRef.current
+          
+          console.log('[useTimelineTerminalStream] Filtering existing chunks', {
+            currentTimeMs: currentTime,
+            totalChunks: currentChunks.length,
+            startAbsoluteTime: startAbsoluteTime.toISOString(),
+            targetAbsoluteTime: targetAbsoluteTime.toISOString(),
+            chunkTimestamps: currentChunks.slice(0, 5).map(c => ({
+              chunkIndex: c.chunkIndex,
+              recordedAt: c.recordedAt,
+              timestamp: new Date(c.recordedAt).toISOString(),
+            })),
+          })
+
           const filtered = currentChunks.filter((chunk) => {
             const recordedAt = new Date(chunk.recordedAt)
-            return recordedAt >= startAbsoluteTime && recordedAt <= targetAbsoluteTime
+            const inRange = recordedAt >= startAbsoluteTime && recordedAt <= targetAbsoluteTime
+            return inRange
           })
+
+          console.log('[useTimelineTerminalStream] Filtered chunks result', {
+            beforeFilter: currentChunks.length,
+            afterFilter: filtered.length,
+            filteredChunkIndices: filtered.map(c => c.chunkIndex),
+            filteredTimestamps: filtered.map(c => ({
+              chunkIndex: c.chunkIndex,
+              recordedAt: c.recordedAt,
+              timestamp: new Date(c.recordedAt).toISOString(),
+            })),
+          })
+
           setTimelineChunksIfChanged(filtered)
         }
       }
@@ -216,9 +257,53 @@ export function useTimelineTerminalStream(
       // In live mode, always use terminalResult.chunks directly for real-time updates
       return terminalResult.chunks
     }
-    // In timeline sync mode (replay), use filtered chunks
-    return timelineChunks.length > 0 ? timelineChunks : terminalResult.chunks
-  }, [timelineSync, playbackMode, timelineChunks, terminalResult.chunks])
+    
+    // In timeline sync mode (replay), always filter by time if we have timelineStartTime
+    // Even if timelineChunks is empty, we should filter terminalResult.chunks by time
+    if (timelineChunks.length > 0) {
+      console.log('[useTimelineTerminalStream] displayChunks - using timelineChunks', {
+        timelineChunksCount: timelineChunks.length,
+        currentTimeMs: currentTime,
+        chunkIndices: timelineChunks.map(c => c.chunkIndex),
+      })
+      return timelineChunks
+    }
+    
+    // Fallback: filter terminalResult.chunks by time if timelineStartTime is available
+    if (timelineStartTime && currentTime >= 0) {
+      const targetAbsoluteTime = getAbsoluteTimeFromTimeline(currentTime)
+      if (targetAbsoluteTime) {
+        const startAbsoluteTime = new Date(timelineStartTime)
+        const filtered = terminalResult.chunks.filter((chunk) => {
+          const recordedAt = new Date(chunk.recordedAt)
+          return recordedAt >= startAbsoluteTime && recordedAt <= targetAbsoluteTime
+        })
+        
+        console.log('[useTimelineTerminalStream] displayChunks - filtering terminalResult.chunks', {
+          currentTimeMs: currentTime,
+          startAbsoluteTime: startAbsoluteTime.toISOString(),
+          targetAbsoluteTime: targetAbsoluteTime.toISOString(),
+          totalChunks: terminalResult.chunks.length,
+          filteredChunks: filtered.length,
+          chunkIndices: filtered.map(c => c.chunkIndex),
+        })
+        
+        return filtered
+      }
+    }
+    
+    // Last resort: return empty array if we can't filter (shouldn't happen in timeline sync mode)
+    console.warn('[useTimelineTerminalStream] displayChunks - no chunks available, returning empty', {
+      timelineSync,
+      playbackMode,
+      timelineChunksCount: timelineChunks.length,
+      terminalResultChunksCount: terminalResult.chunks.length,
+      currentTimeMs: currentTime,
+      timelineStartTime,
+    })
+    
+    return []
+  }, [timelineSync, playbackMode, timelineChunks, terminalResult.chunks, currentTime, timelineStartTime, getAbsoluteTimeFromTimeline])
 
   return {
     ...terminalResult,

@@ -206,11 +206,17 @@ export function NodeTerminalPanel({
         (chunk) => chunk.chunkIndex > lastRenderedChunkIndex.current,
       )
 
-      console.debug('[NodeTerminalPanel] Timeline sync - fast-forward rendering', {
+      console.log('[NodeTerminalPanel] Timeline sync - fast-forward rendering', {
         totalChunks: chunks.length,
         chunksToRender: chunksToRender.length,
         lastRenderedIndex: lastRenderedChunkIndex.current,
-        currentTime,
+        currentTimeMs: currentTime,
+        chunkIndices: chunksToRender.map(c => c.chunkIndex),
+        chunkTimestamps: chunksToRender.slice(0, 5).map(c => ({
+          chunkIndex: c.chunkIndex,
+          recordedAt: c.recordedAt,
+          timestamp: new Date(c.recordedAt).toISOString(),
+        })),
       })
 
       for (const chunk of chunksToRender) {
