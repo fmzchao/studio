@@ -87,7 +87,7 @@ export interface TimelineState {
 
 export interface TimelineActions {
   // Run management
-  selectRun: (runId: string) => Promise<void>
+  selectRun: (runId: string, initialMode?: 'live' | 'replay') => Promise<void>
 
   // Timeline loading
   loadTimeline: (runId: string) => Promise<void>
@@ -449,7 +449,7 @@ export const useExecutionTimelineStore = create<TimelineStore>()(
   subscribeWithSelector((set, get) => ({
     ...INITIAL_STATE,
 
-    selectRun: async (runId: string) => {
+    selectRun: async (runId: string, initialMode: 'live' | 'replay' = 'replay') => {
       // Clear previous events before loading new timeline
       set({ 
         selectedRunId: runId,
@@ -460,25 +460,33 @@ export const useExecutionTimelineStore = create<TimelineStore>()(
         timelineStartTime: null,
         clockOffset: null,
         nodeStates: {},
-        playbackMode: 'replay',
+        playbackMode: initialMode,
         isPlaying: false,
-        isLiveFollowing: false,
+        isLiveFollowing: initialMode === 'live',
       })
       await get().loadTimeline(runId)
     },
 
     loadTimeline: async (runId: string) => {
       try {
-        const [eventsResponse, dataFlowResponse] = await Promise.all([
+        const [eventsResponse, dataFlowResponse, statusResponse] = await Promise.all([
           api.executions.getEvents(runId),
-          api.executions.getDataFlows(runId)
+          api.executions.getDataFlows(runId),
+          api.executions.getStatus(runId).catch(() => null)
         ])
 
         const eventsList = (eventsResponse.events ?? []).filter(
           (event): event is ExecutionLog => 
             Boolean(event.id && event.runId && event.nodeId && event.timestamp && event.type && event.level)
         )
-        const { events, totalDuration, timelineStartTime } = prepareTimelineEvents(eventsList)
+        
+        // Use run start time if available, otherwise fallback to first event
+        const status = statusResponse as ExecutionStatusResponse | null
+        const workflowStartTime = status?.startedAt 
+          ? new Date(status.startedAt).getTime() 
+          : null
+          
+        const { events, totalDuration, timelineStartTime } = prepareTimelineEvents(eventsList, workflowStartTime)
         const packetsList = (dataFlowResponse.packets ?? []).map(packet => {
           let timestamp: string
           if (typeof packet.timestamp === 'number') {
@@ -512,7 +520,7 @@ export const useExecutionTimelineStore = create<TimelineStore>()(
         // In live mode, use current position or end if following
         const initialCurrentTime = isLiveMode
           ? (state.isLiveFollowing ? totalDuration : Math.min(state.currentTime, totalDuration))
-          : totalDuration // Replay mode defaults to end position
+          : Math.min(state.currentTime, totalDuration) // Keep current position (starts at 0 for new runs)
 
         set({
           events,

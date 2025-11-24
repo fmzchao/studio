@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { MessageModal } from '@/components/ui/MessageModal'
 import { useExecutionTimelineStore } from '@/store/executionTimelineStore'
-import { useExecutionStore } from '@/store/executionStore'
+import { useWorkflowExecution } from '@/hooks/useWorkflowExecution'
 import { useWorkflowUiStore } from '@/store/workflowUiStore'
 import { useWorkflowStore } from '@/store/workflowStore'
 import { useArtifactStore } from '@/store/artifactStore'
@@ -70,7 +70,7 @@ export function ExecutionInspector({ onRerunRun }: ExecutionInspectorProps = {})
   const workflowCacheKey = workflowId ?? '__global__'
   const scopedRuns = useRunStore((state) => state.cache[workflowCacheKey]?.runs)
   const runs = scopedRuns ?? []
-  const { logs } = useExecutionStore()
+  const { logs } = useWorkflowExecution()
   const { inspectorTab, setInspectorTab } = useWorkflowUiStore()
   const fetchRunArtifacts = useArtifactStore((state) => state.fetchRunArtifacts)
   const [logModal, setLogModal] = useState<{ open: boolean; message: string; title: string }>({

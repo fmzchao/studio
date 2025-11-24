@@ -62,7 +62,6 @@ export function RunSelector({ onRerun }: RunSelectorProps = {}) {
     selectedRunId,
     playbackMode,
     selectRun,
-    switchToLiveMode,
   } = useExecutionTimelineStore()
   const { id: workflowId, currentVersion: currentWorkflowVersion } = useWorkflowStore(
     (state) => state.metadata
@@ -142,14 +141,14 @@ export function RunSelector({ onRerun }: RunSelectorProps = {}) {
   }
 
   const handleSelectRun = (runId: string) => {
-    selectRun(runId)
+    const isLive = runId === currentLiveRunId
+    selectRun(runId, isLive ? 'live' : 'replay')
     setIsOpen(false)
   }
 
   const handleSwitchToLive = () => {
     if (currentLiveRunId) {
-      switchToLiveMode()
-      selectRun(currentLiveRunId)
+      selectRun(currentLiveRunId, 'live')
       setIsOpen(false)
     }
   }

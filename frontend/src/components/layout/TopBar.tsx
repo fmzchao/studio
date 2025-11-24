@@ -12,7 +12,7 @@ import {
   Upload,
   Download,
 } from 'lucide-react'
-import { useExecutionStore } from '@/store/executionStore'
+import { useWorkflowExecution } from '@/hooks/useWorkflowExecution'
 import { useWorkflowStore } from '@/store/workflowStore'
 import { useWorkflowUiStore } from '@/store/workflowUiStore'
 import { cn } from '@/lib/utils'
@@ -40,7 +40,7 @@ export function TopBar({
   const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   const { metadata, isDirty, setWorkflowName } = useWorkflowStore()
-  const { status, runStatus, reset } = useExecutionStore()
+  const { status, runStatus, reset } = useWorkflowExecution()
   const isRunning = status === 'running' || status === 'queued'
   const { mode, setMode } = useWorkflowUiStore()
   const canEdit = Boolean(canManageWorkflows)

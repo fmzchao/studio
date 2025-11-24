@@ -170,77 +170,62 @@ export function useTimelineTerminalStream(
       return // Can't sync without timeline start time
     }
 
-    // Debounce rapid timeline changes (e.g., during scrubbing)
-    if (debounceTimeoutRef.current) {
-      clearTimeout(debounceTimeoutRef.current)
+    // Handle timeline updates
+    // We separate the logic for "fetching new data" (expensive, needs debounce/throttle)
+    // from "updating view from cache" (cheap, should be immediate)
+    
+    // 1. Immediate update from cache if possible
+    const updateFromCache = () => {
+      const targetAbsoluteTime = getAbsoluteTimeFromTimeline(currentTime)
+      const startAbsoluteTime = timelineStartTime ? new Date(timelineStartTime) : null
+
+      if (targetAbsoluteTime && startAbsoluteTime) {
+        const currentChunks = terminalChunksRef.current
+        
+        // Filter chunks that are within the time range
+        // This is fast enough to run on every frame for reasonable chunk counts
+        const filtered = currentChunks.filter((chunk) => {
+          const recordedAt = new Date(chunk.recordedAt)
+          return recordedAt >= startAbsoluteTime && recordedAt <= targetAbsoluteTime
+        })
+
+        setTimelineChunksIfChanged(filtered)
+      }
     }
 
-    debounceTimeoutRef.current = setTimeout(() => {
-      // Only fetch if timeline position changed significantly (avoid excessive API calls)
+    // 2. Network fetch management
+    const checkAndFetch = () => {
       const timeDiff = lastFetchTimeRef.current
         ? Math.abs(currentTime - lastFetchTimeRef.current)
         : Infinity
 
-      const targetAbsoluteTime = getAbsoluteTimeFromTimeline(currentTime)
-      const startAbsoluteTime = timelineStartTime ? new Date(timelineStartTime) : null
-
-      console.log('[useTimelineTerminalStream] Timeline seek detected', {
-        currentTimeMs: currentTime,
-        timelineStartTime: timelineStartTime,
-        targetAbsoluteTime: targetAbsoluteTime?.toISOString(),
-        startAbsoluteTime: startAbsoluteTime?.toISOString(),
-        timeDiff,
-        willFetch: timeDiff > 100 || lastFetchTimeRef.current === null,
-        availableChunksCount: terminalChunksRef.current.length,
-      })
-
-      // Fetch if timeline moved more than 100ms or this is the first fetch
-      if (timeDiff > 100 || lastFetchTimeRef.current === null) {
+      // If we moved significantly (seeking) or haven't fetched yet, fetch from API
+      // We use a threshold of 500ms to avoid fetching too often during playback
+      // but ensure we fetch when seeking or when playback moves into new territory
+      if (timeDiff > 500 || lastFetchTimeRef.current === null) {
         console.log('[useTimelineTerminalStream] Fetching chunks from API', {
           currentTimeMs: currentTime,
-          targetAbsoluteTime: targetAbsoluteTime?.toISOString(),
+          timeDiff,
         })
         void fetchChunksUpToTime(currentTime)
         lastFetchTimeRef.current = currentTime
-      } else {
-        // Use cached/filtered chunks for small movements
-        if (targetAbsoluteTime && startAbsoluteTime) {
-          // Get current chunks from ref (avoid dependency issues)
-          const currentChunks = terminalChunksRef.current
-          
-          console.log('[useTimelineTerminalStream] Filtering existing chunks', {
-            currentTimeMs: currentTime,
-            totalChunks: currentChunks.length,
-            startAbsoluteTime: startAbsoluteTime.toISOString(),
-            targetAbsoluteTime: targetAbsoluteTime.toISOString(),
-            chunkTimestamps: currentChunks.slice(0, 5).map(c => ({
-              chunkIndex: c.chunkIndex,
-              recordedAt: c.recordedAt,
-              timestamp: new Date(c.recordedAt).toISOString(),
-            })),
-          })
-
-          const filtered = currentChunks.filter((chunk) => {
-            const recordedAt = new Date(chunk.recordedAt)
-            const inRange = recordedAt >= startAbsoluteTime && recordedAt <= targetAbsoluteTime
-            return inRange
-          })
-
-          console.log('[useTimelineTerminalStream] Filtered chunks result', {
-            beforeFilter: currentChunks.length,
-            afterFilter: filtered.length,
-            filteredChunkIndices: filtered.map(c => c.chunkIndex),
-            filteredTimestamps: filtered.map(c => ({
-              chunkIndex: c.chunkIndex,
-              recordedAt: c.recordedAt,
-              timestamp: new Date(c.recordedAt).toISOString(),
-            })),
-          })
-
-          setTimelineChunksIfChanged(filtered)
-        }
       }
-    }, 150) // 150ms debounce (same as asciinema)
+    }
+
+    // Main effect logic
+    if (debounceTimeoutRef.current) {
+      clearTimeout(debounceTimeoutRef.current)
+    }
+
+    // Always try to update from cache immediately for smooth playback
+    updateFromCache()
+
+    // Debounce the network fetch check
+    // This allows "scrubbing" to settle before triggering a fetch
+    // But during playback, we want to check periodically
+    debounceTimeoutRef.current = setTimeout(() => {
+      checkAndFetch()
+    }, 100)
 
     return () => {
       if (debounceTimeoutRef.current) {
