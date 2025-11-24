@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { ChevronDown, Play, Clock, CheckCircle, XCircle, Loader2, Wifi, RefreshCw } from 'lucide-react'
+import { ChevronDown, Clock, CheckCircle, XCircle, Loader2, Wifi, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -84,21 +84,35 @@ export function RunSelector({ onRerun }: RunSelectorProps = {}) {
     }
     return runs.filter((run) => run.workflowId === workflowId)
   }, [runs, workflowId])
+  const liveRuns = useMemo(
+    () =>
+      filteredRuns
+        .filter((run) => run.isLive)
+        .sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime()),
+    [filteredRuns],
+  )
 
   // Load runs on mount
   useEffect(() => {
     fetchRuns({ workflowId }).catch(() => undefined)
   }, [fetchRuns, workflowId])
 
-  // Auto-load current live run if it exists
+  // Auto-load a live run if it exists and nothing is selected
   useEffect(() => {
-    if (currentLiveRunId && !selectedRunId) {
+    if (selectedRunId) {
+      return
+    }
+    if (currentLiveRunId) {
       const liveRun = runs.find((run) => run.id === currentLiveRunId)
       if (!workflowId || liveRun?.workflowId === workflowId) {
         selectRun(currentLiveRunId)
+        return
       }
     }
-  }, [currentLiveRunId, selectedRunId, selectRun, workflowId, runs])
+    if (liveRuns.length > 0) {
+      selectRun(liveRuns[0].id, 'live')
+    }
+  }, [currentLiveRunId, selectedRunId, selectRun, workflowId, runs, liveRuns])
 
   // Fallback to the most recent historical run when nothing is selected
   useEffect(() => {
@@ -115,21 +129,24 @@ export function RunSelector({ onRerun }: RunSelectorProps = {}) {
     }
   }, [filteredRuns, selectedRunId, currentLiveRunId, selectRun])
 
+  useEffect(() => {
+    if (!workflowId && !currentLiveRunId && liveRuns.length === 0) {
+      return
+    }
+    const interval = window.setInterval(() => {
+      fetchRuns({ workflowId, force: true }).catch(() => undefined)
+    }, 10000)
+    return () => window.clearInterval(interval)
+  }, [workflowId, currentLiveRunId, liveRuns.length, fetchRuns])
+
   const selectedRun =
     filteredRuns.find(run => run.id === selectedRunId) ??
     runs.find(run => run.id === selectedRunId)
-  const currentLiveRun = filteredRuns.find(run => run.id === currentLiveRunId)
   const selectedRunVersion = typeof selectedRun?.workflowVersion === 'number' ? selectedRun.workflowVersion : null
   const selectedRunOlder =
     selectedRunVersion !== null &&
     typeof currentWorkflowVersion === 'number' &&
     selectedRunVersion !== currentWorkflowVersion
-  const currentLiveRunVersion =
-    typeof currentLiveRun?.workflowVersion === 'number' ? currentLiveRun.workflowVersion : null
-  const currentLiveRunOlder =
-    currentLiveRunVersion !== null &&
-    typeof currentWorkflowVersion === 'number' &&
-    currentLiveRunVersion !== currentWorkflowVersion
 
   const getStatusIcon = (status: string) => {
     const IconComponent = STATUS_ICONS[status as keyof typeof STATUS_ICONS]
@@ -141,16 +158,9 @@ export function RunSelector({ onRerun }: RunSelectorProps = {}) {
   }
 
   const handleSelectRun = (runId: string) => {
-    const isLive = runId === currentLiveRunId
+    const isLive = liveRuns.some((run) => run.id === runId)
     selectRun(runId, isLive ? 'live' : 'replay')
     setIsOpen(false)
-  }
-
-  const handleSwitchToLive = () => {
-    if (currentLiveRunId) {
-      selectRun(currentLiveRunId, 'live')
-      setIsOpen(false)
-    }
   }
 
   const renderRunItem = (run: ExecutionRun) => {
@@ -272,56 +282,15 @@ export function RunSelector({ onRerun }: RunSelectorProps = {}) {
         </DropdownMenuTrigger>
 
         <DropdownMenuContent className="w-96" align="start">
-          {/* Current Live Run Section */}
-          {currentLiveRun && currentLiveRun.id !== selectedRunId && (
+          {/* Live Runs */}
+          {liveRuns.length > 0 && (
             <>
               <div className="px-3 py-2 text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                Current Live Run
+                Live Runs
               </div>
-              <DropdownMenuItem
-                onSelect={handleSwitchToLive}
-                className="flex items-center gap-3 p-3 cursor-pointer bg-blue-50 dark:bg-blue-950/20"
-              >
-                <div className={cn("flex-shrink-0", getStatusColor(currentLiveRun.status))}>
-                  {getStatusIcon(currentLiveRun.status)}
-                </div>
-
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium truncate">{currentLiveRun.workflowName}</span>
-                    {currentLiveRunVersion !== null && (
-                      <Badge
-                        variant={currentLiveRunOlder ? 'destructive' : 'secondary'}
-                        className="text-[10px] uppercase tracking-wide"
-                      >
-                        v{currentLiveRunVersion}
-                      </Badge>
-                    )}
-                    <Badge variant="outline" className="text-xs animate-pulse">
-                      <Wifi className="h-3 w-3 mr-1" />
-                      LIVE NOW
-                    </Badge>
-                  </div>
-
-                  <div className="flex items-center gap-4 text-xs text-muted-foreground mt-1">
-                    <span>Run #{currentLiveRun.id.slice(-8)}</span>
-                    <span>{currentLiveRun.nodeCount} nodes</span>
-                    <span>{currentLiveRun.eventCount} events</span>
-                    <span>{formatRelativeTime(currentLiveRun.startTime)}</span>
-                    {currentLiveRunVersion !== null && (
-                      <span className={cn(currentLiveRunOlder ? 'text-amber-500' : undefined)}>
-                        v{currentLiveRunVersion}
-                        {currentLiveRunOlder && typeof currentWorkflowVersion === 'number'
-                          ? ` (current v${currentWorkflowVersion})`
-                          : ''}
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                <Play className="h-4 w-4 text-blue-500" />
-              </DropdownMenuItem>
-
+              <div className="max-h-48 overflow-y-auto">
+                {liveRuns.map(renderRunItem)}
+              </div>
               <DropdownMenuSeparator />
             </>
           )}
@@ -379,17 +348,10 @@ export function RunSelector({ onRerun }: RunSelectorProps = {}) {
         </DropdownMenuContent>
       </DropdownMenu>
 
-      {/* Playback Mode Toggle */}
-      {selectedRun && currentLiveRun && selectedRun.id !== currentLiveRun.id && (
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleSwitchToLive}
-          className="flex items-center gap-2"
-        >
-          <Wifi className="h-4 w-4" />
-          Switch to Live
-        </Button>
+      {liveRuns.length > 0 && (
+        <div className="text-xs text-muted-foreground">
+          {liveRuns.length} live run{liveRuns.length === 1 ? '' : 's'}
+        </div>
       )}
     </div>
   )

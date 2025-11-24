@@ -71,7 +71,7 @@ export function ExecutionInspector({ onRerunRun }: ExecutionInspectorProps = {})
   const workflowCacheKey = workflowId ?? '__global__'
   const scopedRuns = useRunStore((state) => state.cache[workflowCacheKey]?.runs)
   const runs = scopedRuns ?? []
-  const { logs, status, runStatus, reset } = useWorkflowExecution()
+  const { logs, status, runStatus, reset, runId: liveRunId } = useWorkflowExecution()
   const { inspectorTab, setInspectorTab } = useWorkflowUiStore()
   const fetchRunArtifacts = useArtifactStore((state) => state.fetchRunArtifacts)
   const [logModal, setLogModal] = useState<{ open: boolean; message: string; title: string }>({
@@ -152,13 +152,13 @@ export function ExecutionInspector({ onRerunRun }: ExecutionInspectorProps = {})
             <RunSelector onRerun={onRerunRun} />
 
             <div className="flex items-center gap-2">
-              {runStatus?.progress && (status === 'running' || status === 'queued') && (
+              {runStatus?.progress && selectedRunId === liveRunId && (status === 'running' || status === 'queued') && (
                 <span className="text-xs text-muted-foreground font-medium whitespace-nowrap">
                   {runStatus.progress.completedActions}/{runStatus.progress.totalActions} actions
                 </span>
               )}
 
-              {(status === 'running' || status === 'queued') && (
+              {selectedRunId === liveRunId && (status === 'running' || status === 'queued') && (
                 <Button
                   onClick={() => reset()}
                   variant="destructive"

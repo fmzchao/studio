@@ -235,7 +235,7 @@ export function TopBar({
 
         <Button
           onClick={handleRun}
-          disabled={!canEdit || isRunning}
+          disabled={!canEdit}
           className="gap-2"
         >
           <Play className="h-4 w-4" />
