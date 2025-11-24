@@ -29,7 +29,7 @@ describeTopBar('TopBar', () => {
     resetStores()
   })
 
-  it('shows progress information when available', () => {
+  it('does not show progress information (removed for cleaner UI)', () => {
     useExecutionStore.setState({
       status: 'running',
       runStatus: {
@@ -50,7 +50,8 @@ describeTopBar('TopBar', () => {
       </MemoryRouter>
     )
 
-    expect(screen.getByText('2/5 actions')).toBeInTheDocument()
+    // Progress information was removed for cleaner UI
+    expect(screen.queryByText('2/5 actions')).not.toBeInTheDocument()
   })
 
   it('displays failure reason when execution fails', () => {
@@ -74,8 +75,7 @@ describeTopBar('TopBar', () => {
       </MemoryRouter>
     )
 
-    expect(screen.getAllByText(/Failed/).length).toBeGreaterThan(0)
-    const failureReasons = screen.getAllByText('ValidationError')
-    expect(failureReasons.length).toBeGreaterThan(0)
+    // Check for the full failure message format: "Failed: ValidationError"
+    expect(screen.getByText('Failed: ValidationError')).toBeInTheDocument()
   })
 })
