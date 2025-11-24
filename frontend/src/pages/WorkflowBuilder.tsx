@@ -1,7 +1,6 @@
 import { useParams, useNavigate } from 'react-router-dom'
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import { PanelLeftClose, PanelLeftOpen } from 'lucide-react'
-import { useSidebar } from '@/components/layout/AppLayout'
 import {
   ReactFlowProvider,
   useNodesState,
@@ -197,7 +196,6 @@ function WorkflowBuilderContent() {
     }
   }, [nodes, edges, buildGraphSignature, lastSavedSignature, markDirty, markClean, isDirty])
   const workflowRuns = useMemo(() => runs, [runs])
-  const { isOpen: mainSidebarOpen } = useSidebar()
   const mostRecentRunId = useMemo(
     () => (workflowRuns.length > 0 ? workflowRuns[0].id : null),
     [workflowRuns],
