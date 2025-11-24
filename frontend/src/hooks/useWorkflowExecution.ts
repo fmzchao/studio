@@ -6,7 +6,8 @@ export function useWorkflowExecution(workflowId?: string | null) {
   const targetWorkflowId = workflowId ?? metadata.id
   
   const executionState = useExecutionStore()
-  const isCurrentExecution = executionState.workflowId === targetWorkflowId
+  const activeWorkflowId = executionState.workflowId ?? executionState.runStatus?.workflowId ?? null
+  const isCurrentExecution = activeWorkflowId === targetWorkflowId
 
   if (!isCurrentExecution) {
     return {

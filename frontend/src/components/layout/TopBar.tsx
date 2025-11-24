@@ -39,10 +39,18 @@ export function TopBar({
   const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   const { metadata, isDirty, setWorkflowName } = useWorkflowStore()
-  const { status } = useWorkflowExecution()
+  const { status, runStatus } = useWorkflowExecution()
   const isRunning = status === 'running' || status === 'queued'
   const { mode, setMode } = useWorkflowUiStore()
   const canEdit = Boolean(canManageWorkflows)
+  const progressSummary =
+    runStatus?.progress && typeof runStatus.progress.completedActions === 'number' && typeof runStatus.progress.totalActions === 'number'
+      ? `${runStatus.progress.completedActions}/${runStatus.progress.totalActions} actions`
+      : null
+  const failureReason =
+    runStatus?.status === 'FAILED'
+      ? runStatus.failure?.reason ?? runStatus.failure?.message ?? 'Unknown error'
+      : null
 
   const handleSave = async () => {
     if (!canEdit) {
@@ -222,6 +230,17 @@ export function TopBar({
           <span className="text-xs text-muted-foreground self-center">
             Unsaved changes
           </span>
+        )}
+        {progressSummary && (
+          <span className="text-xs text-muted-foreground whitespace-nowrap" role="status">
+            {progressSummary}
+          </span>
+        )}
+        {failureReason && (
+          <div className="flex flex-col text-xs text-red-500" role="alert">
+            <span className="font-semibold">Failed</span>
+            <span>{failureReason}</span>
+          </div>
         )}
         <Button
           onClick={handleSave}
