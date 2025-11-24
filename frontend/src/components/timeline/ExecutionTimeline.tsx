@@ -453,10 +453,21 @@ export function ExecutionTimeline() {
               style={{ left: `${clampedStart * 100}%`, width: `${viewportWidth * 100}%` }}
             />
             <div
-              className="absolute top-0 bottom-0 w-0.5 bg-red-500"
-              style={{ left: `${normalizedProgress * 100}%`, transform: 'translateX(-50%)' }}
+              className="absolute inset-y-1 flex flex-col items-center pointer-events-none"
+              style={{
+                left: `${normalizedProgress * 100}%`,
+                transform: 'translateX(-50%)',
+                color: isLiveMode ? '#ef4444' : '#3b82f6',
+              }}
             >
-              <div className="absolute -top-1 -left-1 w-2 h-2 bg-red-500 rounded-full" />
+              <div className="w-[3px] flex-1 rounded-full" style={{ backgroundColor: 'currentColor' }} />
+              <div
+                className="mt-0.5 w-2 h-2 rotate-45 rounded-[2px] shadow-sm"
+                style={{
+                  backgroundColor: 'currentColor',
+                  boxShadow: `0 0 2px rgba(0,0,0,0.15)`,
+                }}
+              />
             </div>
           </div>
         </div>
