@@ -482,9 +482,8 @@ export const useExecutionTimelineStore = create<TimelineStore>()(
         
         // Use run start time if available, otherwise fallback to first event
         const status = statusResponse as ExecutionStatusResponse | null
-        const workflowStartTime = status?.startedAt 
-          ? new Date(status.startedAt).getTime() 
-          : null
+        const parsedStartTime = status?.startedAt ? new Date(status.startedAt).getTime() : NaN
+        const workflowStartTime = !isNaN(parsedStartTime) ? parsedStartTime : null
           
         const { events, totalDuration, timelineStartTime } = prepareTimelineEvents(eventsList, workflowStartTime)
         const packetsList = (dataFlowResponse.packets ?? []).map(packet => {

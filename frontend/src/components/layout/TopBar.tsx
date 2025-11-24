@@ -6,7 +6,6 @@ import {
   ArrowLeft,
   Save,
   Play,
-  StopCircle,
   PencilLine,
   MonitorPlay,
   Upload,
@@ -40,7 +39,7 @@ export function TopBar({
   const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   const { metadata, isDirty, setWorkflowName } = useWorkflowStore()
-  const { status, runStatus, reset } = useWorkflowExecution()
+  const { status } = useWorkflowExecution()
   const isRunning = status === 'running' || status === 'queued'
   const { mode, setMode } = useWorkflowUiStore()
   const canEdit = Boolean(canManageWorkflows)
@@ -66,9 +65,7 @@ export function TopBar({
     }
   }
 
-  const handleStop = () => {
-    reset()
-  }
+
 
   const handleExport = () => {
     if (!canEdit) {
@@ -221,71 +218,31 @@ export function TopBar({
           </Button>
         </div>
 
-        <div className="flex gap-2">
-          {isDirty && (
-            <span className="text-xs text-muted-foreground self-center">
-              Unsaved changes
-            </span>
-          )}
-          <Button
-            onClick={handleSave}
-            disabled={!canEdit || isSaving || isRunning}
-            variant="outline"
-            className="gap-2"
-          >
-            <Save className="h-4 w-4" />
-            {isSaving ? 'Saving...' : 'Save'}
-          </Button>
-          {isRunning ? (
-            <Button
-              onClick={handleStop}
-              variant="destructive"
-              disabled={!canEdit}
-              className="gap-2"
-            >
-              <StopCircle className="h-4 w-4" />
-              Stop
-            </Button>
-          ) : (
-            <Button
-              onClick={handleRun}
-              disabled={!canEdit}
-              className="gap-2"
-            >
-              <Play className="h-4 w-4" />
-              Run
-            </Button>
-          )}
+        {isDirty && (
+          <span className="text-xs text-muted-foreground self-center">
+            Unsaved changes
+          </span>
+        )}
+        <Button
+          onClick={handleSave}
+          disabled={!canEdit || isSaving || isRunning}
+          variant="outline"
+          className="gap-2"
+        >
+          <Save className="h-4 w-4" />
+          {isSaving ? 'Saving...' : 'Save'}
+        </Button>
 
-          {status === 'queued' && (
-            <span className="text-sm text-muted-foreground font-medium">
-              Queued…
-            </span>
-          )}
+        <Button
+          onClick={handleRun}
+          disabled={!canEdit || isRunning}
+          className="gap-2"
+        >
+          <Play className="h-4 w-4" />
+          Run
+        </Button>
 
-          {runStatus?.progress && (
-            <span className="text-sm text-muted-foreground font-medium">
-              {runStatus.progress.completedActions}/{runStatus.progress.totalActions} actions
-            </span>
-          )}
 
-          {status === 'completed' && (
-            <span className="text-sm text-green-600 font-medium">
-              ✓ Completed
-            </span>
-          )}
-
-          {status === 'failed' && (
-            <span className="text-sm text-red-600 font-medium">
-              ✗ Failed
-            </span>
-          )}
-          {status === 'failed' && runStatus?.failure?.reason && (
-            <span className="text-sm text-red-600">
-              {runStatus.failure.reason}
-            </span>
-          )}
-        </div>
       </div>
     </div>
   )
