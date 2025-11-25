@@ -3,10 +3,17 @@
 # ShipSec Studio - Simplified Docker Setup
 # Run `just` to see available commands
 
+# Show available commands and environment info
 default:
-    @just --list
+    @just help
+
+# List all recipes in alphabetical order
+list:
+    @just --list --color never
 
 # === Infrastructure Only ===
+
+# Start Docker infrastructure (PostgreSQL, Temporal, MinIO, Redis)
 infra-up:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -22,6 +29,7 @@ infra-up:
     echo "   - Loki: http://localhost:3100"
     echo "   - Redis: localhost:6379"
 
+# Stop Docker infrastructure
 infra-down:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -29,9 +37,11 @@ infra-down:
     docker compose -f docker/docker-compose.infra.yml down
     echo "✅ Infrastructure stopped"
 
+# View infrastructure logs (follow mode)
 infra-logs:
     docker compose -f docker/docker-compose.infra.yml logs -f
 
+# Clean infrastructure (stop and remove volumes)
 infra-clean:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -41,6 +51,8 @@ infra-clean:
     echo "✅ Infrastructure cleaned"
 
 # === Production: Full Docker Setup ===
+
+# Start production environment (all services in Docker)
 up:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -62,6 +74,7 @@ up:
     echo "   - MinIO Console: http://localhost:9001"
     echo "   - Redis: localhost:6379"
 
+# Stop production environment
 down:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -69,9 +82,11 @@ down:
     docker compose -f docker/docker-compose.full.yml down
     echo "✅ Production environment stopped"
 
+# View production logs (follow mode)
 logs:
     docker compose -f docker/docker-compose.full.yml logs -f
 
+# Clean production environment (stop and remove all data)
 clean:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -82,6 +97,8 @@ clean:
     echo "✅ Production environment cleaned"
 
 # === Development: Docker Infra + PM2 Apps ===
+
+# Start development environment (Docker infra + PM2 apps with hot-reload)
 dev:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -112,6 +129,10 @@ dev:
     # Install dependencies if needed
     if [ ! -d "node_modules" ]; then
         echo "📦 Installing dependencies..."
+        # Handle macOS-specific native module build requirements
+        if [[ "$OSTYPE" == "darwin"* ]]; then
+            export SDKROOT=$(xcrun --show-sdk-path)
+        fi
         bun install
     fi
 
@@ -132,6 +153,7 @@ dev:
     echo "💡 View logs: pm2 logs"
     echo "💡 View status: pm2 status"
 
+# Stop development environment (PM2 apps + infrastructure)
 dev-stop:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -141,6 +163,8 @@ dev-stop:
     echo "✅ Development environment stopped"
 
 # === Utilities ===
+
+# Show status of all Docker containers
 status:
     @echo "📊 Docker container status:"
     @echo ""
@@ -150,6 +174,7 @@ status:
     @echo "Full environment:"
     @docker compose -f docker/docker-compose.full.yml ps 2>/dev/null || echo "  Not running"
 
+# Build application Docker images
 build:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -160,22 +185,54 @@ build:
     docker compose -f docker/docker-compose.full.yml build backend frontend worker
     echo "✅ Images built"
 
+# Reset database and run migrations
+db-reset:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "🗑️  Resetting database..."
+
+    # Check if postgres container is running
+    if ! docker ps --filter "name=shipsec-postgres" --format "{{{{.Names}}}}" | grep -q "shipsec-postgres"; then
+        echo "❌ PostgreSQL container is not running"
+        echo "💡 Start infrastructure with: just infra-up"
+        exit 1
+    fi
+
+    # Drop all tables by dropping and recreating the database
+    echo "📦 Dropping and recreating database..."
+    docker exec shipsec-postgres psql -U shipsec -d postgres -c "DROP DATABASE IF EXISTS shipsec;"
+    docker exec shipsec-postgres psql -U shipsec -d postgres -c "CREATE DATABASE shipsec;"
+
+    # Run migrations to recreate schema
+    echo "🔄 Running migrations..."
+    bun --cwd=backend run migration:push
+
+    echo "✅ Database reset complete"
+    echo "📊 Database is now in a clean state with latest schema"
+
 # === PM2 Management ===
+
+# Start PM2 applications
 pm2-start:
     #!/usr/bin/env bash
     set -euo pipefail
     SHIPSEC_ENV=development NODE_ENV=development pm2 startOrReload pm2.config.cjs --update-env
 
+# Stop all PM2 applications
 pm2-stop:
     pm2 delete shipsec-frontend shipsec-backend shipsec-worker shipsec-test-worker 2>/dev/null || true
 
+# View PM2 logs (follow mode)
 pm2-logs:
     pm2 logs
 
+# Show PM2 application status
 pm2-status:
     pm2 status
 
 # === Help ===
+
+# Show detailed help and environment information
 help:
     @echo "ShipSec Studio - Environment Setup"
     @echo ""
@@ -204,6 +261,7 @@ help:
     @echo "Utilities:"
     @echo "  just status        # Show container status"
     @echo "  just build         # Build application images"
+    @echo "  just db-reset      # Reset database and run migrations"
     @echo ""
     @echo "Environment Differences:"
     @echo "  PRODUCTION:"
