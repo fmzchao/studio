@@ -20,7 +20,7 @@ import { useWorkflowStore } from '@/store/workflowStore'
 import { useComponentStore } from '@/store/componentStore'
 import { useWorkflowUiStore } from '@/store/workflowUiStore'
 import { useExecutionTimelineStore } from '@/store/executionTimelineStore'
-import { useRunStore } from '@/store/runStore'
+import { useRunStore, type ExecutionRun } from '@/store/runStore'
 import { api, API_BASE_URL } from '@/services/api'
 import { cn } from '@/lib/utils'
 import {
@@ -32,6 +32,7 @@ import {
   serializeEdges,
 } from '@/utils/workflowSerializer'
 import type { FrontendNodeData } from '@/schemas/node'
+import type { ExecutionStatus } from '@/schemas/execution'
 import { useAuthStore } from '@/store/authStore'
 import { hasAdminRole } from '@/utils/auth'
 import { WorkflowImportSchema, DEFAULT_WORKFLOW_VIEWPORT } from '@/schemas/workflow'
@@ -50,6 +51,47 @@ const cloneNodes = (nodes: ReactFlowNode<FrontendNodeData>[]) =>
   }))
 
 const cloneEdges = (edges: ReactFlowEdge[]) => edges.map((edge) => ({ ...edge }))
+
+const TERMINAL_RUN_STATUSES: ExecutionStatus[] = [
+  'COMPLETED',
+  'FAILED',
+  'CANCELLED',
+  'TERMINATED',
+  'TIMED_OUT',
+]
+
+const normalizeRunSummary = (run: any): ExecutionRun => {
+  const status = (typeof run.status === 'string' ? run.status.toUpperCase() : 'FAILED') as ExecutionStatus
+  const startTime =
+    typeof run.startTime === 'string' ? run.startTime : new Date().toISOString()
+  const endTime = typeof run.endTime === 'string' ? run.endTime : undefined
+
+  return {
+    id: String(run.id ?? run.runId ?? ''),
+    workflowId: String(run.workflowId ?? ''),
+    workflowName: String(run.workflowName ?? 'Untitled workflow'),
+    status,
+    startTime,
+    endTime,
+    duration: typeof run.duration === 'number' ? run.duration : undefined,
+    nodeCount: typeof run.nodeCount === 'number' ? run.nodeCount : 0,
+    eventCount: typeof run.eventCount === 'number' ? run.eventCount : 0,
+    createdAt: startTime,
+    isLive: !TERMINAL_RUN_STATUSES.includes(status),
+    workflowVersionId: typeof run.workflowVersionId === 'string' ? run.workflowVersionId : null,
+    workflowVersion: typeof run.workflowVersion === 'number' ? run.workflowVersion : null,
+  }
+}
+
+const isRunLive = (run?: ExecutionRun | null) => {
+  if (!run) {
+    return false
+  }
+  if (run.isLive) {
+    return true
+  }
+  return !TERMINAL_RUN_STATUSES.includes(run.status)
+}
 
 /**
  * Format error messages to be more human-readable
@@ -73,7 +115,7 @@ function formatErrorMessage(message: string): string {
 }
 
 function WorkflowBuilderContent() {
-  const { id } = useParams<{ id: string }>()
+  const { id, runId: routeRunId } = useParams<{ id: string; runId?: string }>()
   const navigate = useNavigate()
   const isNewWorkflow = id === 'new'
   const {
@@ -119,8 +161,12 @@ function WorkflowBuilderContent() {
   const inspectorWidth = useWorkflowUiStore((state) => state.inspectorWidth)
   const setInspectorWidth = useWorkflowUiStore((state) => state.setInspectorWidth)
   const setMode = useWorkflowUiStore((state) => state.setMode)
+  const selectRun = useExecutionTimelineStore((state) => state.selectRun)
   const selectedRunId = useExecutionTimelineStore((state) => state.selectedRunId)
   const fetchRuns = useRunStore((state) => state.fetchRuns)
+  const refreshRuns = useRunStore((state) => state.refreshRuns)
+  const getRunById = useRunStore((state) => state.getRunById)
+  const upsertRun = useRunStore((state) => state.upsertRun)
   const workflowCacheKey = metadata.id ?? '__global__'
   const scopedRuns = useRunStore((state) => state.cache[workflowCacheKey]?.runs)
   const runs = scopedRuns ?? []
@@ -215,6 +261,71 @@ function WorkflowBuilderContent() {
 
     fetchRuns({ workflowId: metadata.id }).catch(() => undefined)
   }, [fetchRuns, metadata.id])
+
+  useEffect(() => {
+    if (!metadata.id || !routeRunId || selectedRunId === routeRunId) {
+      return
+    }
+
+    let cancelled = false
+
+    const ensureRouteRun = async () => {
+      let targetRun = getRunById(routeRunId)
+
+      if (!targetRun) {
+        try {
+          await refreshRuns(metadata.id)
+          targetRun = getRunById(routeRunId)
+        } catch (error) {
+          console.error('Failed to refresh runs for route:', error)
+        }
+      }
+
+      if (!targetRun) {
+        try {
+          const runDetails = await api.executions.getRun(routeRunId)
+          if (cancelled) return
+          const normalized = normalizeRunSummary(runDetails)
+          upsertRun(normalized)
+          targetRun = normalized
+        } catch (error) {
+          if (cancelled) return
+          console.error('Failed to load workflow run from route:', error)
+          toast({
+            variant: 'destructive',
+            title: 'Run not found',
+            description: 'This execution may have been deleted or is no longer available.',
+          })
+          navigate(`/workflows/${metadata.id}`, { replace: true })
+          return
+        }
+      }
+
+      if (cancelled || !targetRun) {
+        return
+      }
+
+      if (targetRun.workflowId && targetRun.workflowId !== metadata.id) {
+        navigate(`/workflows/${targetRun.workflowId}/runs/${routeRunId}`, { replace: true })
+        return
+      }
+
+      try {
+        await selectRun(routeRunId, isRunLive(targetRun) ? 'live' : 'replay')
+        if (isRunLive(targetRun)) {
+          useExecutionStore.getState().monitorRun(routeRunId, targetRun.workflowId)
+        }
+      } catch (error) {
+        console.error('Failed to select run from route:', error)
+      }
+    }
+
+    void ensureRouteRun()
+
+    return () => {
+      cancelled = true
+    }
+  }, [metadata.id, routeRunId, selectedRunId, refreshRuns, getRunById, upsertRun, selectRun, navigate, toast])
 
   useEffect(() => {
     if (!metadata.id) {

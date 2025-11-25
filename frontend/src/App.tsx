@@ -40,6 +40,14 @@ function App() {
                       </ProtectedRoute>
                     }
                   />
+                  <Route
+                    path="/workflows/:id/runs/:runId"
+                    element={
+                      <ProtectedRoute>
+                        <WorkflowBuilder />
+                      </ProtectedRoute>
+                    }
+                  />
                   <Route path="/secrets" element={<SecretsManager />} />
                   <Route path="/integrations" element={<IntegrationsManager />} />
                   <Route path="/artifacts" element={<ArtifactLibrary />} />

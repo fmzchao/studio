@@ -34,7 +34,7 @@ describe('atlassian offboarding component', () => {
     const component = componentRegistry.get('shipsec.atlassian.offboarding');
     expect(component).toBeDefined();
     expect(component?.label).toBe('Atlassian Offboarding');
-    expect(component?.category).toBe('security');
+    expect(component?.category).toBe('it_ops');
   });
 
   it('deletes matching users with direct access token and summarises results', async () => {

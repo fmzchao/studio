@@ -267,12 +267,30 @@ describe('WorkflowsService', () => {
       }
       return undefined;
     },
+    async list(options: { workflowId?: string; organizationId?: string | null } = {}) {
+      if (!storedRunMeta) {
+        return [];
+      }
+      if (options.workflowId && storedRunMeta.workflowId !== options.workflowId) {
+        return [];
+      }
+      if (options.organizationId && storedRunMeta.organizationId !== options.organizationId) {
+        return [];
+      }
+      return [storedRunMeta];
+    },
   };
 
   const traceRepositoryMock = {
     async countByType(runId: string, type: string) {
-      if (type === 'NODE_COMPLETED' && storedRunMeta?.runId === runId) {
+      if (!storedRunMeta || storedRunMeta.runId !== runId) {
+        return 0;
+      }
+      if (type === 'NODE_COMPLETED') {
         return completedCount;
+      }
+      if (type === 'NODE_STARTED') {
+        return storedRunMeta.totalActions ?? 0;
       }
       return 0;
     },
@@ -419,6 +437,34 @@ describe('WorkflowsService', () => {
       totalActions: definition.actions.length,
       organizationId: TEST_ORG,
     });
+  });
+
+  it('returns run metadata via getRun', async () => {
+    await service.create(sampleGraph, authContext);
+    const definition = compileWorkflowGraph(sampleGraph);
+    repositoryMock.findById = async () => ({
+      id: 'workflow-id',
+      createdAt: new Date(now),
+      updatedAt: new Date(now),
+      name: sampleGraph.name,
+      description: sampleGraph.description ?? null,
+      graph: sampleGraph,
+      compiledDefinition: definition,
+      lastRun: null,
+      runCount: 0,
+      organizationId: TEST_ORG,
+    });
+
+    const run = await service.run('workflow-id', { inputs: { foo: 'bar' } }, authContext);
+    const summary = await service.getRun(run.runId, authContext);
+
+    expect(summary.id).toBe(run.runId);
+    expect(summary.workflowId).toBe('workflow-id');
+    expect(summary.workflowName).toBe(sampleGraph.name);
+    expect(summary.nodeCount).toBeGreaterThan(0);
+    expect(summary.eventCount).toBeGreaterThanOrEqual(0);
+    expect(summary.duration).toBeGreaterThanOrEqual(0);
+    expect(summary.status).toBe('RUNNING');
   });
 
   it('delegates status, result, and cancel operations to the Temporal service', async () => {

@@ -1585,7 +1585,7 @@
                         "properties": {
                           "label": {
                             "type": "string",
-                            "example": "📥 Input"
+                            "example": "\ud83d\udce5 Input"
                           },
                           "color": {
                             "type": "string",
@@ -1597,7 +1597,7 @@
                           },
                           "emoji": {
                             "type": "string",
-                            "example": "📥"
+                            "example": "\ud83d\udce5"
                           }
                         }
                       },
@@ -2823,6 +2823,100 @@
         },
         "tags": [
           "TestingWebhook"
+        ]
+      }
+    },
+    "/api/v1/workflows/runs/{runId}": {
+      "get": {
+        "operationId": "WorkflowsController_getRun",
+        "parameters": [
+          {
+            "name": "runId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Metadata for a single workflow run",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "workflowId": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "RUNNING",
+                        "COMPLETED",
+                        "FAILED",
+                        "CANCELLED",
+                        "TERMINATED",
+                        "CONTINUED_AS_NEW",
+                        "TIMED_OUT",
+                        "UNKNOWN"
+                      ]
+                    },
+                    "startTime": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "endTime": {
+                      "type": "string",
+                      "format": "date-time",
+                      "nullable": true
+                    },
+                    "temporalRunId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "workflowVersionId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "workflowVersion": {
+                      "type": "number",
+                      "nullable": true
+                    },
+                    "workflowName": {
+                      "type": "string"
+                    },
+                    "eventCount": {
+                      "type": "number"
+                    },
+                    "nodeCount": {
+                      "type": "number"
+                    },
+                    "duration": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "workflowId",
+                    "status",
+                    "startTime",
+                    "workflowName",
+                    "eventCount",
+                    "nodeCount",
+                    "duration"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "workflows"
         ]
       }
     }
