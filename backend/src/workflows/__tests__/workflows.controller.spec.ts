@@ -461,4 +461,18 @@ describe('WorkflowsController', () => {
     expect(trace.events).toHaveLength(0);
     expect(trace.cursor).toBeUndefined();
   });
+
+  it('returns run metadata for direct run lookup', async () => {
+    const created = await controller.create(authContext, baseGraph);
+    await controller.commit(created.id, authContext);
+    const run = await controller.run(authContext, created.id, {
+      inputs: { payload: { value: 'ping' } },
+    });
+
+    const summary = await controller.getRun(authContext, run.runId);
+    expect(summary.id).toBe(run.runId);
+    expect(summary.workflowId).toBe(created.id);
+    expect(summary.workflowName).toBeDefined();
+    expect(summary.nodeCount).toBeGreaterThan(0);
+  });
 });

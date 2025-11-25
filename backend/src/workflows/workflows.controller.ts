@@ -303,6 +303,37 @@ export class WorkflowsController {
     });
   }
 
+  @Get('/runs/:runId')
+  @ApiOkResponse({
+    description: 'Metadata for a single workflow run',
+    schema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string' },
+        workflowId: { type: 'string' },
+        status: {
+          type: 'string',
+          enum: ['RUNNING', 'COMPLETED', 'FAILED', 'CANCELLED', 'TERMINATED', 'CONTINUED_AS_NEW', 'TIMED_OUT', 'UNKNOWN'],
+        },
+        startTime: { type: 'string', format: 'date-time' },
+        endTime: { type: 'string', format: 'date-time', nullable: true },
+        temporalRunId: { type: 'string', nullable: true },
+        workflowVersionId: { type: 'string', nullable: true },
+        workflowVersion: { type: 'number', nullable: true },
+        workflowName: { type: 'string' },
+        eventCount: { type: 'number' },
+        nodeCount: { type: 'number' },
+        duration: { type: 'number' },
+      },
+    },
+  })
+  async getRun(
+    @CurrentAuth() auth: AuthContext | null,
+    @Param('runId') runId: string,
+  ) {
+    return this.workflowsService.getRun(runId, auth);
+  }
+
   @Get(':id')
   @ApiOkResponse({ type: WorkflowResponseDto })
   async findOne(

@@ -496,6 +496,13 @@ export const api = {
       if (response.error) throw new Error('Failed to fetch runs')
       return response.data || { runs: [] }
     },
+
+    getRun: async (runId: string) => {
+      const response = await apiClient.getWorkflowRun(runId)
+      if (response.error) throw new Error('Failed to fetch run')
+      if (!response.data) throw new Error('Run not found')
+      return response.data
+    },
   },
 
   files: {

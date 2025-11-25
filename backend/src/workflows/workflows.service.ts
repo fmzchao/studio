@@ -28,7 +28,7 @@ import {
   TraceEventPayload,
   WorkflowRunConfigPayload,
 } from '@shipsec/shared';
-import type { WorkflowVersionRecord } from '../database/schema';
+import type { WorkflowRunRecord, WorkflowVersionRecord } from '../database/schema';
 import type { AuthContext } from '../auth/types';
 
 export interface WorkflowRunRequest {
@@ -45,6 +45,21 @@ export interface WorkflowRunHandle {
   temporalRunId: string;
   status: ExecutionStatus;
   taskQueue: string;
+}
+
+export interface WorkflowRunSummary {
+  id: string;
+  workflowId: string;
+  workflowVersionId: string | null;
+  workflowVersion: number | null;
+  status: ExecutionStatus;
+  startTime: Date;
+  endTime?: Date | null;
+  temporalRunId?: string;
+  workflowName: string;
+  eventCount: number;
+  nodeCount: number;
+  duration: number;
 }
 
 const SHIPSEC_WORKFLOW_TYPE = 'shipsecWorkflowRun';
@@ -285,6 +300,53 @@ export class WorkflowsService {
     return Math.max(0, endTime - startTime);
   }
 
+  private async buildRunSummary(
+    run: WorkflowRunRecord,
+    organizationId: string,
+  ): Promise<WorkflowRunSummary> {
+    const workflow = await this.repository.findById(run.workflowId, { organizationId });
+    const workflowName = workflow?.name ?? 'Unknown Workflow';
+    const version = run.workflowVersionId
+      ? await this.versionRepository.findById(run.workflowVersionId, { organizationId })
+      : workflow
+        ? await this.versionRepository.findLatestByWorkflowId(workflow.id, { organizationId })
+        : undefined;
+    const graph = (version?.graph ?? workflow?.graph) as { nodes?: unknown[] } | undefined;
+    const nodeCount = Array.isArray(graph?.nodes) ? graph!.nodes!.length : 0;
+
+    const eventCount = await this.traceRepository.countByType(
+      run.runId,
+      'NODE_STARTED',
+      organizationId,
+    );
+
+    let currentStatus: ExecutionStatus = 'RUNNING';
+    try {
+      const status = await this.temporalService.describeWorkflow({
+        workflowId: run.runId,
+        runId: run.temporalRunId ?? undefined,
+      });
+      currentStatus = this.normalizeStatus(status.status);
+    } catch (error) {
+      this.logger.warn(`Failed to get status for run ${run.runId}: ${error}`);
+    }
+
+    return {
+      id: run.runId,
+      workflowId: run.workflowId,
+      workflowVersionId: run.workflowVersionId ?? null,
+      workflowVersion: run.workflowVersion ?? null,
+      status: currentStatus,
+      startTime: run.createdAt,
+      endTime: run.updatedAt ?? null,
+      temporalRunId: run.temporalRunId ?? undefined,
+      workflowName,
+      eventCount,
+      nodeCount,
+      duration: this.computeDuration(run.createdAt, run.updatedAt),
+    };
+  }
+
   async listRuns(
     auth?: AuthContext | null,
     options: {
@@ -298,60 +360,22 @@ export class WorkflowsService {
       ...options,
       organizationId,
     });
-    const enrichedRuns = [];
+    const summaries = await Promise.all(
+      runs.map((run) => this.buildRunSummary(run, organizationId)),
+    );
 
-    for (const run of runs) {
-      // Get workflow name
-      const workflow = await this.repository.findById(run.workflowId, { organizationId });
-      const workflowName = workflow?.name ?? 'Unknown Workflow';
-      const version = run.workflowVersionId
-        ? await this.versionRepository.findById(run.workflowVersionId, { organizationId })
-        : workflow
-          ? await this.versionRepository.findLatestByWorkflowId(workflow.id, { organizationId })
-          : undefined;
-      const graph = (version?.graph ?? workflow?.graph) as { nodes?: unknown[] } | undefined;
-      const nodeCount = Array.isArray(graph?.nodes) ? graph!.nodes!.length : 0;
+    summaries.sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
+    this.logger.log(`Loaded ${summaries.length} workflow run(s) for timeline`);
+    return { runs: summaries };
+  }
 
-      // Get event count
-      const eventCount = await this.traceRepository.countByType(
-        run.runId,
-        'NODE_STARTED',
-        organizationId,
-      );
-
-      // Get current status from Temporal
-      let currentStatus = 'UNKNOWN';
-      try {
-        const status = await this.temporalService.describeWorkflow({
-          workflowId: run.runId,
-          runId: run.temporalRunId ?? undefined,
-        });
-        currentStatus = this.normalizeStatus(status.status);
-      } catch (error) {
-        this.logger.warn(`Failed to get status for run ${run.runId}: ${error}`);
-      }
-
-      enrichedRuns.push({
-        id: run.runId,
-        workflowId: run.workflowId,
-        workflowVersionId: run.workflowVersionId ?? null,
-        workflowVersion: run.workflowVersion ?? null,
-        status: currentStatus,
-        startTime: run.createdAt,
-        endTime: run.updatedAt,
-        temporalRunId: run.temporalRunId ?? undefined,
-        workflowName,
-        eventCount,
-        nodeCount,
-        duration: this.computeDuration(run.createdAt, run.updatedAt),
-      });
+  async getRun(runId: string, auth?: AuthContext | null): Promise<WorkflowRunSummary> {
+    const organizationId = this.requireOrganizationId(auth);
+    const run = await this.runRepository.findByRunId(runId, { organizationId });
+    if (!run) {
+      throw new NotFoundException(`Workflow run ${runId} not found`);
     }
-
-    // Sort by start time (newest first)
-    enrichedRuns.sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
-
-    this.logger.log(`Loaded ${enrichedRuns.length} workflow run(s) for timeline`);
-    return { runs: enrichedRuns };
+    return this.buildRunSummary(run, organizationId);
   }
 
   async commit(id: string, auth?: AuthContext | null): Promise<WorkflowDefinition> {
