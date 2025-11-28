@@ -61,22 +61,14 @@ const textBlockMetadata = {
   outputs: [],
   parameters: [
     {
-      id: 'title',
-      label: 'Title',
-      type: 'text' as const,
-      required: false,
-      placeholder: 'Optional heading',
-      description: 'Short heading shown in the node header. Defaults to the component name.',
-    },
-    {
       id: 'content',
-      label: 'Text Content',
+      label: 'Content',
       type: 'textarea' as const,
       required: false,
-      rows: 6,
-      placeholder: 'Add your workflow notes here…',
-      description: 'The body text displayed inside the node. Supports plain text.',
-      helpText: 'Use this to document manual steps, reminders, or context for teammates.',
+      rows: 10,
+      placeholder: 'Add your notes here... Supports **Markdown**!',
+      description: 'Markdown content for notes and documentation',
+      helpText: 'Supports GitHub Flavored Markdown including checklists, tables, and code blocks',
     },
   ],
   examples: [],
@@ -96,7 +88,7 @@ describe('WorkflowNode – text block rendering', () => {
     cleanup()
   })
 
-  it('renders configured title and content inside the node body', () => {
+  it('renders configured content inside the node body', () => {
     const nodeData = {
       label: 'Text',
       config: {},
@@ -104,7 +96,6 @@ describe('WorkflowNode – text block rendering', () => {
       componentSlug: 'text-block',
       componentVersion: '1.0.0',
       parameters: {
-        title: 'Incident Checklist',
         content: 'Review the execution summary before approval.',
       },
       inputs: {},
@@ -127,7 +118,7 @@ describe('WorkflowNode – text block rendering', () => {
       </ReactFlowProvider>
     )
 
-    expect(screen.getByText('Incident Checklist')).toBeInTheDocument()
+    expect(screen.getByText('Text')).toBeInTheDocument()
     expect(screen.getByTestId('text-block-content')).toHaveTextContent(
       'Review the execution summary before approval.'
     )
@@ -141,7 +132,6 @@ describe('WorkflowNode – text block rendering', () => {
       componentSlug: 'text-block',
       componentVersion: '1.0.0',
       parameters: {
-        title: '',
         content: '   ',
       },
       inputs: {},

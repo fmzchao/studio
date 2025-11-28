@@ -21,8 +21,9 @@ describe('MarkdownView', () => {
   })
 
   it('renders images', () => {
-    render(<MarkdownView content="![alt text](https://example.com/image.png)" />)
-    const img = screen.getByRole('img')
+    const { container } = render(<MarkdownView content="![alt text](https://example.com/image.png)" />)
+    const img = container.querySelector('img')
+    expect(img).not.toBeNull()
     expect(img).toHaveAttribute('src', 'https://example.com/image.png')
   })
 
