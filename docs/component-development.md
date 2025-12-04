@@ -10,6 +10,8 @@ This guide provides best practices and required patterns for developing ShipSec 
 - [Security Requirements](#security-requirements)
 - [Testing Checklist](#testing-checklist)
 - [Common Patterns](#common-patterns)
+- [Docker Entrypoint Pattern: Shell Wrapper for PTY Compatibility](#docker-entrypoint-pattern-shell-wrapper-for-pty-compatibility)
+- [Output Buffering: Universal Solutions for All CLI Tools](#output-buffering-universal-solutions-for-all-cli-tools)
 
 ---
 
@@ -522,13 +524,564 @@ See `worker/src/utils/COMPONENTS_TO_MIGRATE.md` for detailed migration plans.
 
 ---
 
+## Docker Entrypoint Pattern: Shell Wrapper for PTY Compatibility
+
+### Why We Use Shell Wrappers
+
+**All Docker-based components MUST use a shell wrapper (`sh -c`) as the entrypoint, not the CLI tool directly.**
+
+This is required for **PTY (pseudo-terminal) compatibility**. PTY enables real-time streaming of terminal output to users, which is critical for:
+- Live progress updates during long-running scans
+- Streaming results as they're discovered
+- Interactive terminal experience
+- Better UX for monitoring execution
+
+### The Problem: Direct Binary Execution
+
+When CLI tools run directly as the main container process with a PTY attached (`docker run -it`), they may not properly handle TTY signals and can hang indefinitely:
+
+```typescript
+// ❌ WRONG - Can hang with PTY
+const definition = {
+  runner: {
+    kind: 'docker',
+    image: 'projectdiscovery/dnsx:latest',
+    entrypoint: 'dnsx',  // Direct binary execution
+    command: ['-json', '-silent', '-l', '/inputs/domains.txt']
+  }
+}
+```
+
+**What happens:**
+- Container starts successfully
+- Tool begins execution
+- Output never appears (buffering or waiting for TTY input)
+- Container hangs until timeout (e.g., 180 seconds)
+- Workflow fails with timeout error
+
+### The Solution: Shell Wrapper Pattern
+
+Wrap the CLI tool in a shell script, which properly handles TTY behavior and ensures clean exit:
+
+```typescript
+// ✅ CORRECT - PTY compatible
+const definition = {
+  runner: {
+    kind: 'docker',
+    image: 'projectdiscovery/dnsx:latest',
+    entrypoint: 'sh',           // Shell as entrypoint
+    command: ['-c', 'dnsx "$@"', '--'],  // Wrap tool in shell
+    // Additional args will be appended after '--'
+  }
+}
+```
+
+**How it works:**
+- `sh -c` runs the command in a shell
+- `dnsx "$@"` executes dnsx with all arguments
+- `--` marks the end of shell options, everything after becomes `$@`
+- Shell handles TTY signals correctly and exits cleanly
+
+### Implementation Pattern
+
+For components that build dynamic arguments, use this pattern:
+
+```typescript
+// 1. Define base runner with shell wrapper
+const definition: ComponentDefinition<Input, Output> = {
+  id: 'shipsec.tool.run',
+  label: 'Tool',
+  category: 'security',
+  runner: {
+    kind: 'docker',
+    image: 'tool:latest',
+    entrypoint: 'sh',
+    command: ['-c', 'tool "$@"', '--'],  // Shell wrapper
+    network: 'bridge',
+  },
+  // ... inputSchema, outputSchema ...
+
+  async execute(input, context) {
+    // 2. Build tool-specific arguments
+    const toolArgs = buildArgs(input);  // e.g., ['-json', '-silent', '-l', '/inputs/file.txt']
+
+    // 3. Combine shell wrapper + tool args
+    const runnerConfig: DockerRunnerConfig = {
+      kind: 'docker',
+      image: baseRunner.image,
+      entrypoint: baseRunner.entrypoint,  // 'sh'
+      command: [...(baseRunner.command ?? []), ...toolArgs],
+      // Result: ['sh', '-c', 'tool "$@"', '--', '-json', '-silent', '-l', '/inputs/file.txt']
+      // Executes as: sh -c 'tool "$@"' -- -json -silent -l /inputs/file.txt
+    };
+
+    return await runComponentWithRunner(runnerConfig, ...);
+  }
+};
+```
+
+### Why This Pattern Works
+
+1. **TTY Signal Handling**: Shell (`sh`) properly handles SIGTERM, SIGHUP, and other TTY signals
+2. **Clean Exit**: Shell ensures process cleanup even if the wrapped tool doesn't
+3. **Buffering Control**: Shell manages stdout/stderr buffering correctly for TTY
+4. **No Stdin Issues**: Shell doesn't wait for stdin input when not needed
+5. **Consistent Behavior**: Same execution path for PTY and non-PTY modes
+
+### When This Is Required
+
+**ALWAYS use shell wrapper for Docker runners**, especially when:
+- ✅ Component will be used in workflows (PTY is enabled by default)
+- ✅ Tool produces streaming output
+- ✅ Tool is a CLI binary (not a shell script)
+- ✅ Tool runs for more than a few seconds
+
+**Exception**: If the Docker image's default entrypoint is already a shell script (like some official images), you may not need the wrapper. Verify by checking the image's Dockerfile.
+
+### Real-World Examples
+
+#### Example 1: DNSX (Fixed)
+
+```typescript
+// Before: Hung for 180s waiting for timeout
+runner: {
+  entrypoint: 'dnsx',
+  command: ['-h']
+}
+
+// After: Completes in <1s
+runner: {
+  entrypoint: 'sh',
+  command: ['-c', 'dnsx "$@"', '--']
+}
+```
+
+#### Example 2: Subfinder (Already Correct)
+
+```typescript
+// Already uses shell wrapper with full script
+runner: {
+  entrypoint: 'sh',
+  command: [
+    '-c',
+    String.raw`set -eo pipefail
+
+    # Shell script that runs subfinder
+    subfinder -silent -dL "/inputs/domains.txt" |
+      sed 's/\r//g' |
+      sed '/^$/d'
+    `
+  ]
+}
+```
+
+### Testing Your Implementation
+
+Verify PTY compatibility:
+
+```bash
+# 1. Build your component
+bun test src/components/your-component/__tests__/*.test.ts
+
+# 2. Test in actual workflow (PTY enabled)
+# Run workflow in UI or via API
+# Check that:
+# - Output streams in real-time (not all at once after completion)
+# - No timeout errors
+# - Clean exit (no hanging containers)
+
+# 3. Check for orphaned containers
+docker ps -a | grep your-image-name
+# Should be empty after execution completes
+```
+
+### Common Mistakes
+
+❌ **Forgetting the shell wrapper:**
+```typescript
+entrypoint: 'tool',  // Direct binary - will hang
+command: ['-flag']
+```
+
+❌ **Wrong argument passing:**
+```typescript
+entrypoint: 'sh',
+command: ['-c', 'tool -flag']  // Hardcoded args - not flexible
+```
+
+❌ **Overriding entrypoint in execute():**
+```typescript
+const runnerConfig = {
+  entrypoint: 'tool',  // Bypasses the shell wrapper!
+  command: toolArgs
+}
+```
+
+✅ **Correct pattern:**
+```typescript
+const runnerConfig = {
+  entrypoint: baseRunner.entrypoint,  // Keep 'sh'
+  command: [...(baseRunner.command ?? []), ...toolArgs]
+}
+```
+
+### Performance Impact
+
+**Minimal overhead:**
+- Shell startup: <1ms
+- Argument forwarding: negligible
+- Total impact: <0.1% for typical scans
+
+**Benefits far outweigh cost:**
+- Eliminates 180s+ timeout failures
+- Enables real-time output streaming
+- Prevents orphaned containers
+- Better user experience
+
+---
+
+## Output Buffering: Universal Solutions for All CLI Tools
+
+### The Problem
+
+Even with PTY enabled, some CLI tools **buffer their output** instead of streaming it. This causes:
+- Container appears to hang (no output)
+- Results don't stream in real-time
+- Potential timeout failures
+- Poor user experience
+
+**Why buffering happens:**
+- Programs use different buffering modes: line-buffered (TTY) vs fully-buffered (pipe/file)
+- When stdout isn't a TTY, most programs switch to full buffering (4KB-8KB buffer)
+- Buffer only flushes when full or program exits
+- In Docker containers, this can make tools appear hung
+
+### Tool-Specific Solutions
+
+#### ProjectDiscovery Tools (dnsx, subfinder, httpx, nuclei, etc.)
+
+These tools have a built-in `-stream` flag:
+
+```typescript
+// Add to args array
+args.push('-stream');
+```
+
+**What it does:**
+- Disables internal buffering
+- Forces immediate output flush
+- Disables progress stats (they interfere with streaming)
+
+**Example:**
+```typescript
+const args = ['-json', '-silent', '-l', '/inputs/file.txt', '-stream'];
+```
+
+#### GNU Coreutils and Common Tools
+
+Most don't have streaming flags, but you can use shell utilities:
+
+**Option 1: `stdbuf` (line buffering)**
+```typescript
+// Wrap command with stdbuf
+entrypoint: 'sh',
+command: ['-c', 'stdbuf -oL tool "$@"', '--'],
+// -oL means "line buffered output"
+```
+
+**Option 2: `unbuffer` (from expect package)**
+```typescript
+entrypoint: 'sh',
+command: ['-c', 'unbuffer tool "$@"', '--'],
+```
+
+**Option 3: `script` command (full PTY emulation)**
+```typescript
+entrypoint: 'sh',
+command: ['-c', 'script -qec "tool $*" /dev/null', '--'],
+```
+
+### Universal Buffering Control Pattern
+
+For tools that might have buffering issues, use this shell wrapper:
+
+```typescript
+const definition: ComponentDefinition<Input, Output> = {
+  runner: {
+    kind: 'docker',
+    image: 'tool:latest',
+    entrypoint: 'sh',
+    command: [
+      '-c',
+      // Try stdbuf first (available in most images), fallback to direct execution
+      'if command -v stdbuf >/dev/null 2>&1; then stdbuf -oL tool "$@"; else tool "$@"; fi',
+      '--'
+    ],
+  }
+}
+```
+
+### Checking Tool Availability in Images
+
+Before using buffering control tools, verify they're available:
+
+```bash
+# Check Alpine-based images
+docker run --rm alpine:latest which stdbuf unbuffer
+# Usually not available - Alpine uses busybox which lacks stdbuf
+
+# Check Debian/Ubuntu-based images
+docker run --rm ubuntu:latest which stdbuf unbuffer
+# stdbuf: /usr/bin/stdbuf (from coreutils)
+# unbuffer: requires 'expect' package
+
+# Check tool-specific images
+docker run --rm projectdiscovery/dnsx:latest which stdbuf
+# Not available in ProjectDiscovery images
+```
+
+### Decision Tree for Buffering Solutions
+
+```
+Does the tool have a streaming flag? (e.g., -stream, --unbuffered, --line-buffered)
+├─ YES: Use the tool's native flag ✅ BEST OPTION
+│   └─ Example: dnsx -stream, httpx -stream
+│
+└─ NO: Check Docker image base
+    ├─ Debian/Ubuntu-based?
+    │   └─ Use: stdbuf -oL tool "$@" ✅ GOOD OPTION
+    │
+    ├─ Alpine-based?
+    │   ├─ Can you install coreutils?
+    │   │   ├─ YES: apk add coreutils && use stdbuf
+    │   │   └─ NO: Use PTY + script command workaround
+    │   │
+    │   └─ Fallback: Hope PTY mode works 🤞
+    │
+    └─ Unknown/Custom image?
+        └─ Test first, then add stdbuf wrapper if needed
+```
+
+### Testing for Buffering Issues
+
+**Symptoms of buffering problems:**
+- Container runs but produces no output for extended periods
+- Output appears all at once after container exits
+- Container times out waiting for output
+- `docker logs <container>` shows nothing while running
+
+**How to test:**
+
+```bash
+# 1. Run tool in container without streaming
+docker run --rm -i tool:latest tool-command > output.txt &
+PID=$!
+sleep 5
+kill $PID
+cat output.txt  # Empty or incomplete = buffering issue
+
+# 2. Run with stdbuf
+docker run --rm -i tool:latest sh -c "stdbuf -oL tool-command" > output.txt &
+PID=$!
+sleep 5
+kill $PID
+cat output.txt  # Should have partial output = fixed!
+```
+
+### When Buffering Doesn't Matter
+
+You **don't need** buffering solutions when:
+- ✅ Tool outputs JSON at the end (not streaming)
+- ✅ Tool completes in < 5 seconds
+- ✅ Real-time streaming isn't important
+- ✅ Running in non-PTY mode (batch processing)
+
+### Why Some Tools Work Without `-stream`
+
+**Case Study: Why Subfinder Worked But DNSX/httpx Hung**
+
+Both are ProjectDiscovery tools, but they behaved differently:
+
+**Subfinder (worked fine without `-stream`):**
+- Outputs results **line-by-line as discoveries happen**
+- Each subdomain found triggers an immediate write
+- Natural line-buffering behavior (common in text-processing tools)
+- Small outputs (hostnames) flush frequently
+- **Result:** PTY sees data regularly, no hang
+
+**DNSX/httpx (hung without `-stream`):**
+- Collects ALL results in memory first
+- Outputs everything at once when scan completes
+- Uses full buffering (8KB buffer) for JSON output
+- With 27 domains, output < 8KB, buffer never flushes
+- **Result:** PTY sees no data for 180s, timeout occurs
+
+**Key Insight:**
+
+Tools that naturally output **line-by-line** often work fine without `-stream` because:
+- Each line triggers a buffer flush (line-buffering mode)
+- PTY receives incremental data
+- User sees progress in real-time
+
+Tools that output **batch JSON** or **large objects** need `-stream` because:
+- They accumulate data in memory
+- Buffer only flushes when full (8KB) or program exits
+- PTY sees nothing until buffer flushes
+- Causes apparent "hang" even though tool is working
+
+**Recommendation:**
+
+Even if a tool "works" without `-stream`, **always add it for ProjectDiscovery tools** because:
+1. Ensures consistent behavior across all input sizes
+2. Prevents future issues when processing more targets
+3. Better user experience (real-time feedback)
+4. No performance penalty
+
+### Output Format Selection: Plain Text vs JSON
+
+**Why Subfinder Uses Plain Text Instead of JSON:**
+
+Subfinder component does NOT use the `-json` flag, even though it's available. Here's why:
+
+```bash
+# Subfinder without -json (what we use)
+$ subfinder -d example.com -silent
+www.example.com
+mail.example.com
+api.example.com
+
+# Subfinder with -json (what we DON'T use)
+$ subfinder -d example.com -silent -json
+{"host":"www.example.com","input":"example.com"}
+{"host":"mail.example.com","input":"example.com"}
+{"host":"api.example.com","input":"example.com"}
+```
+
+**The Problem with JSONL:**
+
+Subfinder's `-json` flag outputs **JSONL (JSON Lines)** format - one JSON object per line, not a single JSON array. This creates parsing complexity:
+
+```typescript
+// ❌ Can't do this with JSONL:
+const result = JSON.parse(output);  // SyntaxError: Multiple JSON objects
+
+// ✅ Would need line-by-line parsing:
+const subdomains = output
+  .split('\n')
+  .map(line => JSON.parse(line))  // Parse each line separately
+  .map(obj => obj.host);           // Extract the hostname
+```
+
+**Why Other Tools Use JSON:**
+
+Tools like DNSX and httpx output **batch JSON arrays**, which are trivial to parse:
+
+```bash
+# DNSX outputs a single JSON array
+$ dnsx -l domains.txt -json
+[
+  {"host":"example.com","a":["93.184.216.34"]},
+  {"host":"www.example.com","a":["93.184.216.34"]}
+]
+```
+
+```typescript
+// ✅ Clean single parse:
+const result = JSON.parse(output);  // Works directly
+const findings = result.map(item => ({ host: item.host, ips: item.a }));
+```
+
+**Decision Rule:**
+
+| Tool Output Format | Use `-json` Flag? | Reason |
+|-------------------|-------------------|---------|
+| **Batch JSON array** (dnsx, httpx) | ✅ Yes | Single `JSON.parse()` extracts structured data |
+| **JSONL** (subfinder) | ❌ No | Line-by-line parsing adds complexity; plain text is simpler |
+| **Plain text lines** (subfinder, most tools) | ❌ No | Direct `.split('\n')` is simplest |
+
+**Implementation in Subfinder Component:**
+
+```typescript
+// worker/src/components/security/subfinder.ts
+runner: {
+  command: [
+    '-c',
+    String.raw`subfinder -silent -dL /inputs/domains.txt 2>/dev/null || true`
+    // Note: No -json flag - we want plain text output
+  ],
+}
+
+// Parsing is simple:
+const subdomains = rawOutput
+  .split('\n')
+  .map(line => line.trim())
+  .filter(line => line.length > 0);
+```
+
+**Key Takeaway:**
+
+Choose output format based on **parsing simplicity**, not just "JSON is better":
+- Plain text lines → simplest (`.split('\n')`)
+- Batch JSON → structured data worth parsing (`JSON.parse()`)
+- JSONL → avoid unless you need per-line metadata (requires line-by-line parse + aggregation)
+
+### Best Practices Summary
+
+1. **Always try tool-native flags first** (`-stream`, `--unbuffered`, etc.)
+2. **Use shell wrapper pattern** from PTY section (enables buffering control)
+3. **For ProjectDiscovery tools**: Always add `-stream` flag
+4. **For other tools**: Test first, add `stdbuf -oL` if buffering detected
+5. **Document any buffering workarounds** in component comments
+
+### Example: Complete Buffering-Safe Component
+
+```typescript
+const definition: ComponentDefinition<Input, Output> = {
+  id: 'shipsec.tool.run',
+  label: 'Tool Scanner',
+  category: 'security',
+  runner: {
+    kind: 'docker',
+    image: 'tool:latest',
+    // Shell wrapper for PTY compatibility AND buffering control
+    entrypoint: 'sh',
+    command: ['-c', 'tool "$@"', '--'],
+    network: 'bridge',
+  },
+  async execute(input, context) {
+    const args = buildArgs(input);
+
+    // Add tool-specific streaming flag if available
+    // For ProjectDiscovery tools:
+    if (isProjectDiscoveryTool) {
+      args.push('-stream');
+    }
+
+    const runnerConfig = {
+      ...baseRunner,
+      command: [...baseRunner.command, ...args],
+    };
+
+    return await runComponentWithRunner(runnerConfig, input, context);
+  }
+};
+```
+
+---
+
 ## Example: Complete Component
 
 See `worker/src/components/security/dnsx.ts` for a production example:
+- Lines 320-326: Shell wrapper definition
 - Lines 615-618: Volume creation
 - Lines 626-635: File preparation
 - Lines 637-649: Volume initialization and mount
+- Lines 645-646: Preserving shell wrapper in runtime config
 - Lines 659-661: Cleanup
+
+See `worker/src/components/security/subfinder.ts` for shell script pattern:
+- Lines 80-82: Shell entrypoint with full script
+- Lines 84-131: Bash script that wraps subfinder execution
 
 ---
 
@@ -536,5 +1089,6 @@ See `worker/src/components/security/dnsx.ts` for a production example:
 
 - Component development: `.ai/component-sdk.md`
 - File access patterns: This document
+- PTY/Terminal issues: This document (Shell Wrapper section)
 - Security questions: #security channel
 - Bug reports: GitHub Issues
