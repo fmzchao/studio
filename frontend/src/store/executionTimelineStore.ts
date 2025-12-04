@@ -478,6 +478,11 @@ export const useExecutionTimelineStore = create<TimelineStore>()(
           api.executions.getStatus(runId).catch(() => null)
         ])
 
+        // Also fetch historical logs for the run
+        void import('./executionStore').then(({ useExecutionStore }) => {
+          useExecutionStore.getState().fetchHistoricalLogs(runId)
+        })
+
         const eventsList = (eventsResponse.events ?? []).filter(
           (event): event is ExecutionLog => 
             Boolean(event.id && event.runId && event.nodeId && event.timestamp && event.type && event.level)

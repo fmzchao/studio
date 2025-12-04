@@ -148,6 +148,17 @@ export class LogIngestService implements OnModuleInit, OnModuleDestroy {
   }
 
   private buildLines(message: string, timestamp: Date) {
+    // Check if message is JSON (starts with { or [) - keep as single line
+    const trimmed = message.trim();
+    if ((trimmed.startsWith('{') && trimmed.endsWith('}')) ||
+        (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+      return [{
+        message: trimmed,
+        timestamp,
+      }];
+    }
+
+    // For non-JSON messages, split by newlines
     const segments = message.split(/\r?\n/);
     return segments
       .map((segment) => segment.trimEnd())

@@ -742,7 +742,7 @@ Loop the Conversation State output back into the next agent invocation to keep m
       stepLimit,
     } = params;
 
-    const debugLog = (...args: unknown[]) => console.log('[AI Agent Debug]', ...args);
+    const debugLog = (...args: unknown[]) => context.logger.debug(`[AIAgent Debug] ${args.join(' ')}`);
     const emitAgentProgress = (event: AgentProgressEvent) => {
       context.emitProgress({
         level: event.kind === 'tool_error' ? 'error' : 'info',

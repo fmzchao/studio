@@ -57,6 +57,7 @@ interface ExecutionStoreActions {
   prefetchTerminal: (nodeId: string, stream?: 'pty' | 'stdout' | 'stderr', runIdOverride?: string | null) => Promise<void>
   getTerminalSession: (nodeId: string, stream?: 'pty' | 'stdout' | 'stderr') => TerminalStreamState | undefined
   fetchLogsForTimeRange: (startTime: Date, endTime: Date) => Promise<void>
+  fetchHistoricalLogs: (runId: string) => Promise<void>
   setLogMode: (mode: 'live' | 'scrubbing' | 'historical') => void
   getDisplayLogs: () => ExecutionLog[]
 }
@@ -672,6 +673,21 @@ export const useExecutionStore = create<ExecutionStore>((set, get) => ({
       }))
     } catch (error) {
       console.error('Failed to fetch logs for time range', error)
+    }
+  },
+
+  fetchHistoricalLogs: async (runId: string) => {
+    try {
+      const result = await api.executions.getLogs(runId, {
+        limit: 500, // Fetch up to 500 logs for historical view
+      })
+
+      set(() => ({
+        logs: result.logs as ExecutionLog[],
+        logMode: 'historical',
+      }))
+    } catch (error) {
+      console.error('Failed to fetch historical logs', error)
     }
   },
 

@@ -58,6 +58,7 @@ export interface TerminalChunkInput {
 }
 
 export interface Logger {
+  debug: (...args: unknown[]) => void;
   info: (...args: unknown[]) => void;
   error: (...args: unknown[]) => void;
   warn: (...args: unknown[]) => void;
@@ -213,7 +214,7 @@ export interface ComponentUiMetadata {
 export interface ExecutionContext {
   runId: string;
   componentRef: string;
-  logger: Logger;
+    logger: Logger;
   emitProgress: (progress: ProgressEventInput | string) => void;
   logCollector?: (entry: LogEventInput) => void;
   terminalCollector?: (chunk: TerminalChunkInput) => void;

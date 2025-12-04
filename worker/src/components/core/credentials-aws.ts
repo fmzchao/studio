@@ -71,7 +71,9 @@ const definition: ComponentDefinition<Input, Output> = {
       },
     ],
   },
-  async execute(params) {
+  async execute(params, context) {
+    context.logger.info('[AWSCredentials] Bundled AWS credentials');
+
     return {
       credentials: {
         accessKeyId: params.accessKeyId,

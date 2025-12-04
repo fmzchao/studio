@@ -87,6 +87,10 @@ export function createExecutionContext(options: CreateContextOptions): Execution
   };
 
   const logger: Logger = Object.freeze({
+    debug: (...args: unknown[]) => {
+      pushLog('stdout', 'debug', args);
+      console.debug(`[${componentRef}]`, ...args);
+    },
     info: (...args: unknown[]) => {
       pushLog('stdout', 'info', args);
       console.log(`[${componentRef}]`, ...args);
@@ -139,6 +143,18 @@ export function createExecutionContext(options: CreateContextOptions): Execution
   // Override logger methods to use logCollector instead of trace.record
   if (logCollector) {
     const loggerWithCollector: Logger = Object.freeze({
+      debug: (...args: unknown[]) => {
+        logCollector({
+          runId,
+          nodeRef: componentRef,
+          stream: 'stdout',
+          level: 'debug',
+          message: format(...args),
+          timestamp: new Date().toISOString(),
+          metadata,
+        });
+        console.debug(`[${componentRef}]`, ...args);
+      },
       info: (...args: unknown[]) => {
         logCollector({
           runId,

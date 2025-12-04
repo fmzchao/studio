@@ -264,57 +264,83 @@ export function ExecutionInspector({ onRerunRun }: ExecutionInspectorProps = {})
                   {playbackMode === 'live' ? (isPlaying ? 'Live (following)' : 'Live paused') : 'Execution playback'}
                 </span>
               </div>
-              <div className="flex-1 overflow-y-auto px-3 py-2 pb-20 space-y-2 text-xs font-mono bg-background/40">
+              <div className="flex-1 overflow-auto bg-slate-950 text-slate-100 font-mono text-xs">
                 {getDisplayLogs().length === 0 ? (
-                  <div className="text-muted-foreground text-center py-8">
+                  <div className="text-slate-400 text-center py-8">
                     No logs to display for this run.
                   </div>
                 ) : (
-                  getDisplayLogs().map((log) => {
-                    const executionLog = log as ExecutionLog
-                    const fullMessage = buildLogMessage(executionLog)
-                    const preview = createPreview(fullMessage, { charLimit: 220, lineLimit: 4 })
-                    const previewText = preview.truncated
-                      ? `${preview.text.trimEnd()}\n…`
-                      : preview.text
-                    const hasAnsi = /\u001b\[[0-9;]*m/.test(previewText)
-                    const au = hasAnsi ? new AnsiUp() : null
-                    const ansiHtml = hasAnsi && au ? au.ansi_to_html(previewText) : ''
+                  <div className="p-2 space-y-0 min-w-max">
+                    {getDisplayLogs().map((log, index) => {
+                      const executionLog = log as ExecutionLog
+                      const fullMessage = buildLogMessage(executionLog)
+                      const time = formatTime(log.timestamp)
+                      const level = log.level.toUpperCase()
+                      const node = log.nodeId ? `[${log.nodeId}]` : ''
 
-                    return (
-                      <div key={log.id} className="border rounded-md bg-background px-3 py-2 space-y-1 min-w-0">
-                        <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-                          <span>{formatTime(log.timestamp)}</span>
-                          <Badge variant={log.level === 'error' ? 'destructive' : log.level === 'warn' ? 'warning' : 'secondary'} className="text-[10px] uppercase">
-                            {log.level.toUpperCase()}
-                          </Badge>
+                      // Color coding for log levels
+                      const levelColor = {
+                        'DEBUG': 'text-gray-400',
+                        'INFO': 'text-blue-400',
+                        'WARN': 'text-yellow-400',
+                        'ERROR': 'text-red-400'
+                      }[level] || 'text-slate-300'
+
+                      // Check for JSON and format nicely
+                      let displayMessage = fullMessage
+                      let isJson = false
+                      try {
+                        const parsed = JSON.parse(fullMessage.trim())
+                        if (typeof parsed === 'object' && parsed !== null) {
+                          displayMessage = JSON.stringify(parsed, null, 2)
+                          isJson = true
+                        }
+                      } catch {
+                        // Not JSON, use as-is
+                      }
+
+                      // Truncate long messages
+                      const maxLength = 150
+                      const isTruncated = displayMessage.length > maxLength
+                      const truncatedMessage = isTruncated
+                        ? displayMessage.substring(0, maxLength) + '...'
+                        : displayMessage
+
+                      return (
+                        <div key={log.id} className="group hover:bg-slate-800/30 px-1 py-0.5 rounded cursor-pointer leading-none"
+                             onClick={() => openLogModal(fullMessage, executionLog)}>
+                          <div className="flex items-start gap-1">
+                            <span className="text-slate-500 text-[10px] font-mono flex-shrink-0 w-10">
+                              {time}
+                            </span>
+                            <span className={cn('text-[10px] font-bold uppercase flex-shrink-0 w-12', levelColor)}>
+                              {level}
+                            </span>
+                            {node && (
+                              <span className="text-slate-400 text-[10px] flex-shrink-0 max-w-16 truncate">
+                                {node}
+                              </span>
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-1">
+                                <pre className={cn(
+                                  "text-[11px] leading-tight flex-1",
+                                  isJson ? "whitespace-pre-wrap" : "whitespace-nowrap overflow-hidden text-ellipsis"
+                                )}>
+                                  {truncatedMessage}
+                                </pre>
+                                {isTruncated && (
+                                  <span className="text-slate-400 text-[9px] flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    ⋯
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
                         </div>
-                        {log.nodeId && (
-                          <div className="text-[11px] text-muted-foreground">Node: {log.nodeId}</div>
-                        )}
-                        <div className="text-[11px] max-w-full">
-                          {hasAnsi ? (
-                            <div
-                              className="font-mono text-[11px] whitespace-pre-wrap break-words"
-                              dangerouslySetInnerHTML={{ __html: ansiHtml }}
-                            />
-                          ) : (
-                            <pre className="whitespace-pre-wrap break-words font-mono text-[11px]">
-                              {previewText}
-                            </pre>
-                          )}
-                          {preview.truncated && (
-                            <button
-                              className="text-[10px] text-blue-500 hover:text-blue-700 mt-1"
-                              onClick={() => openLogModal(fullMessage, executionLog)}
-                            >
-                              View full message
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    )
-                  })
+                      )
+                    })}
+                  </div>
                 )}
               </div>
             </div>

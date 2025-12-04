@@ -68,7 +68,9 @@ const definition: ComponentDefinition<Input, Output> = {
       { id: 'description', label: 'Description', type: 'textarea' },
     ],
   },
-  async execute(params): Promise<Output> {
+  async execute(params, context): Promise<Output> {
+    context.logger.info(`[S3Destination] Configured for bucket: ${params.bucket}`);
+
     const destination: DestinationConfig = {
       adapterId: 's3',
       config: {
