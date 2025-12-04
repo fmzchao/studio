@@ -405,7 +405,7 @@ Loop the Conversation State output back into the next agent invocation to keep m
         required: false,
         default: DEFAULT_MAX_TOKENS,
         min: 64,
-        max: 8192,
+        max: 1_000_000,
         description: 'Upper bound for tokens generated in the final response.',
       },
       {

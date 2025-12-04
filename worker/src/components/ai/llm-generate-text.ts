@@ -150,7 +150,7 @@ const definition: ComponentDefinition<Input, Output> = {
         required: false,
         default: 1024,
         min: 1,
-        max: 8192,
+        max: 1_000_000,
         description: 'Maximum number of tokens to request from the provider.',
       },
     ],

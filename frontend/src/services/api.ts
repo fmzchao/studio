@@ -402,6 +402,14 @@ export const api = {
       return response.data
     },
 
+    getResult: async (executionId: string) => {
+      const response = await apiClient.getWorkflowRunResult(executionId)
+      if (response.error || !response.data) {
+        throw new Error('Failed to fetch run result')
+      }
+      return response.data
+    },
+
     getEvents: async (executionId: string) => {
       const response = await apiClient.getWorkflowRunEvents(executionId)
       if (response.error) throw new Error('Failed to fetch events')

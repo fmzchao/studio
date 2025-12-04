@@ -5,7 +5,7 @@ export type WorkflowMode = 'design' | 'execution'
 
 interface WorkflowUiState {
   mode: WorkflowMode
-  inspectorTab: 'events' | 'logs' | 'artifacts'
+  inspectorTab: 'events' | 'logs' | 'artifacts' | 'agent'
   libraryOpen: boolean
   inspectorWidth: number
 }

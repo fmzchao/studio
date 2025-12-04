@@ -6,7 +6,7 @@ This roadmap tracks how we evolve the `core.ai.agent` component from a model-onl
 
 | Phase | Status | Description |
 |-------|--------|-------------|
-| Phase 1 | ⚪ Planned | Agentic reasoning & trace UI (no tools) |
+| Phase 1 | ✅ Complete | Agentic reasoning & trace UI (no tools) |
 | Phase 2 | ⚪ Planned | MCP tool bridge + streaming UX |
 | Phase 3 | ⚪ Planned | ShipSec components exposed as tools |
 
@@ -16,16 +16,22 @@ This roadmap tracks how we evolve the `core.ai.agent` component from a model-onl
 
 **Goal:** Ship a compelling agent experience without any tool integrations so designers can see immediate progress.
 
-- [ ] Use the existing `reasoningTrace`/`toolInvocations` outputs from `core.ai.agent` to render a new “Agent Trace” tab inside `ExecutionInspector`.
-- [ ] Update run history persistence so the backend can fetch agent outputs for completed runs (either via `outputSummary` on `NODE_COMPLETED` events or a light `/runs/:runId/nodes/:nodeId/output` endpoint).
-- [ ] Build a React timeline component that shows per-step “Thought / Action / Observation” cards with timestamps, finish reasons, and any tool data (even if empty).
+> **Update — 2025‑11‑27:** ExecutionInspector now exposes a fourth “Agent Trace” tab that renders the `core.ai.agent` reasoning payloads. The UI fetches `/workflows/runs/:runId/result`, highlights agent nodes, and lets operators inspect Thoughts / Actions / Observations without backend changes. See `.playground/agentic-workflow.ts` for a real MCP-backed sample run.
+
+- [x] Use the existing `reasoningTrace`/`toolInvocations` outputs from `core.ai.agent` to render a new “Agent Trace” tab inside `ExecutionInspector`.
+- [x] Update run history persistence so the backend can fetch agent outputs for completed runs (either via `outputSummary` on `NODE_COMPLETED` events or a light `/runs/:runId/nodes/:nodeId/output` endpoint).
+- [x] Build a React timeline component that shows per-step “Thought / Action / Observation” cards with timestamps, finish reasons, and any tool data (even if empty).
 - [ ] Instrument PostHog (`ai_agent_trace_viewed`, `ai_agent_trace_expand_tool`) once the panel lands so Product can see adoption.
 - [ ] Optional stretch: add skeleton loaders and animated state transitions so selecting a run visibly changes the panel even before data loads.
 
 **Deliverables**
-- [ ] UX spec in Figma (or equivalent) documenting the Agent Trace panel layout.
-- [ ] PR landing the new panel + run output wiring.
-- [ ] PostHog dashboard tile tracking trace tab usage.
+- [ ] UX spec in Figma (or equivalent) documenting the Agent Trace panel layout. _(Backlog: visual polish planned alongside Phase 2 streaming work.)_
+- [x] PR landing the new panel + run output wiring.
+- [ ] PostHog dashboard tile tracking trace tab usage. _(Backlog: instrumentation deferred until we have the streaming view.)_
+
+**Backlog / follow-ups**
+- Instrument PostHog events (`ai_agent_trace_viewed`, `ai_agent_trace_expand_tool`) once design polish lands.
+- Add skeleton loaders / animations for the Agent Trace cards when Phase 2 streaming work reshapes the panel.
 
 **Success criteria**
 - [ ] When a workflow containing `core.ai.agent` completes, operators can open the Agent Trace tab and read the full thought process even if no tools were used.

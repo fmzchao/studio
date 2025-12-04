@@ -17,6 +17,7 @@ import { cn } from '@/lib/utils'
 import type { ExecutionLog } from '@/schemas/execution'
 import { createPreview } from '@/utils/textPreview'
 import { RunArtifactsPanel } from '@/components/artifacts/RunArtifactsPanel'
+import { AgentTracePanel } from '@/components/timeline/AgentTracePanel'
 
 const formatTime = (timestamp: string) => {
   const date = new Date(timestamp)
@@ -225,6 +226,14 @@ export function ExecutionInspector({ onRerunRun }: ExecutionInspectorProps = {})
               Logs
             </Button>
             <Button
+              variant={inspectorTab === 'agent' ? 'default' : 'ghost'}
+              size="sm"
+              className="h-7 px-3"
+              onClick={() => setInspectorTab('agent')}
+            >
+              Agent Trace
+            </Button>
+            <Button
               variant={inspectorTab === 'artifacts' ? 'default' : 'ghost'}
               size="sm"
               className="h-7 px-3"
@@ -320,6 +329,10 @@ export function ExecutionInspector({ onRerunRun }: ExecutionInspectorProps = {})
 
           {inspectorTab === 'artifacts' && (
             <RunArtifactsPanel runId={selectedRunId ?? null} />
+          )}
+
+          {inspectorTab === 'agent' && (
+            <AgentTracePanel runId={selectedRunId ?? null} />
           )}
         </div>
       </aside>
