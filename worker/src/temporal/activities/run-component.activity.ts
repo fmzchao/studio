@@ -8,6 +8,7 @@ import {
   type IFileStorageService,
   type ISecretsService,
   type ITraceService,
+  type AgentTracePublisher,
 } from '@shipsec/component-sdk';
 import { RedisTerminalStreamAdapter } from '../../adapters';
 import type {
@@ -24,6 +25,7 @@ let globalArtifacts: ArtifactServiceFactory | undefined;
 let globalTrace: ITraceService | undefined;
 let globalLogs: WorkflowLogSink | undefined;
 let globalTerminal: RedisTerminalStreamAdapter | undefined;
+let globalAgentTracePublisher: AgentTracePublisher | undefined;
 
 export function initializeComponentActivityServices(options: {
   storage: IFileStorageService;
@@ -32,6 +34,7 @@ export function initializeComponentActivityServices(options: {
   trace: ITraceService;
   logs?: WorkflowLogSink;
   terminalStream?: RedisTerminalStreamAdapter;
+  agentTracePublisher?: AgentTracePublisher;
 }) {
   globalStorage = options.storage;
   globalSecrets = options.secrets;
@@ -39,6 +42,7 @@ export function initializeComponentActivityServices(options: {
   globalTrace = options.trace;
   globalLogs = options.logs;
   globalTerminal = options.terminalStream;
+  globalAgentTracePublisher = options.agentTracePublisher;
 }
 
 export async function setRunMetadataActivity(input: {
@@ -204,6 +208,7 @@ export async function runComponentActivity(
             });
         }
       : undefined,
+    agentTracePublisher: globalAgentTracePublisher,
   });
 
   try {

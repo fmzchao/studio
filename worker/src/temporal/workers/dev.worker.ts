@@ -17,7 +17,7 @@ import {
   finalizeRunActivity,
   initializeComponentActivityServices,
 } from '../activities/run-component.activity';
-import { ArtifactAdapter, FileStorageAdapter, SecretsAdapter, RedisTerminalStreamAdapter, KafkaLogAdapter, KafkaTraceAdapter } from '../../adapters';
+import { ArtifactAdapter, FileStorageAdapter, SecretsAdapter, RedisTerminalStreamAdapter, KafkaLogAdapter, KafkaTraceAdapter, KafkaAgentTracePublisher } from '../../adapters';
 import * as schema from '../../adapters/schema';
 
 // Load environment variables from .env file
@@ -103,6 +103,12 @@ async function main() {
     clientId: process.env.EVENT_KAFKA_CLIENT_ID ?? 'shipsec-worker-events',
   });
 
+  const agentTracePublisher = new KafkaAgentTracePublisher({
+    brokers: kafkaBrokers,
+    topic: process.env.AGENT_TRACE_KAFKA_TOPIC ?? 'telemetry.agent-trace',
+    clientId: process.env.AGENT_TRACE_KAFKA_CLIENT_ID ?? 'shipsec-worker-agent-trace',
+  });
+
   let logAdapter: KafkaLogAdapter;
   try {
     logAdapter = new KafkaLogAdapter({
@@ -139,6 +145,7 @@ async function main() {
     secrets: secretsAdapter,
     artifacts: artifactAdapter.factory(),
     terminalStream,
+    agentTracePublisher,
   });
 
   console.log(`✅ Service adapters initialized`);

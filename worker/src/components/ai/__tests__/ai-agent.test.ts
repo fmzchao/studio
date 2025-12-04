@@ -50,10 +50,15 @@ const workflowContext: ExecutionContext = {
   runId: 'test-run',
   componentRef: 'core.ai.agent',
   logger: {
+    debug: () => {},
     info: () => {},
     error: () => {},
+    warn: () => {},
   },
   emitProgress: () => {},
+  agentTracePublisher: {
+    publish: () => {},
+  },
   metadata: {
     runId: 'test-run',
     componentRef: 'core.ai.agent',
@@ -210,6 +215,8 @@ describe('core.ai.agent component', () => {
     });
     expect(result.toolInvocations).toHaveLength(0);
     expect(result.reasoningTrace).toHaveLength(1);
+    expect(typeof result.agentRunId).toBe('string');
+    expect(result.agentRunId.length).toBeGreaterThan(0);
   });
 
 
@@ -280,15 +287,22 @@ describe('core.ai.agent component', () => {
       const params = {
         userInput: 'What does the MCP tool return?',
         conversationState: undefined,
-      chatModel: {
-        provider: 'gemini',
-        modelId: 'gemini-2.5-flash',
-        baseUrl: 'https://generativelanguage.googleapis.com/v1beta',
-      },
-      modelApiKey: 'gm-gemini-from-secret',
-        mcp: {
-          endpoint: 'https://mcp.test/api',
+        chatModel: {
+          provider: 'gemini',
+          modelId: 'gemini-2.5-flash',
+          baseUrl: 'https://generativelanguage.googleapis.com/v1beta',
         },
+        modelApiKey: 'gm-gemini-from-secret',
+        mcpTools: [
+          {
+            id: 'call-mcp',
+            title: 'Lookup',
+            endpoint: 'https://mcp.test/api',
+            metadata: {
+              toolName: 'call_mcp_tool',
+            },
+          },
+        ],
         systemPrompt: '',
         temperature: 0.6,
         maxTokens: 512,
@@ -335,6 +349,7 @@ describe('core.ai.agent component', () => {
         modelId: 'gemini-2.5-flash',
       });
       expect(result.responseText).toBe('Final resolved answer');
+      expect(result.agentRunId).toBeTruthy();
     } finally {
       globalThis.fetch = originalFetch;
     }

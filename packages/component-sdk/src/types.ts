@@ -81,6 +81,24 @@ export interface LogEventInput {
   metadata?: ExecutionContextMetadata;
 }
 
+export interface AgentTracePart {
+  type: string;
+  [key: string]: unknown;
+}
+
+export interface AgentTraceEvent {
+  agentRunId: string;
+  workflowRunId: string;
+  nodeRef: string;
+  sequence: number;
+  timestamp: string;
+  part: AgentTracePart;
+}
+
+export interface AgentTracePublisher {
+  publish(event: AgentTraceEvent): Promise<void> | void;
+}
+
 export type PrimitivePortTypeName =
   | 'any'
   | 'text'
@@ -219,6 +237,7 @@ export interface ExecutionContext {
   logCollector?: (entry: LogEventInput) => void;
   terminalCollector?: (chunk: TerminalChunkInput) => void;
   metadata: ExecutionContextMetadata;
+  agentTracePublisher?: AgentTracePublisher;
 
   // Service interfaces - implemented by adapters
   storage?: IFileStorageService;

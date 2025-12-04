@@ -12,6 +12,8 @@ import {
   componentRegistry,
   ComponentDefinition,
   port,
+  type ExecutionContext,
+  type AgentTraceEvent,
 } from '@shipsec/component-sdk';
 import { llmProviderContractName, LLMProviderSchema } from './chat-model-contract';
 import {
@@ -169,6 +171,7 @@ type Output = {
   reasoningTrace: ReasoningStep[];
   usage?: unknown;
   rawResponse: unknown;
+  agentRunId: string;
 };
 
 const outputSchema = z.object({
@@ -178,56 +181,104 @@ const outputSchema = z.object({
   reasoningTrace: z.array(reasoningStepSchema),
   usage: z.unknown().optional(),
   rawResponse: z.unknown(),
+  agentRunId: z.string(),
 });
 
-type AgentStatusEvent = {
-  kind: 'status';
-  status: 'starting' | 'completed';
-};
+type AgentStreamPart =
+  | { type: 'message-start'; messageId: string; role: 'assistant' | 'user'; metadata?: Record<string, unknown> }
+  | { type: 'text-delta'; textDelta: string }
+  | { type: 'tool-input-available'; toolCallId: string; toolName: string; input: Record<string, unknown> }
+  | { type: 'tool-output-available'; toolCallId: string; toolName: string; output: unknown }
+  | { type: 'finish'; finishReason: string; responseText: string }
+  | { type: `data-${string}`; data: unknown };
 
-type AgentStepEvent = {
-  kind: 'step';
-  step: ReasoningStep;
-};
+class AgentStreamRecorder {
+  private sequence = 0;
 
-type AgentToolCallEvent = {
-  kind: 'tool_call';
-  toolCallId: string;
-  toolName: string;
-  args: Record<string, unknown>;
-  metadata?: RegisteredToolMetadata;
-};
+  constructor(private readonly context: ExecutionContext, private readonly agentRunId: string) {}
 
-type AgentToolResultEvent = {
-  kind: 'tool_result';
-  toolCallId: string;
-  toolName: string;
-  result: unknown;
-  metadata?: RegisteredToolMetadata;
-};
+  emitMessageStart(role: 'assistant' | 'user' = 'assistant'): void {
+    this.emitPart({
+      type: 'message-start',
+      messageId: this.agentRunId,
+      role,
+    });
+  }
 
-type AgentToolErrorEvent = {
-  kind: 'tool_error';
-  toolCallId: string;
-  toolName: string;
-  error: string;
-  metadata?: RegisteredToolMetadata;
-};
+  emitReasoningStep(step: ReasoningStep): void {
+    this.emitPart({
+      type: 'data-reasoning-step',
+      data: step,
+    });
+  }
 
-type AgentFinalEvent = {
-  kind: 'final';
-  responseText: string;
-  reasoningTrace: ReasoningStep[];
-  toolInvocations: ToolInvocationEntry[];
-};
+  emitToolInput(toolCallId: string, toolName: string, input: Record<string, unknown>): void {
+    this.emitPart({
+      type: 'tool-input-available',
+      toolCallId,
+      toolName,
+      input,
+    });
+  }
 
-type AgentProgressEvent =
-  | AgentStatusEvent
-  | AgentStepEvent
-  | AgentToolCallEvent
-  | AgentToolResultEvent
-  | AgentToolErrorEvent
-  | AgentFinalEvent;
+  emitToolOutput(toolCallId: string, toolName: string, output: unknown): void {
+    this.emitPart({
+      type: 'tool-output-available',
+      toolCallId,
+      toolName,
+      output,
+    });
+  }
+
+  emitToolError(toolCallId: string, toolName: string, error: string): void {
+    this.emitPart({
+      type: 'data-tool-error',
+      data: { toolCallId, toolName, error },
+    });
+  }
+
+  emitTextDelta(textDelta: string): void {
+    if (!textDelta.trim()) {
+      return;
+    }
+    this.emitPart({
+      type: 'text-delta',
+      textDelta,
+    });
+  }
+
+  emitFinish(finishReason: string, responseText: string): void {
+    this.emitPart({
+      type: 'finish',
+      finishReason,
+      responseText,
+    });
+  }
+
+  private emitPart(part: AgentStreamPart): void {
+    const timestamp = new Date().toISOString();
+    const sequence = ++this.sequence;
+    const envelope: AgentTraceEvent = {
+      agentRunId: this.agentRunId,
+      workflowRunId: this.context.runId,
+      nodeRef: this.context.componentRef,
+      sequence,
+      timestamp,
+      part,
+    };
+
+    if (this.context.agentTracePublisher) {
+      void this.context.agentTracePublisher.publish(envelope);
+      return;
+    }
+
+    this.context.emitProgress({
+      level: 'info',
+      message: `[AgentTraceFallback] ${part.type}`,
+      data: envelope,
+    });
+  }
+}
 
 class MCPClient {
   private readonly endpoint: string;
@@ -365,7 +416,7 @@ type RegisterMcpToolParams = {
   tools?: Array<z.infer<typeof McpToolDefinitionSchema>>;
   sessionId: string;
   toolFactory: ToolFn;
-  emitEvent: (event: AgentProgressEvent) => void;
+  agentStream: AgentStreamRecorder;
   logger?: {
     warn?: (...args: unknown[]) => void;
   };
@@ -375,7 +426,7 @@ function registerMcpTools({
   tools,
   sessionId,
   toolFactory,
-  emitEvent,
+  agentStream,
   logger,
 }: RegisterMcpToolParams): RegisteredMcpTool[] {
   if (!Array.isArray(tools) || tools.length === 0) {
@@ -435,32 +486,18 @@ function registerMcpTools({
       execute: async (args: Record<string, unknown>) => {
         const invocationId = `${tool.id}-${randomUUID()}`;
         const normalizedArgs = args ?? {};
-        emitEvent({
-          kind: 'tool_call',
-          toolCallId: invocationId,
-          toolName,
-          args: normalizedArgs,
-          metadata,
-        });
+        agentStream.emitToolInput(invocationId, toolName, normalizedArgs);
 
         try {
           const result = await client.execute(remoteToolName, normalizedArgs);
-          emitEvent({
-            kind: 'tool_result',
-            toolCallId: invocationId,
-            toolName,
-            result,
-            metadata,
-          });
+          agentStream.emitToolOutput(invocationId, toolName, result);
           return result;
         } catch (error) {
-          emitEvent({
-            kind: 'tool_error',
-            toolCallId: invocationId,
+          agentStream.emitToolError(
+            invocationId,
             toolName,
-            error: error instanceof Error ? error.message : String(error),
-            metadata,
-          });
+            error instanceof Error ? error.message : String(error),
+          );
           throw error;
         }
       },
@@ -665,6 +702,12 @@ Loop the Conversation State output back into the next agent invocation to keep m
         dataType: port.json(),
         description: 'Sequence of Think → Act → Observe steps executed by the agent.',
       },
+      {
+        id: 'agentRunId',
+        label: 'Agent Run ID',
+        dataType: port.text(),
+        description: 'Unique identifier for streaming and replaying this agent session.',
+      },
     ],
     parameters: [
       {
@@ -743,16 +786,9 @@ Loop the Conversation State output back into the next agent invocation to keep m
     } = params;
 
     const debugLog = (...args: unknown[]) => context.logger.debug(`[AIAgent Debug] ${args.join(' ')}`);
-    const emitAgentProgress = (event: AgentProgressEvent) => {
-      context.emitProgress({
-        level: event.kind === 'tool_error' ? 'error' : 'info',
-        message: `[AIAgent] ${event.kind}`,
-        data: {
-          agentEvent: event.kind,
-          ...event,
-        },
-      });
-    };
+    const agentRunId = `${context.runId}:${context.componentRef}:${randomUUID()}`;
+    const agentStream = new AgentStreamRecorder(context as ExecutionContext, agentRunId);
+    agentStream.emitMessageStart();
 
     debugLog('Incoming params', {
       userInput,
@@ -772,8 +808,6 @@ Loop the Conversation State output back into the next agent invocation to keep m
     if (!trimmedInput) {
       throw new Error('AI Agent requires a non-empty user input.');
     }
-
-    emitAgentProgress({ kind: 'status', status: 'starting' });
 
     const effectiveProvider = (chatModel?.provider ?? 'openai') as ModelProvider;
     const effectiveModel = ensureModelName(effectiveProvider, chatModel?.modelId ?? null);
@@ -839,7 +873,7 @@ Loop the Conversation State output back into the next agent invocation to keep m
       tools: mcpTools,
       sessionId,
       toolFactory: toolFn,
-      emitEvent: emitAgentProgress,
+      agentStream,
       logger: context.logger,
     });
     for (const entry of registeredMcpTools) {
@@ -915,10 +949,7 @@ Loop the Conversation State output back into the next agent invocation to keep m
       onStepFinish: (stepResult: unknown) => {
         const mappedStep = mapStepToReasoning(stepResult, streamedStepCount, sessionId);
         streamedStepCount += 1;
-        emitAgentProgress({
-          kind: 'step',
-          step: mappedStep,
-        });
+        agentStream.emitReasoningStep(mappedStep);
       },
     });
     debugLog('ToolLoopAgent instantiated', {
@@ -1007,13 +1038,8 @@ Loop the Conversation State output back into the next agent invocation to keep m
     };
     debugLog('Next conversation state', nextState);
 
-    emitAgentProgress({
-      kind: 'final',
-      responseText,
-      reasoningTrace,
-      toolInvocations: toolLogEntries,
-    });
-    emitAgentProgress({ kind: 'status', status: 'completed' });
+    agentStream.emitTextDelta(responseText);
+    agentStream.emitFinish(generationResult.finishReason ?? 'stop', responseText);
     context.emitProgress('AI agent completed.');
     debugLog('Final output payload', {
       responseText,
@@ -1030,6 +1056,7 @@ Loop the Conversation State output back into the next agent invocation to keep m
       reasoningTrace,
       usage: generationResult.usage,
       rawResponse: generationResult,
+      agentRunId,
     };
   },
 };

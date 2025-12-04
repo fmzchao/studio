@@ -1,98 +1,63 @@
 # ShipSec Studio – AI Agent Roadmap
 
-This roadmap tracks how we evolve the `core.ai.agent` component from a model-only assistant into a fully instrumented, tool-using operator inside ShipSec Studio. Phases are ordered to maximise visible UX improvements before tackling heavier runtime plumbing.
+This roadmap tracks how we evolve the `core.ai.agent` component from a model-only assistant into a fully instrumented, tool-using operator inside ShipSec Studio. Phase 1 landed the Agent Trace tab, persisted reasoning/tool data on run completion, and delivered the React cards that surfaced Thought/Action/Observation history—now we are pivoting entirely to the official Vercel AI SDK transport so the UI, backend, and worker all speak the same protocol.
 
 ## Progress Overview
 
 | Phase | Status | Description |
 |-------|--------|-------------|
-| Phase 1 | ✅ Complete | Agentic reasoning & trace UI (no tools) |
-| Phase 2 | ⚪ Planned | MCP tool bridge + streaming UX |
-| Phase 3 | ⚪ Planned | ShipSec components exposed as tools |
+| Phase 1 | ✅ Complete | Legacy Agent Trace UI on stored outputs |
+| Phase 2 | ⚪ Planned | AI SDK stream transport + storage ledger |
+| Phase 3 | ⚪ Planned | Full AI SDK UI adoption & legacy removal |
 
 ---
 
-## Phase 1 – Agentic Reasoning & Trace UI (No Tools)
+## Phase 2 – AI SDK Stream Transport
 
-**Goal:** Ship a compelling agent experience without any tool integrations so designers can see immediate progress.
+**Goal:** Replace the bespoke `agent_event` bus with the official AI SDK UI message stream across worker, backend, and frontend while preserving historical storage.
 
-> **Update — 2025‑11‑27:** ExecutionInspector now exposes a fourth “Agent Trace” tab that renders the `core.ai.agent` reasoning payloads. The UI fetches `/workflows/runs/:runId/result`, highlights agent nodes, and lets operators inspect Thoughts / Actions / Observations without backend changes. See `.playground/agentic-workflow.ts` for a real MCP-backed sample run.
+> **Update — 2025‑11‑30:** Worker now emits AI SDK–compatible agent trace parts (message start, reasoning deltas, tool IO, finish) and ships them to a dedicated Kafka topic (`telemetry.agent-trace`). Backend ingest writes those parts into the new `agent_trace_events` ledger table, so we have a clean store keyed by `agentRunId`. The Agent component exposes that run ID for downstream consumers.
 
-- [x] Use the existing `reasoningTrace`/`toolInvocations` outputs from `core.ai.agent` to render a new “Agent Trace” tab inside `ExecutionInspector`.
-- [x] Update run history persistence so the backend can fetch agent outputs for completed runs (either via `outputSummary` on `NODE_COMPLETED` events or a light `/runs/:runId/nodes/:nodeId/output` endpoint).
-- [x] Build a React timeline component that shows per-step “Thought / Action / Observation” cards with timestamps, finish reasons, and any tool data (even if empty).
-- [ ] Instrument PostHog (`ai_agent_trace_viewed`, `ai_agent_trace_expand_tool`) once the panel lands so Product can see adoption.
-- [ ] Optional stretch: add skeleton loaders and animated state transitions so selecting a run visibly changes the panel even before data loads.
+### Worker
+- [x] Wrap `core.ai.agent` execution in the AI SDK streaming helpers (`streamText`/`createStreamableUI`) so reasoning steps, tool IO, and final responses are emitted as UI message parts.
+- [x] Persist every emitted part (type, payload, timestamp, nodeRef, sequence) through a dedicated Kafka publisher so `agent_trace_events` becomes the canonical ledger for live + replay streams.
+- [ ] Remove bespoke `agent_event` enums once the AI SDK part emitter is stable.
 
-**Deliverables**
-- [ ] UX spec in Figma (or equivalent) documenting the Agent Trace panel layout. _(Backlog: visual polish planned alongside Phase 2 streaming work.)_
-- [x] PR landing the new panel + run output wiring.
-- [ ] PostHog dashboard tile tracking trace tab usage. _(Backlog: instrumentation deferred until we have the streaming view.)_
-
-**Backlog / follow-ups**
-- Instrument PostHog events (`ai_agent_trace_viewed`, `ai_agent_trace_expand_tool`) once design polish lands.
-- Add skeleton loaders / animations for the Agent Trace cards when Phase 2 streaming work reshapes the panel.
-
-**Success criteria**
-- [ ] When a workflow containing `core.ai.agent` completes, operators can open the Agent Trace tab and read the full thought process even if no tools were used.
-- [ ] Zero backend or worker changes required beyond exposing existing outputs.
-
----
-
-## Phase 2 – MCP Tool Bridge & Live Streaming
-
-**Goal:** Allow the agent to call external tools via MCP and stream those calls to the UI in real time, still without touching ShipSec components.
-
-> **Update — 2025‑11‑28:** MCP plumbing now exists end-to-end: worker emits per-step `agent_event` payloads, the backend exposes `/agents/:runId/stream`, and the frontend ships a `useAgentStream` hook that connects via SSE. The Agent Trace panel, however, still fetches the completed run output once—wire it to `useAgentStream` to unlock live updates.
-
-### Backend/Worker
-- [ ] Expand agent node config to accept MCP endpoint + credentials in the builder (`WorkflowBuilder` node sidebar).
-- [ ] Ensure `core.ai.agent` registers a `call_mcp_tool` tool per the Vercel AI SDK contract and surfaces every invocation in `toolInvocations`.
-- [ ] Emit per-step events (`AGENT_STEP`, `AGENT_TOOL_CALL`, `AGENT_TOOL_RESULT`) via the existing trace pipeline or a dedicated Redis stream so the backend can serve them incrementally.
-- [ ] Build an SSE endpoint (`/api/v1/agents/:runId/stream`) that wraps those events with `toUIMessageStreamResponse`, enabling AI SDK UI clients.
+### Backend
+- [ ] Add `POST /api/v1/agents/:runId/chat` that proxies the worker result and returns `result.toUIMessageStreamResponse()` for live runs.
+- [ ] Add `GET /api/v1/agents/:runId/replay` and `GET /api/v1/agents/:runId/parts` that read from the new repository and stream/return the stored UI message parts in order (with cursor + timestamp metadata).
+- [ ] Deprecate and then remove `/api/v1/agents/:runId/stream` once consumers switch to the new endpoints.
 
 ### Frontend
-- [ ] Introduce a `useAgentStream` hook built on `@ai-sdk/react` (`useChat` + `onData`) to subscribe to the SSE endpoint.
-- [ ] Upgrade the Agent Trace tab to show live updates: “Thinking…” placeholders, tool cards animating from pending → completed, transient status toasts (e.g., MCP latency, errors).
-- [ ] Provide controls in the inspector (“Follow live agent”, “Pause”) akin to the existing log viewer.
-
-### Telemetry & Testing
-- [ ] Add PostHog events for MCP enablement and tool counts.
-- [ ] Unit tests: worker MCP bridge mock, backend SSE serialization, frontend hook reconnection.
-- [ ] Manual validation: run a workflow with an MCP tool; confirm trace panel updates as steps stream in even before the run completes.
+- [ ] Replace `useAgentStream` + custom reducers with `useChat` (or other AI SDK UI primitives) pointed at the new `/chat` endpoint, using `initialMessages` from `/parts` for quick hydration.
+- [ ] Update the Agent Trace tab inside `ExecutionInspector` to render AI SDK components (tool cards, reasoning blocks) instead of bespoke cards.
+- [ ] Ensure replay/seeker controls reset the hook and re-stream stored parts when the user scrubs.
 
 **Success criteria**
-- [ ] Users can configure MCP once, start a run, and watch tool calls materialise live in the Agent Trace tab.
-- [ ] The streaming endpoint is AI SDK–compatible so future UI components (chatbot, debug console) can reuse it.
+- [ ] Live runs stream through the AI SDK protocol end-to-end and render via official components.
+- [ ] Historical runs replay by streaming the stored parts and appear identical to the live experience.
+- [ ] No code references `agent_event`, `useAgentStream`, or custom SSE parsers.
 
 ---
 
-## Phase 3 – ShipSec Components as Agent Tools
+## Phase 3 – AI SDK UI Adoption & Legacy Retirement
 
-**Goal:** Let the agent invoke specific ShipSec components (Docker or inline) as “tools”, with full observability parity (terminal logs, artifacts, traces).
+**Goal:** Fully align the Studio UX with AI SDK’s UI toolkit and delete the legacy transport/UI surface.
 
-### Scheduler & Worker Runtime
-- [ ] Extend the workflow DSL to flag nodes as `exposeAsTool` (with optional friendly name + description). Enforce schema requirements (inputs must be serialisable; outputs must be JSON-friendly).
-- [ ] At runtime, build a tool catalogue for the agent node (using the flagged nodes) and register each as a Vercel AI SDK tool (`tool({ inputSchema, description, execute })`).
-- [ ] Inside each tool `execute`, call the standard component runtime (the same stack the scheduler uses) so trace/log/artifact adapters continue working.
-- [ ] Propagate tool execution metadata (`childNodeRef`, `runId`, `attempt`) into `toolInvocations`, `reasoningTrace`, and the new Agent event stream.
-- [ ] Guardrails: enforce concurrency limits, reject non-idempotent components, and require explicit approvals for high-impact nodes.
+### Deletions & Refactors
+- [ ] Delete `useAgentStream`, `AgentStreamEvent` types, and any bespoke SSE helpers (`frontend/src/hooks/useAgentStream.ts`, `frontend/src/utils/sse-client.ts`).
+- [ ] Remove backend polling loops/heartbeat logic tied to the legacy `/stream` endpoint.
+- [ ] Strip `agentEvent` handling from TraceService consumers; only AI SDK part types remain.
 
-### Backend & UI
-- [ ] Update run metadata + APIs to associate each tool call with the underlying component execution (e.g., tool card links to terminal logs).
-- [ ] Enhance the Agent Trace tab to show nested detail drawers: clicking a tool reveals command/args, stdout snippets, artifacts, and re-run controls.
-- [ ] Add timeline markers on the Execution Timeline so agent tool calls appear alongside regular nodes for holistic replay.
-
-### MCP integration (optional at this stage)
-- [ ] When both MCP and ShipSec tools are configured, merge them into a single tool map so the agent chooses the best capability at runtime.
-
-### Validation
-- [ ] Integration tests covering a workflow where the agent calls an inline tool and a Docker tool, asserting traces/logs/artifacts exist.
-- [ ] UX walkthrough demonstrating cross-linking between Agent Trace and Terminal panel.
+### Frontend Adoption
+- [ ] Swap bespoke Agent Trace cards with the AI SDK conversation components so future upgrades (tool drawers, reasoning chips) are inherited automatically.
+- [ ] Hook ExecutionInspector’s replay controls into the `/replay` endpoint to rebuild state when the user scrubs or jumps to a node.
+- [ ] Update docs/Runbooks to reference the new endpoints and controls.
 
 **Success criteria**
-- [ ] Operators can declare “run httpx as a tool” in the builder; during execution the agent can invoke it, stream progress, and the logs/artifacts are accessible from both the Agent Trace and existing inspector panels.
-- [ ] Strong guardrails prevent accidental exposure of unsafe components.
+- [ ] `git grep` shows no references to the legacy stream plumbing.
+- [ ] Designers can drop in AI SDK UI blocks anywhere in Studio without adapter shims.
+- [ ] Replay, seek, and historical audit features operate entirely on the stored AI SDK parts.
 
 ---
 

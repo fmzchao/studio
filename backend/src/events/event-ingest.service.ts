@@ -111,5 +111,6 @@ export class EventIngestService implements OnModuleInit, OnModuleDestroy {
     };
 
     await this.traceRepository.append(mapped);
+
   }
 }

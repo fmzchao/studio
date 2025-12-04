@@ -21,6 +21,7 @@ import type {
   ProgressEventInput,
   LogEventInput,
   TerminalChunkInput,
+  AgentTracePublisher,
 } from './types';
 import type {
   IFileStorageService,
@@ -39,10 +40,11 @@ export interface CreateContextOptions {
   trace?: ITraceService;
   logCollector?: (entry: LogEventInput) => void;
   terminalCollector?: (chunk: TerminalChunkInput) => void;
+  agentTracePublisher?: AgentTracePublisher;
 }
 
 export function createExecutionContext(options: CreateContextOptions): ExecutionContext {
-  const { runId, componentRef, metadata: metadataInput, storage, secrets, artifacts, trace, logCollector, terminalCollector } =
+  const { runId, componentRef, metadata: metadataInput, storage, secrets, artifacts, trace, logCollector, terminalCollector, agentTracePublisher } =
     options;
   const metadata = createMetadata(runId, componentRef, metadataInput);
   const scopedTrace = trace ? createScopedTrace(trace, metadata) : undefined;
@@ -138,6 +140,7 @@ export function createExecutionContext(options: CreateContextOptions): Execution
     logCollector,
     terminalCollector,
     metadata,
+    agentTracePublisher,
   };
 
   // Override logger methods to use logCollector instead of trace.record

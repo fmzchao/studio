@@ -8,6 +8,10 @@ export { ArtifactAdapter } from './artifact.adapter';
 export { TraceAdapter } from './trace.adapter';
 export { KafkaTraceAdapter } from './kafka-trace.adapter';
 export {
+  KafkaAgentTracePublisher,
+  type KafkaAgentTracePublisherConfig,
+} from './kafka-agent-trace.adapter';
+export {
   LokiLogAdapter,
   LokiLogClient,
   type LokiLogClientConfig,
