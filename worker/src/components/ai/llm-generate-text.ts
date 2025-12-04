@@ -28,7 +28,7 @@ const inputSchema = z.object({
     .number()
     .int()
     .min(1)
-    .max(8192)
+    .max(1_000_000)
     .default(1024)
     .describe('Maximum number of tokens to request from the model.'),
   chatModel: LLMProviderSchema.describe('Provider configuration emitted by a provider component.'),

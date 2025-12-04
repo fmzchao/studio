@@ -143,7 +143,7 @@ const inputSchema = z.object({
     .number()
     .int()
     .min(64)
-    .max(8192)
+    .max(1_000_000)
     .default(DEFAULT_MAX_TOKENS)
     .describe('Maximum number of tokens to generate on the final turn.'),
   memorySize: z
