@@ -53,6 +53,34 @@ const buildLogMessage = (log: ExecutionLog): string => {
   return sections.join('\n\n').trim()
 }
 
+const LOG_LEVEL_OPTIONS = ['all', 'error', 'warn', 'info', 'debug'] as const
+type LogLevelFilter = (typeof LOG_LEVEL_OPTIONS)[number]
+const LOG_LEVEL_LABELS: Record<LogLevelFilter, string> = {
+  all: 'All',
+  error: 'Error',
+  warn: 'Warn',
+  info: 'Info',
+  debug: 'Debug',
+}
+const LOG_LEVEL_TONES: Record<string, { text: string; accent: string }> = {
+  error: { text: 'text-red-300', accent: 'border-red-400/60 bg-red-400/10' },
+  warn: { text: 'text-amber-200', accent: 'border-amber-300/60 bg-amber-300/10' },
+  info: { text: 'text-sky-200', accent: 'border-sky-300/60 bg-sky-300/10' },
+  debug: { text: 'text-slate-300', accent: 'border-slate-300/60 bg-slate-200/10' },
+  default: { text: 'text-slate-200', accent: 'border-slate-400/40 bg-slate-700/20' },
+}
+const LOG_LEVEL_ORDER: Record<Exclude<LogLevelFilter, 'all'>, number> = {
+  error: 0,
+  warn: 1,
+  info: 2,
+  debug: 3,
+}
+const normalizeLevel = (level?: string | null) => (level ?? '').toLowerCase()
+const getLogLevelTone = (level?: string | null) => {
+  const normalized = normalizeLevel(level)
+  return LOG_LEVEL_TONES[normalized] ?? LOG_LEVEL_TONES.default
+}
+
 interface ExecutionInspectorProps {
   onRerunRun?: (runId: string) => void
 }
@@ -78,6 +106,19 @@ export function ExecutionInspector({ onRerunRun }: ExecutionInspectorProps = {})
     message: '',
     title: '',
   })
+  const [logLevelFilter, setLogLevelFilter] = useState<LogLevelFilter>('all')
+  const rawLogs = getDisplayLogs()
+  const filteredLogs = useMemo(() => {
+    if (logLevelFilter === 'all') {
+      return rawLogs
+    }
+    const threshold = LOG_LEVEL_ORDER[logLevelFilter]
+    return rawLogs.filter((log) => {
+      const normalized = normalizeLevel(log.level)
+      const value = LOG_LEVEL_ORDER[normalized as keyof typeof LOG_LEVEL_ORDER] ?? LOG_LEVEL_ORDER.debug
+      return value <= threshold
+    })
+  }, [rawLogs, logLevelFilter])
 
   const selectedRun = useMemo(() => (
     runs.find(run => run.id === selectedRunId)
@@ -208,7 +249,7 @@ export function ExecutionInspector({ onRerunRun }: ExecutionInspectorProps = {})
           )}
         </div>
 
-        <div className="border-b bg-background/60 px-3 py-2">
+        <div className="border-b bg-background/60 px-3 py-2 flex items-center justify-between gap-3">
           <div className="inline-flex rounded-md border bg-muted/60 p-1 text-xs font-medium">
             <Button
               variant={inspectorTab === 'events' ? 'default' : 'ghost'}
@@ -243,6 +284,24 @@ export function ExecutionInspector({ onRerunRun }: ExecutionInspectorProps = {})
               Artifacts
             </Button>
           </div>
+          {inspectorTab === 'logs' && (
+            <div className="flex flex-col text-right">
+              <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                Display up to level
+              </span>
+              <select
+                value={logLevelFilter}
+                onChange={(event) => setLogLevelFilter(event.target.value as LogLevelFilter)}
+                className="mt-1 h-8 rounded-md border bg-background px-2 text-xs"
+              >
+                {LOG_LEVEL_OPTIONS.map((option) => (
+                  <option key={option} value={option}>
+                    {LOG_LEVEL_LABELS[option]}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
 
         <div className="flex-1 min-h-0">
@@ -256,34 +315,29 @@ export function ExecutionInspector({ onRerunRun }: ExecutionInspectorProps = {})
             <div className="flex flex-col h-full min-h-0">
               <div className="flex items-center justify-between px-3 py-2 border-b bg-background/70 text-xs text-muted-foreground">
                 <div className="flex items-center gap-2">
-                  <span>{`${getDisplayLogs().length} log entries`}</span>
+                  <span>{`${filteredLogs.length} log entries`}</span>
                 </div>
                 <span className={cn('font-medium', playbackMode === 'live' ? 'text-green-600' : 'text-blue-600')}>
                   {playbackMode === 'live' ? (isPlaying ? 'Live (following)' : 'Live paused') : 'Execution playback'}
                 </span>
               </div>
               <div className="flex-1 overflow-auto bg-slate-950 text-slate-100 font-mono text-xs">
-                {getDisplayLogs().length === 0 ? (
+                {filteredLogs.length === 0 ? (
                   <div className="text-slate-400 text-center py-8">
-                    No logs to display for this run.
+                    {rawLogs.length === 0
+                      ? 'No logs to display for this run.'
+                      : 'No logs match the selected filter.'}
                   </div>
                 ) : (
                   <div className="p-2 space-y-0 min-w-max">
-                    {getDisplayLogs().map((log) => {
+                    {filteredLogs.map((log) => {
                       const executionLog = log as ExecutionLog
                       const fullMessage = buildLogMessage(executionLog)
                       const time = formatTime(log.timestamp)
-                      const level = log.level.toUpperCase()
+                      const level = (log.level ?? '').toUpperCase()
                       const node = log.nodeId ? `[${log.nodeId}]` : ''
 
                       // Color coding for log levels
-                      const levelColor = {
-                        'DEBUG': 'text-gray-400',
-                        'INFO': 'text-blue-400',
-                        'WARN': 'text-yellow-400',
-                        'ERROR': 'text-red-400'
-                      }[level] || 'text-slate-300'
-
                       // Check for JSON and format nicely
                       let displayMessage = fullMessage
                       let isJson = false
@@ -304,27 +358,39 @@ export function ExecutionInspector({ onRerunRun }: ExecutionInspectorProps = {})
                         ? displayMessage.substring(0, maxLength) + '...'
                         : displayMessage
 
+                      const tone = getLogLevelTone(log.level)
+
                       return (
-                        <div key={log.id} className="group hover:bg-slate-800/30 px-1 py-0.5 rounded cursor-pointer leading-none"
-                             onClick={() => openLogModal(fullMessage, executionLog)}>
+                        <div
+                          key={log.id}
+                          className={cn(
+                            'group cursor-pointer rounded border-l-2 px-2 py-1 leading-none transition-colors',
+                            tone.accent,
+                            'hover:bg-white/5'
+                          )}
+                          onClick={() => openLogModal(fullMessage, executionLog)}
+                        >
                           <div className="flex items-start gap-1">
-                            <span className="text-slate-500 text-[10px] font-mono flex-shrink-0 w-10">
+                            <span className={cn('text-[10px] font-mono flex-shrink-0 w-12', tone.text)}>
                               {time}
                             </span>
-                            <span className={cn('text-[10px] font-bold uppercase flex-shrink-0 w-12', levelColor)}>
+                            <span className={cn('text-[10px] font-bold uppercase flex-shrink-0 w-12', tone.text)}>
                               {level}
                             </span>
                             {node && (
-                              <span className="text-slate-400 text-[10px] flex-shrink-0 max-w-16 truncate">
+                              <span className={cn('text-[10px] flex-shrink-0 max-w-16 truncate', tone.text)}>
                                 {node}
                               </span>
                             )}
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-1">
-                                <pre className={cn(
-                                  "text-[11px] leading-tight flex-1",
-                                  isJson ? "whitespace-pre-wrap" : "whitespace-nowrap overflow-hidden text-ellipsis"
-                                )}>
+                                <pre
+                                  className={cn(
+                                    'text-[11px] leading-tight flex-1',
+                                    tone.text,
+                                    isJson ? 'whitespace-pre-wrap' : 'whitespace-nowrap overflow-hidden text-ellipsis'
+                                  )}
+                                >
                                   {truncatedMessage}
                                 </pre>
                                 {isTruncated && (
