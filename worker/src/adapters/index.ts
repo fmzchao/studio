@@ -11,5 +11,6 @@ export {
   LokiLogClient,
   type LokiLogClientConfig,
 } from './loki-log.adapter';
+export { KafkaLogAdapter, type KafkaLogAdapterConfig } from './kafka-log.adapter';
 export { SecretsAdapter } from './secrets.adapter';
 export { RedisTerminalStreamAdapter } from './terminal-stream.adapter';
