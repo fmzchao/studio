@@ -11,9 +11,11 @@ import { AgentTraceIngestService } from '../agent-trace/agent-trace-ingest.servi
 import { AgentTraceRepository } from '../agent-trace/agent-trace.repository';
 import { AgentTraceService } from '../agent-trace/agent-trace.service';
 
-// By default, skip ingest services to avoid startup connections during OpenAPI generation
-// Enable them only when ENABLE_INGEST_SERVICES is explicitly set to 'true'
-const ingestServices = process.env.ENABLE_INGEST_SERVICES === 'true'
+const ingestServicesEnabled =
+  (process.env.ENABLE_INGEST_SERVICES ?? 'true') === 'true' &&
+  process.env.SKIP_INGEST_SERVICES !== 'true';
+
+const ingestServices = ingestServicesEnabled
   ? [LogIngestService, EventIngestService, AgentTraceIngestService]
   : [];
 

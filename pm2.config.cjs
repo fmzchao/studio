@@ -235,6 +235,7 @@ module.exports = {
         EVENT_KAFKA_TOPIC: process.env.EVENT_KAFKA_TOPIC || 'telemetry.events',
         EVENT_KAFKA_CLIENT_ID: process.env.EVENT_KAFKA_CLIENT_ID || 'shipsec-backend-events',
         EVENT_KAFKA_GROUP_ID: process.env.EVENT_KAFKA_GROUP_ID || 'shipsec-event-ingestor',
+        ENABLE_INGEST_SERVICES: process.env.ENABLE_INGEST_SERVICES || 'true',
       },
       watch: !isProduction ? ['src'] : false,
       ignore_watch: ['node_modules', 'dist', '*.log'],

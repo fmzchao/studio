@@ -194,6 +194,7 @@ type AgentStreamPart =
 
 class AgentStreamRecorder {
   private sequence = 0;
+  private activeTextId: string | null = null;
 
   constructor(private readonly context: ExecutionContext, private readonly agentRunId: string) {}
 
@@ -237,10 +238,24 @@ class AgentStreamRecorder {
     });
   }
 
+  private ensureTextStream(): string {
+    if (this.activeTextId) {
+      return this.activeTextId;
+    }
+    const textId = `${this.agentRunId}:text`;
+    this.emitPart({
+      type: 'data-text-start',
+      data: { id: textId },
+    });
+    this.activeTextId = textId;
+    return textId;
+  }
+
   emitTextDelta(textDelta: string): void {
     if (!textDelta.trim()) {
       return;
     }
+    const textId = this.ensureTextStream();
     this.emitPart({
       type: 'text-delta',
       textDelta,
@@ -248,6 +263,13 @@ class AgentStreamRecorder {
   }
 
   emitFinish(finishReason: string, responseText: string): void {
+    if (this.activeTextId) {
+      this.emitPart({
+        type: 'data-text-end',
+        data: { id: this.activeTextId },
+      });
+      this.activeTextId = null;
+    }
     this.emitPart({
       type: 'finish',
       finishReason,
@@ -789,6 +811,14 @@ Loop the Conversation State output back into the next agent invocation to keep m
     const agentRunId = `${context.runId}:${context.componentRef}:${randomUUID()}`;
     const agentStream = new AgentStreamRecorder(context as ExecutionContext, agentRunId);
     agentStream.emitMessageStart();
+    context.emitProgress({
+      level: 'info',
+      message: 'AI agent session started',
+      data: {
+        agentRunId,
+        agentStatus: 'started',
+      },
+    });
 
     debugLog('Incoming params', {
       userInput,
@@ -963,7 +993,14 @@ Loop the Conversation State output back into the next agent invocation to keep m
     context.logger.info(
       `[AIAgent] Using ${effectiveProvider} model "${effectiveModel}" with ${availableToolsCount} connected tool(s).`,
     );
-    context.emitProgress('AI agent reasoning in progress...');
+    context.emitProgress({
+      level: 'info',
+      message: 'AI agent reasoning in progress...',
+      data: {
+        agentRunId,
+        agentStatus: 'running',
+      },
+    });
     debugLog('Invoking ToolLoopAgent.generate with payload', {
       messages: messagesForModel,
     });
@@ -1040,7 +1077,14 @@ Loop the Conversation State output back into the next agent invocation to keep m
 
     agentStream.emitTextDelta(responseText);
     agentStream.emitFinish(generationResult.finishReason ?? 'stop', responseText);
-    context.emitProgress('AI agent completed.');
+    context.emitProgress({
+      level: 'info',
+      message: 'AI agent completed.',
+      data: {
+        agentRunId,
+        agentStatus: 'completed',
+      },
+    });
     debugLog('Final output payload', {
       responseText,
       conversationState: nextState,

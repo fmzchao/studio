@@ -53,7 +53,7 @@ export class LogIngestService implements OnModuleInit, OnModuleDestroy {
       });
       this.consumer = kafka.consumer({ groupId: this.kafkaGroupId });
       await this.consumer.connect();
-      await this.consumer.subscribe({ topic: this.kafkaTopic, fromBeginning: false });
+      await this.consumer.subscribe({ topic: this.kafkaTopic, fromBeginning: true });
       await this.consumer.run({
         eachMessage: async ({ message }) => {
           if (!message.value) {

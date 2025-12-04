@@ -354,4 +354,117 @@ describe('core.ai.agent component', () => {
       globalThis.fetch = originalFetch;
     }
   });
+
+  test('emits agent trace events via publisher and fallback progress stream', async () => {
+    const component = componentRegistry.get('core.ai.agent');
+    expect(component).toBeDefined();
+
+    nextAgentResult = makeAgentResult({
+      text: 'Tool enriched answer',
+      steps: [
+        {
+          text: 'Consider calling lookup_fact',
+          finishReason: 'tool-calls',
+          toolCalls: [
+            {
+              toolCallId: 'call-1',
+              toolName: 'lookup_fact',
+              args: { topic: 'zebra stripes' },
+            },
+          ],
+          toolResults: [
+            {
+              toolCallId: 'call-1',
+              toolName: 'lookup_fact',
+              result: { fact: 'Zebra stripes help confuse predators.' },
+            },
+          ],
+        },
+      ],
+    });
+
+    const params = {
+      userInput: 'Explain zebra stripes',
+      conversationState: undefined,
+      chatModel: {
+        provider: 'openai',
+        modelId: 'gpt-4o-mini',
+      },
+      modelApiKey: 'sk-openai-from-secret',
+      mcp: { endpoint: '' },
+      systemPrompt: 'You are a biologist.',
+      temperature: 0.2,
+      maxTokens: 256,
+      memorySize: 5,
+      stepLimit: 3,
+    };
+
+    const publishMock = vi.fn().mockResolvedValue(undefined);
+    const emitProgressMock = vi.fn();
+    const contextWithPublisher: ExecutionContext = {
+      ...workflowContext,
+      agentTracePublisher: { publish: publishMock },
+      emitProgress: emitProgressMock,
+    };
+
+    await runComponentWithRunner(
+      component!.runner,
+      (componentParams: any, ctx: any) =>
+        (component!.execute as any)(componentParams, ctx, {
+          ToolLoopAgent: MockToolLoopAgent as unknown as ToolLoopAgentClass,
+          stepCountIs: stepCountIsMock as unknown as StepCountIsFn,
+          tool: ((definition: any) => definition) as unknown as ToolFn,
+          createOpenAI: openAiFactoryMock as unknown as CreateOpenAIFn,
+          createGoogleGenerativeAI: googleFactoryMock as unknown as CreateGoogleGenerativeAIFn,
+        }),
+      params,
+      contextWithPublisher,
+    );
+
+    expect(publishMock).toHaveBeenCalled();
+    const publishedEnvelope = publishMock.mock.calls[0][0];
+    expect(publishedEnvelope).toMatchObject({
+      workflowRunId: 'test-run',
+      nodeRef: 'core.ai.agent',
+      agentRunId: expect.any(String),
+    });
+    const fallbackDuringPublisher = emitProgressMock.mock.calls.some(([payload]) =>
+      payload?.message?.includes('[AgentTraceFallback]'),
+    );
+    expect(fallbackDuringPublisher).toBe(false);
+
+    publishMock.mockReset();
+    emitProgressMock.mockReset();
+
+    const contextWithoutPublisher: ExecutionContext = {
+      ...workflowContext,
+      agentTracePublisher: undefined,
+      emitProgress: emitProgressMock,
+    };
+
+    await runComponentWithRunner(
+      component!.runner,
+      (componentParams: any, ctx: any) =>
+        (component!.execute as any)(componentParams, ctx, {
+          ToolLoopAgent: MockToolLoopAgent as unknown as ToolLoopAgentClass,
+          stepCountIs: stepCountIsMock as unknown as StepCountIsFn,
+          tool: ((definition: any) => definition) as unknown as ToolFn,
+          createOpenAI: openAiFactoryMock as unknown as CreateOpenAIFn,
+          createGoogleGenerativeAI: googleFactoryMock as unknown as CreateGoogleGenerativeAIFn,
+        }),
+      params,
+      contextWithoutPublisher,
+    );
+
+    expect(publishMock).not.toHaveBeenCalled();
+    const fallbackCall = emitProgressMock.mock.calls.find(
+      ([payload]) => payload?.message?.includes('[AgentTraceFallback]'),
+    );
+    expect(fallbackCall).toBeTruthy();
+    expect(fallbackCall?.[0]?.data).toMatchObject({
+      workflowRunId: 'test-run',
+      nodeRef: 'core.ai.agent',
+      agentRunId: expect.any(String),
+    });
+  });
 });

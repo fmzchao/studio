@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react'
-import { AnsiUp } from 'ansi_up'
 import { RunSelector } from '@/components/timeline/RunSelector'
 import { ExecutionTimeline } from '@/components/timeline/ExecutionTimeline'
 import { EventInspector } from '@/components/timeline/EventInspector'
@@ -16,7 +15,6 @@ import { useArtifactStore } from '@/store/artifactStore'
 import { useRunStore } from '@/store/runStore'
 import { cn } from '@/lib/utils'
 import type { ExecutionLog } from '@/schemas/execution'
-import { createPreview } from '@/utils/textPreview'
 import { RunArtifactsPanel } from '@/components/artifacts/RunArtifactsPanel'
 import { AgentTracePanel } from '@/components/timeline/AgentTracePanel'
 
@@ -271,7 +269,7 @@ export function ExecutionInspector({ onRerunRun }: ExecutionInspectorProps = {})
                   </div>
                 ) : (
                   <div className="p-2 space-y-0 min-w-max">
-                    {getDisplayLogs().map((log, index) => {
+                    {getDisplayLogs().map((log) => {
                       const executionLog = log as ExecutionLog
                       const fullMessage = buildLogMessage(executionLog)
                       const time = formatTime(log.timestamp)
