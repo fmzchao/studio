@@ -583,7 +583,7 @@ function WorkflowBuilderContent() {
       const nodeData = node.data as any
       const componentRef = nodeData.componentId ?? nodeData.componentSlug
       const component = getComponent(componentRef)
-      return component?.slug === 'manual-trigger'
+      return component?.id === 'core.trigger.manual'
     })
 
     if (!triggerNode) {

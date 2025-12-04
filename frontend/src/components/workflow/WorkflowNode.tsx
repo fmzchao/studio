@@ -123,7 +123,7 @@ export const WorkflowNode = memo(({ data, selected, id }: NodeProps<NodeData>) =
   const isTimelineActive = mode === 'execution' && selectedRunId && visualState.status !== 'idle'
   const hasEvents = isTimelineActive && visualState.eventCount > 0
 
-  const isTextBlock = component.slug === 'text-block' || component.id === 'core.ui.text'
+  const isTextBlock = component.id === 'core.ui.text'
   useEffect(() => {
     if (!isTextBlock) return
     const uiSize = (nodeData as any)?.ui?.size as { width?: number; height?: number } | undefined
@@ -163,7 +163,7 @@ export const WorkflowNode = memo(({ data, selected, id }: NodeProps<NodeData>) =
 
   // DYNAMIC OUTPUTS: For Manual Trigger, generate outputs based on runtimeInputs parameter
   let effectiveOutputs = component.outputs ?? []
-  if (component.slug === 'manual-trigger' && nodeData.parameters?.runtimeInputs) {
+  if (component.id === 'core.trigger.manual' && nodeData.parameters?.runtimeInputs) {
     try {
       const runtimeInputs = typeof nodeData.parameters.runtimeInputs === 'string'
         ? JSON.parse(nodeData.parameters.runtimeInputs)

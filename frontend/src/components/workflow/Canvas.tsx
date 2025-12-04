@@ -348,7 +348,7 @@ export function Canvas({
     // Check if this is a text-block node
     const nodeData = node.data as any
     const componentRef = nodeData?.componentId || nodeData?.componentSlug
-    const isTextBlock = componentRef === 'text-block' || componentRef === 'core.ui.text'
+    const isTextBlock = componentRef === 'core.ui.text'
 
     if (isTextBlock) {
       event.stopPropagation()
