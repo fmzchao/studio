@@ -24,8 +24,8 @@ This roadmap tracks how we evolve the `core.ai.agent` component from a model-onl
 - [ ] Remove bespoke `agent_event` enums once the AI SDK part emitter is stable.
 
 ### Backend
-- [ ] Add `POST /api/v1/agents/:runId/chat` that proxies the worker result and returns `result.toUIMessageStreamResponse()` for live runs.
-- [ ] Add `GET /api/v1/agents/:runId/replay` and `GET /api/v1/agents/:runId/parts` that read from the new repository and stream/return the stored UI message parts in order (with cursor + timestamp metadata).
+- [ ] Add `POST /api/v1/agents/:agentRunId/chat` that proxies the worker result and returns `result.toUIMessageStreamResponse()` for live runs.
+- [x] Add `/api/v1/agents/:agentRunId/stream` (SSE) and `/api/v1/agents/:agentRunId/parts` that read from the new repository and stream/return stored UI message parts in order with cursor metadata.
 - [ ] Deprecate and then remove `/api/v1/agents/:runId/stream` once consumers switch to the new endpoints.
 
 ### Frontend

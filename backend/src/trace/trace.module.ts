@@ -9,6 +9,7 @@ import { LogIngestService } from '../logging/log-ingest.service';
 import { EventIngestService } from '../events/event-ingest.service';
 import { AgentTraceIngestService } from '../agent-trace/agent-trace-ingest.service';
 import { AgentTraceRepository } from '../agent-trace/agent-trace.repository';
+import { AgentTraceService } from '../agent-trace/agent-trace.service';
 
 // By default, skip ingest services to avoid startup connections during OpenAPI generation
 // Enable them only when ENABLE_INGEST_SERVICES is explicitly set to 'true'
@@ -25,8 +26,16 @@ const ingestServices = process.env.ENABLE_INGEST_SERVICES === 'true'
     LogStreamRepository,
     LogStreamService,
     AgentTraceRepository,
+    AgentTraceService,
     ...ingestServices,
   ],
-  exports: [TraceService, TraceRepository, LogStreamRepository, LogStreamService, AgentTraceRepository],
+  exports: [
+    TraceService,
+    TraceRepository,
+    LogStreamRepository,
+    LogStreamService,
+    AgentTraceRepository,
+    AgentTraceService,
+  ],
 })
 export class TraceModule {}
