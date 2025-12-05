@@ -156,9 +156,9 @@ export class ShipSecApiClient {
 
   async cancelWorkflowRun(runId: string, temporalRunId?: string) {
     return this.client.POST('/api/v1/workflows/runs/{runId}/cancel', {
-      params: { 
+      params: {
         path: { runId },
-        query: { temporalRunId: temporalRunId || '' } as any,
+        ...(temporalRunId ? { query: { temporalRunId } } : {}),
       },
     });
   }

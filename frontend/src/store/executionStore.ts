@@ -41,6 +41,7 @@ interface ExecutionStoreActions {
       version?: number
     }
   ) => Promise<string | undefined>
+  stopExecution: () => Promise<void>
   monitorRun: (runId: string, workflowId?: string | null) => void
   pollOnce: () => Promise<void>
   stopPolling: () => void
@@ -199,6 +200,24 @@ export const useExecutionStore = create<ExecutionStore>((set, get) => ({
       console.error('Failed to start execution:', error)
       set({ status: 'failed' })
       throw error
+    }
+  },
+
+  stopExecution: async () => {
+    const runId = get().runId
+    if (!runId) return
+
+    try {
+      await api.executions.cancel(runId)
+      get().stopPolling()
+      set({ status: 'cancelled' })
+
+      const workflowId = get().workflowId
+      if (workflowId) {
+        void useRunStore.getState().refreshRuns(workflowId)
+      }
+    } catch (error) {
+      console.error('Failed to stop execution:', error)
     }
   },
 
