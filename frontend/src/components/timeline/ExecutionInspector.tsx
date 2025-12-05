@@ -71,7 +71,7 @@ export function ExecutionInspector({ onRerunRun }: ExecutionInspectorProps = {})
   const workflowCacheKey = workflowId ?? '__global__'
   const scopedRuns = useRunStore((state) => state.cache[workflowCacheKey]?.runs)
   const runs = scopedRuns ?? []
-  const { logs, status, runStatus, reset, runId: liveRunId } = useWorkflowExecution()
+  const { logs, status, runStatus, stopExecution, runId: liveRunId } = useWorkflowExecution()
   const { inspectorTab, setInspectorTab } = useWorkflowUiStore()
   const fetchRunArtifacts = useArtifactStore((state) => state.fetchRunArtifacts)
   const [logModal, setLogModal] = useState<{ open: boolean; message: string; title: string }>({
@@ -122,12 +122,17 @@ export function ExecutionInspector({ onRerunRun }: ExecutionInspectorProps = {})
     })
   }
 
+  const getStatusLabel = (status: string) => {
+    if (status === 'TERMINATED') return 'STOPPED'
+    return status.toUpperCase()
+  }
+
   const statusBadge = selectedRun ? (
     <Badge
       variant={selectedRun.status === 'RUNNING' ? 'default' : selectedRun.status === 'FAILED' ? 'destructive' : 'secondary'}
       className="text-xs"
     >
-      {selectedRun.status.toUpperCase()}
+      {getStatusLabel(selectedRun.status)}
     </Badge>
   ) : null
   const runVersion = typeof selectedRun?.workflowVersion === 'number' ? selectedRun.workflowVersion : null
@@ -163,7 +168,7 @@ export function ExecutionInspector({ onRerunRun }: ExecutionInspectorProps = {})
 
               {selectedRunId === liveRunId && (status === 'running' || status === 'queued') && (
                 <Button
-                  onClick={() => reset()}
+                  onClick={() => stopExecution()}
                   variant="destructive"
                   size="sm"
                   className="h-8 px-2 gap-1.5"

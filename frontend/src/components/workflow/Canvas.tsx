@@ -222,7 +222,7 @@ export function Canvas({
       return
     }
     try {
-      reactFlowInstance.fitView({ padding: 0.2, duration: 300 })
+      reactFlowInstance.fitView({ padding: 0.2, duration: 300, maxZoom: 0.85 })
     } catch (error) {
       console.warn('Failed to fit view:', error)
     }
@@ -562,7 +562,7 @@ export function Canvas({
               setReactFlowInstance(instance)
               if (nodes.length > 0) {
                 try {
-                  instance.fitView({ padding: 0.2, duration: 0 })
+                  instance.fitView({ padding: 0.2, duration: 0, maxZoom: 0.85 })
                 } catch (error) {
                   console.warn('Failed to fit view on init:', error)
                 }
