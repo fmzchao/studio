@@ -6,7 +6,7 @@
   - `DATABASE_URL` – Postgres connection string (matches the `postgres` service in `docker-compose.yml` by default).
   - `TEMPORAL_ADDRESS` – Temporal server host:port (default `localhost:7233` when running docker compose).
   - `TEMPORAL_NAMESPACE` – Namespace to operate within (default `shipsec-dev`).
-- `TEMPORAL_TASK_QUEUE` – Task queue used for ShipSec workflows (default `shipsec-default`).
+  - `TEMPORAL_TASK_QUEUE` – Task queue used for ShipSec workflows (default `shipsec-dev` for local, `shipsec-prod` for Docker).
 - `TEMPORAL_BOOTSTRAP_DEMO` – Set to `true` to auto-create and run the demo workflow at startup (appears in Temporal UI).
 - `MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD` – Credentials for the MinIO console/API (`minioadmin` by default).
 - `SECRET_STORE_MASTER_KEY` – 32-byte master key (base64, hex, or UTF-8) used to encrypt secrets. Defaults to a development key when unset.
