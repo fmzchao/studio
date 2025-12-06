@@ -52,7 +52,7 @@ export function NodeTerminalPanel({
 
   const currentTime = useExecutionTimelineStore((state) => state.currentTime)
 
-  const { chunks, isHydrating, isStreaming, error, mode, exportText, isTimelineSync, isFetchingTimeline } = useTimelineTerminalStream({
+  const { chunks, isHydrating, isStreaming, error, mode, exportText, isTimelineSync, isFetchingTimeline, hasData } = useTimelineTerminalStream({
     runId,
     nodeId,
     stream: 'pty',
@@ -244,18 +244,15 @@ export function NodeTerminalPanel({
     setTerminalKey((key) => key + 1)
   }, [runId, nodeId])
 
-  // Prevent wheel events from bubbling up to ReactFlow canvas (prevents zoom on scroll)
-  // Use bubble phase so xterm can handle scrolling first, then we stop propagation to ReactFlow
+  // Prevent wheel events from bubbling to ReactFlow (backup to nowheel class)
   useEffect(() => {
     const panel = panelRef.current
     if (!panel) return
 
     const handleWheel = (event: WheelEvent) => {
-      // Stop the event from bubbling up to ReactFlow's zoom handler
       event.stopPropagation()
     }
 
-    // Add listener in bubble phase (capture: false) so xterm handles scroll first
     panel.addEventListener('wheel', handleWheel, { capture: false, passive: true })
 
     return () => {
@@ -266,7 +263,9 @@ export function NodeTerminalPanel({
   return (
     <div
       ref={panelRef}
-      className="w-[520px] rounded-lg shadow-2xl border border-slate-200 overflow-hidden"
+      // nodrag, nowheel, nopan: Prevent ReactFlow from intercepting mouse events in terminal
+      // This fixes sticky selection issues caused by ReactFlow capturing mouse events
+      className="nodrag nowheel nopan select-text w-[520px] rounded-lg shadow-2xl border border-slate-200 overflow-hidden"
       style={{ backgroundColor: '#ffffff' }}
     >
       <div className="flex items-center justify-between px-3 py-2 border-b border-slate-200" style={{ backgroundColor: '#ffffff' }}>
@@ -308,7 +307,7 @@ export function NodeTerminalPanel({
       )}
       <div className="relative bg-slate-950">
         <div ref={containerRef} className="h-[360px] w-full" />
-        {!session?.chunks?.length && (
+        {!hasData && !session?.chunks?.length && (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
             <div className="text-sm text-white space-y-2 text-center p-4">
               <div>{isHydrating || isFetchingTimeline ? 'Loading output…' : 'Waiting for terminal output…'}</div>
