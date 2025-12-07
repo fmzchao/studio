@@ -45,6 +45,7 @@ interface ExecutionStoreActions {
       version?: number
     }
   ) => Promise<string | undefined>
+  stopExecution: () => Promise<void>
   monitorRun: (runId: string, workflowId?: string | null) => void
   pollOnce: () => Promise<void>
   stopPolling: () => void
@@ -98,8 +99,8 @@ const mapStatusToLifecycle = (status: ExecutionStatus | undefined): ExecutionLif
     case 'FAILED':
       return 'failed'
     case 'CANCELLED':
-      return 'cancelled'
     case 'TERMINATED':
+      return 'cancelled'
     case 'TIMED_OUT':
       return 'failed'
     default:
@@ -215,6 +216,46 @@ export const useExecutionStore = create<ExecutionStore>((set, get) => ({
       console.error('Failed to start execution:', error)
       set({ status: 'failed' })
       throw error
+    }
+  },
+
+  stopExecution: async () => {
+    const runId = get().runId
+    if (!runId) return
+
+    try {
+      await api.executions.cancel(runId)
+
+      // Fetch final status before stopping polling so runStatus reflects terminal state.
+      // This ensures timeline store and other consumers see the TERMINATED/CANCELLED status.
+      try {
+        const statusPayload = await api.executions.getStatus(runId)
+        if (statusPayload) {
+          const status = (statusPayload as any)?.status as ExecutionStatus | undefined
+          const lifecycle = mapStatusToLifecycle(status)
+          set({
+            runStatus: statusPayload as ExecutionStatusResponse,
+            status: lifecycle,
+          })
+        } else {
+          set({ status: 'cancelled' })
+        }
+      } catch (statusError) {
+        console.warn('Failed to fetch final status after stop:', statusError)
+        set({ status: 'cancelled' })
+      }
+
+      get().stopPolling()
+
+      const workflowId = get().workflowId
+      if (workflowId) {
+        void useRunStore.getState().refreshRuns(workflowId)
+      }
+    } catch (error) {
+      console.error('Failed to stop execution:', error)
+      // Still stop polling on cancel failure to avoid zombie polling
+      get().stopPolling()
+      set({ status: 'cancelled' })
     }
   },
 
