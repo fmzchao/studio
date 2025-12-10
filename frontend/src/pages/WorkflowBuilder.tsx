@@ -1666,15 +1666,6 @@ function WorkflowBuilderContent() {
         onExport={handleExportWorkflow}
         canManageWorkflows={canManageWorkflows}
       />
-      {workflowId && (
-        <WorkflowSchedulesBanner
-          schedules={workflowSchedules}
-          isLoading={workflowSchedulesLoading}
-          error={workflowSchedulesError}
-          onCreate={() => openScheduleDrawer('create')}
-          onManage={navigateToSchedules}
-        />
-      )}
       <div ref={layoutRef} className="flex flex-1 overflow-hidden relative">
         {/* Show components button - anchored to layout when tray is hidden */}
         {mode === 'design' && !isLibraryVisible && (
@@ -1736,23 +1727,36 @@ function WorkflowBuilderContent() {
         </aside>
 
         <main className="flex-1 relative flex">
-          <Canvas
-            className="flex-1 h-full relative"
-            nodes={nodes}
-            edges={edges}
-            setNodes={setNodes}
-            setEdges={setEdges}
-            onNodesChange={onNodesChange}
-            onEdgesChange={onEdgesChange}
-            workflowId={workflowId}
-            workflowSchedules={workflowSchedules}
-            schedulesLoading={workflowSchedulesLoading}
-            scheduleError={workflowSchedulesError}
-            onScheduleCreate={() => openScheduleDrawer('create')}
-            onScheduleEdit={(schedule) => openScheduleDrawer('edit', schedule)}
-            onScheduleAction={handleScheduleAction}
-            onViewSchedules={navigateToSchedules}
-          />
+          <div className="flex-1 h-full relative">
+            {workflowId && mode === 'design' && (
+              <div className="absolute right-4 top-4 z-40 w-96 max-w-full">
+                <WorkflowSchedulesPanel
+                  schedules={workflowSchedules}
+                  isLoading={workflowSchedulesLoading}
+                  error={workflowSchedulesError}
+                  onCreate={() => openScheduleDrawer('create')}
+                  onManage={navigateToSchedules}
+                />
+              </div>
+            )}
+            <Canvas
+              className="flex-1 h-full relative"
+              nodes={nodes}
+              edges={edges}
+              setNodes={setNodes}
+              setEdges={setEdges}
+              onNodesChange={onNodesChange}
+              onEdgesChange={onEdgesChange}
+              workflowId={workflowId}
+              workflowSchedules={workflowSchedules}
+              schedulesLoading={workflowSchedulesLoading}
+              scheduleError={workflowSchedulesError}
+              onScheduleCreate={() => openScheduleDrawer('create')}
+              onScheduleEdit={(schedule) => openScheduleDrawer('edit', schedule)}
+              onScheduleAction={handleScheduleAction}
+              onViewSchedules={navigateToSchedules}
+            />
+          </div>
           {isInspectorVisible && (
             <aside
               className="relative h-full border-l bg-background"
@@ -1803,7 +1807,7 @@ export function WorkflowBuilder() {
   )
 }
 
-interface WorkflowSchedulesBannerProps {
+interface WorkflowSchedulesPanelProps {
   schedules: WorkflowSchedule[]
   isLoading: boolean
   error?: string | null
@@ -1811,58 +1815,70 @@ interface WorkflowSchedulesBannerProps {
   onManage: () => void
 }
 
-function WorkflowSchedulesBanner({
+function WorkflowSchedulesPanel({
   schedules,
   isLoading,
   error,
   onCreate,
   onManage,
-}: WorkflowSchedulesBannerProps) {
+}: WorkflowSchedulesPanelProps) {
   const topSchedules = schedules.slice(0, 3)
   return (
-    <div className="border-b bg-muted/30 px-4 py-3">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="space-y-1">
+    <div className="rounded-xl border bg-background/95 shadow-xl ring-1 ring-black/5 p-4 space-y-4 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+      <div className="flex items-center justify-between gap-3">
+        <div>
           <p className="text-sm font-semibold text-foreground">Schedules</p>
-          {isLoading ? (
-            <p className="text-xs text-muted-foreground">Loading schedules…</p>
-          ) : error ? (
-            <p className="text-xs text-destructive">{error}</p>
-          ) : topSchedules.length === 0 ? (
-            <p className="text-xs text-muted-foreground">No schedules yet.</p>
-          ) : (
-            <div className="flex flex-wrap gap-2">
-              {topSchedules.map((schedule) => (
-                <Badge
-                  key={schedule.id}
-                  variant={scheduleStatusVariant[schedule.status]}
-                  className="text-xs font-medium"
-                >
-                  {schedule.name}
-                  {schedule.nextRunAt && (
-                    <span className="ml-2 text-[10px] font-normal text-muted-foreground">
-                      Next: {formatScheduleTimestamp(schedule.nextRunAt)}
-                    </span>
-                  )}
-                </Badge>
-              ))}
-              {schedules.length > topSchedules.length && (
-                <Badge variant="outline" className="text-xs font-medium">
-                  +{schedules.length - topSchedules.length} more
-                </Badge>
-              )}
-            </div>
-          )}
+          <p className="text-xs text-muted-foreground">
+            Automate this workflow on a cadence.
+          </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex items-center gap-2">
           <Button size="sm" onClick={onCreate}>
             <Plus className="mr-1 h-4 w-4" />
-            Create schedule
+            New
           </Button>
           <Button size="sm" variant="outline" onClick={onManage}>
             View all
           </Button>
         </div>
+      </div>
+      <div>
+        {isLoading ? (
+          <p className="text-xs text-muted-foreground">Loading schedules…</p>
+        ) : error ? (
+          <p className="text-xs text-destructive">{error}</p>
+        ) : topSchedules.length === 0 ? (
+          <p className="text-xs text-muted-foreground">
+            No schedules yet. Create one to run this workflow automatically.
+          </p>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {topSchedules.map((schedule) => (
+              <div
+                key={schedule.id}
+                className="rounded-lg border bg-muted/40 px-3 py-2 space-y-1"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium">{schedule.name}</span>
+                  <Badge
+                    variant={scheduleStatusVariant[schedule.status]}
+                    className="text-[11px] capitalize"
+                  >
+                    {schedule.status}
+                  </Badge>
+                </div>
+                <div className="text-[11px] text-muted-foreground">
+                  Next: {formatScheduleTimestamp(schedule.nextRunAt)}
+                </div>
+              </div>
+            ))}
+            {schedules.length > topSchedules.length && (
+              <Badge variant="outline" className="text-xs font-medium w-fit">
+                +{schedules.length - topSchedules.length} more
+              </Badge>
+            )}
+          </div>
+        )}
       </div>
     </div>
   )

@@ -342,6 +342,7 @@ export function ConfigPanel({
     navigate(`/schedules?workflowId=${workflowId}`)
   }, [navigate, workflowId])
   const viewSchedules = onViewSchedules ?? handleNavigateSchedules
+  const schedulesDisabled = !workflowId
   const handleCreateSchedule = useCallback(() => {
     if (schedulesDisabled) {
       viewSchedules()
@@ -398,7 +399,6 @@ export function ConfigPanel({
   const entryPointPayloadString = JSON.stringify(entryPointPayload, null, 2)
   const safeEntryPayload = JSON.stringify(entryPointPayload).replace(/'/g, "\\'")
   const entryPointCurlSnippet = `curl -X POST '${workflowInvokeUrl}' \\\n  -H 'Content-Type: application/json' \\\n  -d '${safeEntryPayload}'`
-  const schedulesDisabled = !workflowId
 
   return (
     <div className="config-panel w-[400px] border-l bg-background flex flex-col h-full overflow-hidden">
