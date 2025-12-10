@@ -196,6 +196,10 @@ services:
       - AUTH_PROVIDER=local
       - CLERK_PUBLISHABLE_KEY=
       - CLERK_SECRET_KEY=
+      # PostHog analytics (baked into Docker images)
+      - POSTHOG_API_KEY=${POSTHOG_API_KEY:-}
+      - POSTHOG_HOST=${POSTHOG_HOST:-}
+      - DISABLE_ANALYTICS=${DISABLE_ANALYTICS:-}
     ports:
       - "3211:3211"
     depends_on:
@@ -232,6 +236,7 @@ services:
       # If unset, the app disables analytics at runtime.
       - VITE_PUBLIC_POSTHOG_KEY=${VITE_PUBLIC_POSTHOG_KEY:-}
       - VITE_PUBLIC_POSTHOG_HOST=${VITE_PUBLIC_POSTHOG_HOST:-}
+      - VITE_DISABLE_ANALYTICS=${VITE_DISABLE_ANALYTICS:-}
     ports:
       - "8090:8080"
     depends_on:
