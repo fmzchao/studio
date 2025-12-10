@@ -11,7 +11,6 @@ const rootPackage = (() => {
 
 const DEFAULT_BASE_URL = process.env.SHIPSEC_VERSION_CHECK_URL ?? 'https://version.shipsec.ai';
 const DEFAULT_VERSION = typeof rootPackage?.version === 'string' ? rootPackage.version : '0.1.1';
-const DEFAULT_APP = process.env.SHIPSEC_VERSION_CHECK_APP ?? 'studio';
 const DEFAULT_TIMEOUT_MS = Number(process.env.SHIPSEC_VERSION_CHECK_TIMEOUT_MS ?? '5000');
 
 export interface VersionCheckResponse {
@@ -25,17 +24,15 @@ export interface VersionCheckResponse {
 export type VersionCheckOutcome = 'ok' | 'upgrade' | 'unsupported';
 
 interface VersionCheckMetadata {
-  app: string;
   version: string;
   platform?: string;
   arch?: string;
-  workspaceId?: string;
-  instanceId?: string;
 }
 
 export interface VersionCheckResult {
   outcome: VersionCheckOutcome;
   response: VersionCheckResponse;
+  requestedVersion: string;
 }
 
 export function isVersionCheckDisabled(env: NodeJS.ProcessEnv = process.env) {
@@ -46,21 +43,16 @@ export function isVersionCheckDisabled(env: NodeJS.ProcessEnv = process.env) {
 
 export async function performVersionCheck(overrides: Partial<VersionCheckMetadata> = {}): Promise<VersionCheckResult> {
   const metadata: VersionCheckMetadata = {
-    app: overrides.app ?? DEFAULT_APP,
-    version: overrides.version ?? process.env.SHIPSEC_VERSION_CHECK_VERSION ?? DEFAULT_VERSION,
+    version: overrides.version ?? DEFAULT_VERSION,
     platform: overrides.platform ?? process.platform,
     arch: overrides.arch ?? process.arch,
-    workspaceId: overrides.workspaceId ?? process.env.SHIPSEC_WORKSPACE_ID,
-    instanceId: overrides.instanceId ?? process.env.SHIPSEC_INSTANCE_ID,
   };
 
   const url = new URL('/api/version/check', ensureTrailingSlash(DEFAULT_BASE_URL));
-  url.searchParams.set('app', metadata.app);
+  url.searchParams.set('app', 'studio');
   url.searchParams.set('version', metadata.version);
   if (metadata.platform) url.searchParams.set('platform', metadata.platform);
   if (metadata.arch) url.searchParams.set('arch', metadata.arch);
-  if (metadata.workspaceId) url.searchParams.set('workspace', metadata.workspaceId);
-  if (metadata.instanceId) url.searchParams.set('instance', metadata.instanceId);
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS);
@@ -75,6 +67,7 @@ export async function performVersionCheck(overrides: Partial<VersionCheckMetadat
     return {
       outcome: evaluateOutcome(payload),
       response: payload,
+      requestedVersion: metadata.version,
     };
   } finally {
     clearTimeout(timeout);
