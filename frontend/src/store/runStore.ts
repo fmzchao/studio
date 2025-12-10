@@ -78,6 +78,8 @@ const normalizeRun = (run: any): ExecutionRun => {
   const status = (typeof run.status === 'string' ? run.status.toUpperCase() : 'FAILED') as ExecutionStatus
   const isActiveStatus = !TERMINAL_STATUSES.includes(status)
 
+  // Backend now calculates duration from events, so use it directly
+  // Fallback to calculating from endTime if duration not provided
   const derivedDuration =
     typeof run.duration === 'number'
       ? run.duration

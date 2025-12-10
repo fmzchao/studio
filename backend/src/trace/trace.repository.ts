@@ -155,6 +155,28 @@ export class TraceRepository implements OnModuleDestroy {
     return Number(result?.value ?? 0);
   }
 
+  /**
+   * Get the first and last event timestamps for a run to calculate accurate duration
+   */
+  async getEventTimeRange(
+    runId: string,
+    organizationId?: string | null,
+  ): Promise<{ firstTimestamp: Date | null; lastTimestamp: Date | null }> {
+    const runFilter = this.buildRunFilter(runId, organizationId);
+    const [result] = await this.db
+      .select({
+        firstTimestamp: sql<Date>`min(${workflowTracesTable.timestamp})`,
+        lastTimestamp: sql<Date>`max(${workflowTracesTable.timestamp})`,
+      })
+      .from(workflowTracesTable)
+      .where(runFilter);
+
+    return {
+      firstTimestamp: result?.firstTimestamp ?? null,
+      lastTimestamp: result?.lastTimestamp ?? null,
+    };
+  }
+
   private mapToInsert(event: PersistedTraceEvent) {
     return {
       runId: event.runId,

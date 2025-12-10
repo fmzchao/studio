@@ -405,6 +405,15 @@ export class WorkflowsService {
       organizationId,
     );
 
+    // Calculate duration from events (more accurate than createdAt/updatedAt)
+    const eventTimeRange = await this.traceRepository.getEventTimeRange(
+      run.runId,
+      organizationId,
+    );
+    const duration = eventTimeRange.firstTimestamp && eventTimeRange.lastTimestamp
+      ? this.computeDuration(eventTimeRange.firstTimestamp, eventTimeRange.lastTimestamp)
+      : this.computeDuration(run.createdAt, run.updatedAt);
+
     let currentStatus: ExecutionStatus = 'RUNNING';
     try {
       const status = await this.temporalService.describeWorkflow({
@@ -434,7 +443,7 @@ export class WorkflowsService {
       workflowName,
       eventCount,
       nodeCount,
-      duration: this.computeDuration(run.createdAt, run.updatedAt),
+      duration,
       triggerType,
       triggerSource,
       triggerLabel,

@@ -55,9 +55,9 @@ This document captures the phase-by-phase rollout for introducing Workflow Entry
 - [x] Entry Point inspector lists existing schedules (chips with status & quick actions) and links to edit/pause/run now.
 
 ## Phase 7 – Execution Surfaces
-- [ ] Propagate trigger metadata to UI components (`RunSelector`, `ExecutionTimeline`, `ExecutionInspector`, dashboard cards) with badges (🕐 scheduled, 👤 manual) and labels.
-- [ ] Add timeline filters for `Trigger: All | Manual | Scheduled`.
-- [ ] Include trigger info in log/trace panels (e.g., “Triggered by Daily Quick Scan”) for clarity during investigations.
+- [x] Propagate trigger metadata across run fetchers, cards, and dashboard selectors so `RunSelector`, `ExecutionTimeline`, and `ExecutionInspector` show consistent badges (`👤 Manual run`, `🕐 Scheduled run`, `🌐 API run`).
+- [x] Add trigger filters to the Run Selector dropdown (`Trigger: All | Manual | Scheduled`) and align all dropdown cards with the info bar layout (title row + metadata row + badge row).
+- [x] Surface trigger info in the inspector/log panels (“Triggered by Daily Quick Scan”) and add rerun actions that mirror the overview bar.
 
 ## Phase 8 – Validation, Tests, Observability
 - [ ] Backend tests: unified run endpoint, dispatcher workflow, schedule lifecycle (create/update/pause/resume/trigger) with idempotency + failure cases.

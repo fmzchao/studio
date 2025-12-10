@@ -16,6 +16,9 @@ import { useWorkflowStore } from '@/store/workflowStore'
 import { useRunStore, type ExecutionRun } from '@/store/runStore'
 import { cn } from '@/lib/utils'
 import { useToast } from '@/components/ui/use-toast'
+import { getTriggerDisplay } from '@/utils/triggerDisplay'
+import { formatStartTime, formatDuration } from '@/utils/timeFormat'
+import { RunInfoDisplay } from '@/components/timeline/RunInfoDisplay'
 
 const STATUS_ICONS = {
   RUNNING: Loader2,
@@ -49,12 +52,6 @@ const isRunLive = (run?: ExecutionRun | null) => {
   return !TERMINAL_STATUSES.includes(run.status)
 }
 
-const formatDuration = (ms: number): string => {
-  if (ms < 1000) return `${ms}ms`
-  if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`
-  return `${(ms / 60000).toFixed(1)}m`
-}
-
 const formatRelativeTime = (timestamp: string): string => {
   const now = Date.now()
   const then = new Date(timestamp).getTime()
@@ -66,12 +63,23 @@ const formatRelativeTime = (timestamp: string): string => {
   return `${Math.floor(diffMs / 86400000)}d ago`
 }
 
+const formatTimeOfDay = (timestamp: string): string => {
+  const date = new Date(timestamp)
+  return date.toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+  })
+}
+
+type TriggerFilter = 'all' | 'manual' | 'schedule'
+
 interface RunSelectorProps {
   onRerun?: (runId: string) => void
 }
 
 export function RunSelector({ onRerun }: RunSelectorProps = {}) {
   const [isOpen, setIsOpen] = useState(false)
+  const [triggerFilter, setTriggerFilter] = useState<TriggerFilter>('all')
   const navigate = useNavigate()
   const location = useLocation()
   const { runId: routeRunId } = useParams<{ id?: string; runId?: string }>()
@@ -119,12 +127,19 @@ export function RunSelector({ onRerun }: RunSelectorProps = {}) {
     return runs.filter((run) => run.workflowId === workflowId)
   }, [runs, workflowId])
 
+  const filteredRunsByTrigger = useMemo(() => {
+    if (triggerFilter === 'all') {
+      return filteredRuns
+    }
+    return filteredRuns.filter((run) => run.triggerType === triggerFilter)
+  }, [filteredRuns, triggerFilter])
+
   const liveRuns = useMemo(
     () =>
-      filteredRuns
+      filteredRunsByTrigger
         .filter((run) => isRunLive(run))
         .sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime()),
-    [filteredRuns],
+    [filteredRunsByTrigger],
   )
   const otherLiveRuns = useMemo(
     () => liveRuns.filter((run) => run.id !== currentLiveRunId),
@@ -132,10 +147,10 @@ export function RunSelector({ onRerun }: RunSelectorProps = {}) {
   )
   const historicalRuns = useMemo(
     () =>
-      filteredRuns
+      filteredRunsByTrigger
         .filter((run) => !isRunLive(run))
         .sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime()),
-    [filteredRuns],
+    [filteredRunsByTrigger],
   )
 
   // Load runs on mount
@@ -211,6 +226,9 @@ export function RunSelector({ onRerun }: RunSelectorProps = {}) {
     selectedRunVersion !== null &&
     typeof currentWorkflowVersion === 'number' &&
     selectedRunVersion !== currentWorkflowVersion
+  const selectedTriggerDisplay = selectedRun
+    ? getTriggerDisplay(selectedRun.triggerType, selectedRun.triggerLabel)
+    : null
 
   const currentLiveRun = runs.find(run => run.id === currentLiveRunId)
   const currentLiveRunVersion = typeof currentLiveRun?.workflowVersion === 'number'
@@ -222,6 +240,9 @@ export function RunSelector({ onRerun }: RunSelectorProps = {}) {
     currentLiveRunVersion !== currentWorkflowVersion
   const isCurrentLiveSelected =
     currentLiveRun ? selectedRunId === currentLiveRun.id : false
+  const currentLiveTrigger = currentLiveRun
+    ? getTriggerDisplay(currentLiveRun.triggerType, currentLiveRun.triggerLabel)
+    : null
 
   const getStatusIcon = (status: string) => {
     const IconComponent = STATUS_ICONS[status as keyof typeof STATUS_ICONS]
@@ -280,97 +301,65 @@ export function RunSelector({ onRerun }: RunSelectorProps = {}) {
     }
   }
 
-  const renderRunItem = (run: ExecutionRun) => {
-    const runVersion = run.workflowVersion
-    const hasVersion = typeof runVersion === 'number'
-    const isOlderVersion =
-      hasVersion && typeof currentWorkflowVersion === 'number' && runVersion !== currentWorkflowVersion
+  const matchesTriggerFilter = useCallback(
+    (run?: ExecutionRun | null) => {
+      if (!run) {
+        return triggerFilter === 'all'
+      }
+      return triggerFilter === 'all' || run.triggerType === triggerFilter
+    },
+    [triggerFilter],
+  )
 
+  const renderRunItem = (run: ExecutionRun) => {
     return (
       <DropdownMenuItem
         key={run.id}
         onSelect={() => handleSelectRun(run.id)}
         className={cn(
-          "flex items-center gap-3 p-3 cursor-pointer",
-          selectedRunId === run.id && "bg-accent"
+          'cursor-pointer p-0 border-b border-border/50 last:border-b-0',
+          selectedRunId === run.id && 'bg-accent/20',
         )}
       >
-        <div className={cn("flex-shrink-0", getStatusColor(run.status))}>
-          {getStatusIcon(run.status)}
-        </div>
-
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <span className="font-medium truncate">{run.workflowName}</span>
-            {hasVersion && (
-              <Badge
-                variant={isOlderVersion ? 'destructive' : 'secondary'}
-                className="text-[10px] uppercase tracking-wide"
+        <div className="w-full px-3 py-3 space-y-2">
+          <div className="flex items-start gap-3">
+            <p className="font-semibold text-sm truncate flex-1 min-w-0">
+              {run.workflowName}
+            </p>
+            <div className="flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6"
+                title="Copy run link"
+                aria-label="Copy direct link to this run"
+                onClick={(event) => {
+                  event.preventDefault()
+                  event.stopPropagation()
+                  handleCopyLink(run)
+                }}
               >
-                v{runVersion}
-              </Badge>
-            )}
-            {isRunLive(run) && (
-              <Badge variant="outline" className="text-xs animate-pulse">
-                <Wifi className="h-3 w-3 mr-1" />
-                LIVE
-              </Badge>
-            )}
-          </div>
-
-          <div className="flex items-center gap-4 text-xs text-muted-foreground mt-1">
-            <span>Run #{run.id.slice(-8)}</span>
-            <span>{run.nodeCount} nodes</span>
-            <span>{run.eventCount} events</span>
-            {run.duration && <span>{formatDuration(run.duration)}</span>}
-            <span>{formatRelativeTime(run.startTime)}</span>
-            {hasVersion && (
-              <span className={cn(isOlderVersion ? 'text-amber-500' : undefined)}>
-                v{runVersion}
-                {isOlderVersion && typeof currentWorkflowVersion === 'number'
-                  ? ` (current v${currentWorkflowVersion})`
-                  : ''}
-              </span>
-            )}
-          </div>
-        </div>
-
-        <div className="flex flex-col gap-2 items-end justify-between">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7"
-            onClick={(event) => {
-              event.preventDefault()
-              event.stopPropagation()
-              handleCopyLink(run)
-            }}
-            title="Copy run link"
-            aria-label="Copy direct link to this run"
-          >
-            <Link2 className="h-4 w-4" />
-          </Button>
-          {onRerun && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7"
-              onClick={(event) => {
-                event.preventDefault()
-                event.stopPropagation()
-                onRerun(run.id)
-              }}
-              title="Re-run this execution"
-              aria-label="Re-run this execution"
-            >
-              <RefreshCw className="h-4 w-4" />
-            </Button>
-          )}
-          {selectedRunId === run.id && (
-            <div className="flex-shrink-0">
-              <div className="h-2 w-2 bg-blue-500 rounded-full" />
+                <Link2 className="h-3.5 w-3.5" />
+              </Button>
+              {onRerun && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-7 px-3 gap-1.5"
+                  onClick={(event) => {
+                    event.preventDefault()
+                    event.stopPropagation()
+                    onRerun(run.id)
+                  }}
+                >
+                  <RefreshCw className="h-3.5 w-3.5" />
+                  Rerun
+                </Button>
+              )}
             </div>
-          )}
+          </div>
+          <RunInfoDisplay run={run} currentWorkflowVersion={currentWorkflowVersion} />
         </div>
       </DropdownMenuItem>
     )
@@ -390,6 +379,12 @@ export function RunSelector({ onRerun }: RunSelectorProps = {}) {
                 <div className="flex items-center gap-2">
                   {getStatusIcon(selectedRun.status)}
                   <span className="truncate">{selectedRun.workflowName}</span>
+                  {selectedTriggerDisplay && (
+                    <Badge variant={selectedTriggerDisplay.variant} className="text-[10px] gap-1 max-w-[120px] truncate">
+                      <span aria-hidden="true">{selectedTriggerDisplay.icon}</span>
+                      <span className="truncate">{selectedTriggerDisplay.label}</span>
+                    </Badge>
+                  )}
                   {selectedRunVersion !== null && (
                     <Badge
                       variant={selectedRunOlder ? 'destructive' : 'secondary'}
@@ -413,8 +408,28 @@ export function RunSelector({ onRerun }: RunSelectorProps = {}) {
         </DropdownMenuTrigger>
 
         <DropdownMenuContent className="w-96" align="start">
+          <div className="px-3 py-2 border-b space-y-2">
+            <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Trigger</span>
+            <div className="flex flex-wrap gap-2">
+              {(['all', 'manual', 'schedule'] as TriggerFilter[]).map((option) => (
+                <Button
+                  key={option}
+                  type="button"
+                  size="sm"
+                  variant={triggerFilter === option ? 'default' : 'outline'}
+                  className="h-7 px-3 text-xs"
+                  onClick={(event) => {
+                    event.preventDefault()
+                    setTriggerFilter(option)
+                  }}
+                >
+                  {option === 'all' ? 'All' : option === 'manual' ? 'Manual' : 'Scheduled'}
+                </Button>
+              ))}
+            </div>
+          </div>
           {/* Current Live Run */}
-          {currentLiveRun && isRunLive(currentLiveRun) && (
+          {currentLiveRun && isRunLive(currentLiveRun) && matchesTriggerFilter(currentLiveRun) && (
             <>
               <div className="px-3 py-2 text-xs font-medium text-muted-foreground uppercase tracking-wider">
                 Current Live Run
@@ -429,48 +444,19 @@ export function RunSelector({ onRerun }: RunSelectorProps = {}) {
                   }
                 }}
                 className={cn(
-                  "flex items-center gap-3 p-3 cursor-pointer bg-blue-50 dark:bg-blue-950/20",
-                  isCurrentLiveSelected ? "ring-1 ring-primary/60" : undefined,
+                  "cursor-pointer p-0 border-b border-border/50",
+                  isCurrentLiveSelected && "bg-accent/20",
                 )}
               >
-                <div className={cn("flex-shrink-0", getStatusColor(currentLiveRun.status))}>
-                  {getStatusIcon(currentLiveRun.status)}
-                </div>
-
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium truncate">{currentLiveRun.workflowName}</span>
-                    {currentLiveRunVersion !== null && (
-                      <Badge
-                        variant={currentLiveRunOlder ? 'destructive' : 'secondary'}
-                        className="text-[10px] uppercase tracking-wide"
-                      >
-                        v{currentLiveRunVersion}
-                      </Badge>
-                    )}
-                    <Badge variant="outline" className="text-xs animate-pulse">
-                      <Wifi className="h-3 w-3 mr-1" />
-                      LIVE NOW
-                    </Badge>
+                <div className="w-full px-3 py-3 space-y-2 bg-blue-50/50 dark:bg-blue-950/20">
+                  <div className="flex items-start gap-3">
+                    <p className="font-semibold text-sm truncate flex-1 min-w-0">
+                      {currentLiveRun.workflowName}
+                    </p>
+                    <Play className={cn("h-4 w-4 text-blue-500 flex-shrink-0", isCurrentLiveSelected && "opacity-50")} />
                   </div>
-
-                  <div className="flex items-center gap-4 text-xs text-muted-foreground mt-1">
-                    <span>Run #{currentLiveRun.id.slice(-8)}</span>
-                    <span>{currentLiveRun.nodeCount} nodes</span>
-                    <span>{currentLiveRun.eventCount} events</span>
-                    <span>{formatRelativeTime(currentLiveRun.startTime)}</span>
-                    {currentLiveRunVersion !== null && (
-                      <span className={cn(currentLiveRunOlder ? 'text-amber-500' : undefined)}>
-                        v{currentLiveRunVersion}
-                        {currentLiveRunOlder && typeof currentWorkflowVersion === 'number'
-                          ? ` (current v${currentWorkflowVersion})`
-                          : ''}
-                      </span>
-                    )}
-                  </div>
+                  <RunInfoDisplay run={currentLiveRun} currentWorkflowVersion={currentWorkflowVersion} />
                 </div>
-
-                <Play className={cn("h-4 w-4 text-blue-500", isCurrentLiveSelected && "opacity-50")} />
               </DropdownMenuItem>
 
               <DropdownMenuSeparator />
@@ -483,7 +469,7 @@ export function RunSelector({ onRerun }: RunSelectorProps = {}) {
               <div className="px-3 py-2 text-xs font-medium text-muted-foreground uppercase tracking-wider">
                 Live Runs
               </div>
-              <div className="max-h-48 overflow-y-auto">
+              <div className="max-h-48 overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-muted-foreground/20 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-muted-foreground/30">
                 {otherLiveRuns.map(renderRunItem)}
               </div>
               <DropdownMenuSeparator />
@@ -500,7 +486,7 @@ export function RunSelector({ onRerun }: RunSelectorProps = {}) {
               {isLoadingRuns ? 'Loading runs…' : 'No previous runs found'}
             </div>
           ) : (
-            <div className="max-h-64 overflow-y-auto">
+            <div className="max-h-64 overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-muted-foreground/20 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-muted-foreground/30">
               {historicalRuns.map(renderRunItem)}
             </div>
           )}
