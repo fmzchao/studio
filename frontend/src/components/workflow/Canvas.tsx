@@ -603,7 +603,7 @@ export function Canvas({
   return (
     <div className={className}>
       <div className="flex h-full">
-        <div className="flex-1 relative">
+        <div className="flex-1 relative bg-white">
           <ReactFlow
             nodes={nodes}
             edges={edges}
@@ -631,7 +631,7 @@ export function Canvas({
             nodeTypes={nodeTypes}
             edgeTypes={edgeTypes}
             attributionPosition="bottom-left"
-            nodesDraggable={mode === 'design'}
+            nodesDraggable
             nodesConnectable={mode === 'design'}
             elementsSelectable
           >
@@ -654,7 +654,7 @@ export function Canvas({
               </defs>
             </svg>
 
-            <Background color="#aaa" gap={16} />
+            <Background color="#aaa" gap={16} style={{ backgroundColor: '#ffffff' }} />
             <Controls position="bottom-left" />
             <MiniMap
               position="bottom-right"
