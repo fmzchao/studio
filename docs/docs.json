@@ -34,8 +34,7 @@
               "components/overview",
               "components/core",
               "components/security",
-              "components/ai",
-              "components/it-automation"
+              "components/ai"
             ]
           },
           {

@@ -67,9 +67,9 @@ The `just dev` command automatically:
 | Frontend | http://localhost:5173 | Workflow builder |
 | Backend API | http://localhost:3211 | REST API |
 | Temporal UI | http://localhost:8081 | Workflow management |
-| PostgreSQL | localhost:5433 | Database |
+| PostgreSQL | http://localhost:5433 | Database |
 | MinIO | http://localhost:9000 | Object storage |
-| MinIO Console | http://localhost:9001 | `minioadmin/minioadmin` |
+| MinIO Console | http://localhost:9001 | Credentials: `minioadmin/minioadmin` |
 | Loki | http://localhost:3100 | Logs |
 
 ---
@@ -79,7 +79,7 @@ The `just dev` command automatically:
 For production, use the Docker-based deployment:
 
 ```bash
-# Start production environment
+# Start production environment with cached images
 just prod
 
 # Or build and start
@@ -102,6 +102,7 @@ just dev          # Start development environment
 just dev stop     # Stop everything
 just dev logs     # View application logs
 just dev status   # Check service status
+just dev clean    # Stop and remove all data
 ```
 
 ### Production
@@ -111,6 +112,7 @@ just prod          # Start with cached images
 just prod build    # Rebuild and start
 just prod stop     # Stop production
 just prod logs     # View production logs
+just prod status   # Check production status
 just prod clean    # Remove all data
 ```
 

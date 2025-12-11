@@ -1,6 +1,6 @@
 ---
 title: "Security Components"
-description: "ProjectDiscovery tools and security scanning for reconnaissance workflows"
+description: "Open source security tools for security automation workflows"
 ---
 
 Security components wrap popular open-source tools for subdomain discovery, DNS resolution, port scanning, and secret detection.
@@ -11,7 +11,11 @@ Security components wrap popular open-source tools for subdomain discovery, DNS 
 
 ### Subfinder
 
-Discovers subdomains using passive sources (ProjectDiscovery).
+<Info>
+[GitHub](https://github.com/projectdiscovery/subfinder) · Docker: `projectdiscovery/subfinder`
+</Info>
+
+Discovers subdomains using passive sources.
 
 | Input | Type | Description |
 |-------|------|-------------|
@@ -30,6 +34,10 @@ Discovers subdomains using passive sources (ProjectDiscovery).
 
 ### Amass
 
+<Info>
+[GitHub](https://github.com/owasp-amass/amass) · Docker: `owaspamass/amass`
+</Info>
+
 Active and passive subdomain enumeration.
 
 | Input | Type | Description |
@@ -44,9 +52,13 @@ Active and passive subdomain enumeration.
 
 ---
 
-### ShuffleDNS / MassDNS
+### ShuffleDNS + MassDNS
 
-High-performance DNS bruteforcing and resolution.
+<Info>
+[GitHub (ShuffleDNS)](https://github.com/projectdiscovery/shuffledns) · [GitHub (MassDNS)](https://github.com/blechschmidt/massdns) · Docker: `ghcr.io/shipsecai/shuffledns-massdns`
+</Info>
+
+High-performance DNS bruteforcing and resolution. This is a combined image that has both ShuffleDNS with MassDNS pre-installed. 
 
 | Input | Type | Description |
 |-------|------|-------------|
@@ -59,6 +71,10 @@ High-performance DNS bruteforcing and resolution.
 ## DNS Resolution
 
 ### DNSX
+
+<Info>
+[GitHub](https://github.com/projectdiscovery/dnsx) · Docker: `projectdiscovery/dnsx`
+</Info>
 
 Resolves DNS records with support for multiple record types and custom resolvers.
 
@@ -88,6 +104,10 @@ Resolves DNS records with support for multiple record types and custom resolvers
 
 ### httpx
 
+<Info>
+[GitHub](https://github.com/projectdiscovery/httpx) · Docker: `projectdiscovery/httpx`
+</Info>
+
 Probes hosts for live HTTP services and captures response metadata.
 
 | Input | Type | Description |
@@ -116,6 +136,10 @@ Probes hosts for live HTTP services and captures response metadata.
 
 ### Naabu
 
+<Info>
+[GitHub](https://github.com/projectdiscovery/naabu) · Docker: `projectdiscovery/naabu`
+</Info>
+
 Fast active port scanning using SYN/CONNECT probes.
 
 | Input | Type | Description |
@@ -143,7 +167,11 @@ Fast active port scanning using SYN/CONNECT probes.
 
 ### Nuclei
 
-Template-based vulnerability scanning.
+<Info>
+[GitHub](https://github.com/shipsecai/tools/pkgs/container/nuclei) · Docker: `ghcr.io/shipsecai/nuclei`
+</Info>
+
+Template-based vulnerability scanning. This is nuclei custom image with nuclei-templates baked in.
 
 | Input | Type | Description |
 |-------|------|-------------|
@@ -166,6 +194,10 @@ Template-based vulnerability scanning.
 ## Secret Detection
 
 ### TruffleHog
+
+<Info>
+[GitHub](https://github.com/trufflesecurity/trufflehog) · Docker: `trufflesecurity/trufflehog`
+</Info>
 
 Scans for leaked credentials across repositories, filesystems, and cloud storage.
 
@@ -194,7 +226,11 @@ Scans for leaked credentials across repositories, filesystems, and cloud storage
 
 ### Prowler Scan
 
-AWS security best practices auditing.
+<Info>
+[GitHub](https://github.com/prowler-cloud/prowler) · Docker: `prowlercloud/prowler`
+</Info>
+
+Cloud (AWS, Azure, GCP) security posture management. Best practices auditing.
 
 | Input | Type | Description |
 |-------|------|-------------|
@@ -207,6 +243,10 @@ AWS security best practices auditing.
 | `services` | Array | AWS services to audit |
 
 ### Supabase Scanner
+
+<Info>
+[GitHub](https://ghcr.io/shipsecai/supabase-scanner) · Docker: `ghcr.io/shipsecai/supabase-scanner`
+</Info>
 
 Scans Supabase instances for misconfigurations.
 
@@ -221,7 +261,11 @@ Scans Supabase instances for misconfigurations.
 
 ### Notify
 
-Sends alerts to Slack, Discord, Telegram, or email using ProjectDiscovery notify.
+<Info>
+[GitHub](https://github.com/projectdiscovery/notify) · Docker: `projectdiscovery/notify`
+</Info>
+
+Sends alerts to Slack, Discord, Telegram, or email.
 
 | Input | Type | Description |
 |-------|------|-------------|
@@ -233,20 +277,18 @@ Sends alerts to Slack, Discord, Telegram, or email using ProjectDiscovery notify
 
 ## Example Workflow
 
-A complete reconnaissance pipeline:
+A complete attack surface discovery pipeline:
 
 ```
 Manual Trigger (domains input)
     ↓
 Subfinder (subdomain discovery)
     ↓
-DNSX (DNS resolution)
+DNSx (DNS resolution)
     ↓
 httpx (HTTP probing)
     ↓
 Nuclei (vulnerability scanning)
     ↓
-TruffleHog (secret detection on found endpoints)
-    ↓
-Webhook (notify security team)
+Notify (notify team)
 ```

@@ -47,19 +47,15 @@ description: "Get ShipSec Studio running in 5 minutes"
 
 <Steps>
   <Step title="Create a new workflow">
-    Click **New Workflow** in the dashboard. Name it "DNS Recon" with description "Basic DNS enumeration".
+    Click **New Workflow** in the dashboard. Name it "Subdomain Discovery".
   </Step>
-  
+
   <Step title="Add components">
     - Drag **Manual Trigger** to the canvas
-    - Drag **DNSX** component to the canvas
-    - Connect the trigger output to the DNSX input
+    - Drag **Subfinder** component to the canvas
+    - Connect the trigger output to the Subfinder input
   </Step>
-  
-  <Step title="Configure DNSX">
-    Click the DNSX component and set the domains input to `["example.com"]`.
-  </Step>
-  
+
   <Step title="Run the workflow">
     Click **Save**, then **Run**. Watch the execution unfold in real-time with streaming logs and terminal output.
   </Step>

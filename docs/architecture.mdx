@@ -5,13 +5,15 @@ description: "System design and module responsibilities for ShipSec Studio"
 
 ## Overview
 
-ShipSec Studio is a component-based security workflow orchestration platform designed for security teams to build, execute, and monitor reconnaissance workflows.
+ShipSec Studio is an open source, no-code security workflow orchestration platform designed for security teams to build, execute, and monitor security automation workflows. Focus on security, not infrastructure.
+
+The system is composed of four main layers:
 
 ```
 Frontend (React 19) ←→ Backend (NestJS) ←→ Temporal ←→ Worker (Node.js)
-     ↓                    ↓                      ↓                  ↓
-  Visual Builder      REST API              Workflow           Component
-  & Timeline          & Auth                Orchestration        Execution
+     ↓                      ↓                  ↓              ↓
+  Visual Builder         REST API          Workflow        Component
+  & Timeline             & Auth          Orchestration     Execution
 ```
 
 ---
@@ -170,7 +172,8 @@ async function runComponentActivity(
 
 ## Backend Services
 
-**Core Modules:**
+#### Core Modules
+
 - **WorkflowsModule**: Workflow CRUD, compilation, Temporal integration
 - **AuthModule**: Clerk-based authentication and multi-tenancy
 - **SecretsModule**: Encrypted secrets management with versioning
@@ -178,7 +181,8 @@ async function runComponentActivity(
 - **TraceModule**: Event management and timeline generation
 - **LoggingModule**: Log ingestion and processing
 
-**Key API Endpoints:**
+
+#### Key API Endpoints
 
 | Endpoint | Description |
 |----------|-------------|
@@ -189,22 +193,22 @@ async function runComponentActivity(
 | `GET /api/v1/runs/{runId}/events` | Get trace events |
 | `GET /api/v1/runs/{runId}/stream` | SSE streaming endpoint |
 
----
 
 ## Frontend Architecture
 
-**Real-time Features:**
+#### Real-time Features
+
 - **Visual Builder**: ReactFlow-based workflow editor with drag-and-drop
 - **Terminal Display**: xterm.js integration for real-time terminal output
 - **Execution Timeline**: Zustand-based timeline state with event synchronization
 - **Live Updates**: WebSocket/SSE streaming for real-time status updates
 
-**State Management:**
+#### State Management
+
 - **Timeline Store**: Zustand for execution timeline state
 - **API State**: React Query for server state management
 - **Component State**: Local React state with hooks
 
----
 
 ## Workflow Execution Flow
 
@@ -238,13 +242,15 @@ async function runComponentActivity(
 
 ## Workflow Replay
 
-**Data Sources for Replay:**
+#### Data Sources for Replay
+
 - **Terminal Cast Files**: Asciinema-compatible `.cast` files stored in MinIO
 - **Structured Logs**: Loki with nanosecond precision
 - **Trace Events**: PostgreSQL with sequence numbers
 - **Artifacts**: MinIO with component outputs
 
-**Timeline Features:**
+#### Timeline Features
+
 - Playback controls (play, pause, seek)
 - Node state visualization
 - Data flow display
@@ -303,11 +309,13 @@ secrets (
 ## Security Architecture
 
 ### Multi-tenant Authentication
+
 - **Clerk Integration**: Production-ready authentication
 - **Organization Isolation**: Tenant-based data separation
 - **Role-Based Access**: Admin, User, Viewer roles
 
 ### Data Security
+
 - **Secrets Encryption**: AES-256-GCM encryption at rest
 - **Container Isolation**: Docker isolation for component execution
 - **Network Security**: TLS encryption, proper CORS configuration

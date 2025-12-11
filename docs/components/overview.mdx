@@ -17,9 +17,6 @@ Components are the building blocks of ShipSec Studio workflows. Each component p
   <Card title="AI" icon="brain" href="/components/ai">
     OpenAI, Gemini, and OpenRouter chat completions
   </Card>
-  <Card title="IT Automation" icon="gear" href="/components/it-automation">
-    Okta, Google Workspace, and GitHub user management
-  </Card>
 </CardGroup>
 
 ## How Components Work
@@ -48,40 +45,28 @@ interface ComponentDefinition<Input, Output> {
 
 ## Example Pipelines
 
-### Security Reconnaissance
+### Attack Surface Discovery
 
 ```
-Manual Trigger → Subfinder → DNSX → httpx → Webhook
+Manual Trigger → Subfinder → DNSx → httpx → Notify
 ```
 
 1. **Manual Trigger** – User provides target domains
 2. **Subfinder** – Discovers subdomains
-3. **DNSX** – Resolves DNS records
+3. **DNSx** – Resolves DNS records
 4. **httpx** – Probes for live HTTP services
-5. **Webhook** – Sends results to Slack/Teams
+5. **Notify** – Sends results to Slack, Discord, or Teams
 
 ### Secret Detection
 
 ```
-Manual Trigger → TruffleHog → OpenAI Chat → Webhook
+Manual Trigger → TruffleHog → OpenAI Chat → Notify
 ```
 
 1. **Manual Trigger** – User provides repository URL
 2. **TruffleHog** – Scans for leaked credentials
 3. **OpenAI Chat** – Analyzes and prioritizes findings
-4. **Webhook** – Alerts security team
-
-### User Offboarding
-
-```
-Manual Trigger → Okta Offboard → GitHub Remove → Google Unassign → Webhook
-```
-
-1. **Manual Trigger** – User email input
-2. **Okta Offboard** – Deactivates Okta account
-3. **GitHub Remove** – Removes org membership
-4. **Google Unassign** – Reclaims license
-5. **Webhook** – Notifies HR
+4. **Notify** – Alerts team via Slack, Discord, or email
 
 ## Execution Context
 

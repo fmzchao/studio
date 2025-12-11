@@ -95,10 +95,10 @@ const definition: ComponentDefinition<Input, Output> = {
 
 | Benefit | Description |
 |---------|-------------|
-| TTY Signal Handling | Shell properly handles SIGTERM, SIGHUP |
-| Clean Exit | Shell ensures process cleanup |
-| Buffering Control | Shell manages stdout/stderr correctly |
-| No Stdin Issues | Shell doesn't wait for stdin input |
+| TTY signal handling | Shell properly handles `SIGTERM`, `SIGHUP` |
+| Clean exit | Shell ensures process cleanup |
+| Buffering control | Shell manages stdout/stderr correctly |
+| No stdin issues | Shell doesn't wait for `stdin` input |
 
 ### Pattern Decision Tree
 
@@ -211,45 +211,21 @@ try {
 
 ## Output Buffering Solutions
 
-Even with PTY enabled, some CLI tools buffer their output. Use these solutions:
-
-### ProjectDiscovery Tools
-
-Add the `-stream` flag:
-
-```typescript
-const args = ['-json', '-silent', '-l', '/inputs/file.txt', '-stream'];
-```
-
-### GNU Coreutils
-
-Use `stdbuf` for line buffering:
+Even with PTY enabled, some CLI tools buffer their output. Use the shell wrapper pattern for PTY compatibility:
 
 ```typescript
 runner: {
   kind: 'docker',
-  image: 'tool:latest',
+  image: 'projectdiscovery/nuclei:latest',
+  // Use shell wrapper for PTY compatibility
+  // Running CLI tools directly as entrypoint can cause them to hang with PTY
+  // The shell wrapper ensures proper TTY signal handling and clean exit
   entrypoint: 'sh',
-  command: ['-c', 'stdbuf -oL tool "$@"', '--'],
+  // Shell wrapper pattern: sh -c 'nuclei "$@"' -- [args...]
+  // This allows dynamic args to be appended and properly passed to the tool
+  command: ['-c', 'nuclei "$@"', '--'],
 }
 ```
-
-### Universal Pattern
-
-```typescript
-runner: {
-  kind: 'docker',
-  image: 'tool:latest',
-  entrypoint: 'sh',
-  command: [
-    '-c',
-    'if command -v stdbuf >/dev/null 2>&1; then stdbuf -oL tool "$@"; else tool "$@"; fi',
-    '--'
-  ],
-}
-```
-
----
 
 ## UI-Only Components
 

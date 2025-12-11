@@ -19,8 +19,8 @@ Executes chat completion against OpenAI-compatible endpoints.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `model` | Select | gpt-4o, gpt-4.1-mini, gpt-5-mini, etc. |
-| `temperature` | Number | Sampling temperature (0-2) |
+| `model` | Select | gpt-5-mini, gpt-5-pro, gpt-5, gpt-4o, gpt-4.1-mini |
+| `temperature` | Number | Sampling temperature |
 | `maxTokens` | Number | Max tokens to generate |
 | `apiBaseUrl` | String | Override API base URL |
 
@@ -44,7 +44,7 @@ Chat completion using Google's Gemini models.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `model` | Select | gemini-2.5-flash, gemini-1.5-pro, etc. |
+| `model` | Select | gemini-2.5-flash, gemini-2.5-pro, gemini-1.5-flash, gemini-1.5-pro |
 | `temperature` | Number | Sampling temperature |
 | `maxTokens` | Number | Max tokens (up to 8192) |
 
@@ -67,7 +67,7 @@ Access multiple LLM providers through OpenRouter's unified API.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `model` | String | Model identifier (e.g., `anthropic/claude-3-opus`) |
+| `model` | String | Model identifier (e.g., `openrouter/auto`, `anthropic/claude-sonnet-4`) |
 | `temperature` | Number | Sampling temperature |
 | `maxTokens` | Number | Max tokens to generate |
 
@@ -106,7 +106,7 @@ Autonomous agent with tool-calling capabilities for complex reasoning tasks.
 ### Security Analysis
 
 ```
-TruffleHog → OpenAI Chat → Webhook
+TruffleHog → OpenAI Chat → Notify
 ```
 
 Use AI to analyze and prioritize detected secrets before alerting.
@@ -145,7 +145,7 @@ Results:
 ### Intelligent Triage
 
 ```
-Subfinder → AI Agent → Slack Webhook
+Subfinder → AI Agent → Notify
 ```
 
 Let an AI agent decide which subdomains require immediate attention.
@@ -166,7 +166,7 @@ Subdomains:
 ### Vulnerability Prioritization
 
 ```
-Nuclei → OpenAI Chat → Jira (Webhook)
+Nuclei → OpenAI Chat → Notify
 ```
 
 Automatically triage and create tickets for vulnerabilities.
@@ -187,7 +187,7 @@ Findings:
 ## Best Practices
 
 <Note>
-  **API Key Security**: Always use the Secret Loader component to inject API keys. Never hardcode credentials in prompts.
+  **API Key Security**: Always use the [Secret Loader](/components/core#secret-loader) component to inject API keys. Never hardcode credentials in prompts.
 </Note>
 
 ### Prompt Engineering Tips
@@ -201,11 +201,12 @@ Findings:
 
 | Model | Context Window | Recommended Max Output |
 |-------|---------------|----------------------|
+| GPT-5 | 128K | 16384 |
+| GPT-5 Mini | 128K | 16384 |
 | GPT-4o | 128K | 4096 |
-| GPT-4o-mini | 128K | 4096 |
-| Gemini 1.5 Pro | 1M | 8192 |
-| Gemini 2.0 Flash | 1M | 8192 |
-| Claude 3 Opus | 200K | 4096 |
+| Gemini 2.5 Pro | 1M | 8192 |
+| Gemini 2.5 Flash | 1M | 8192 |
+| Claude Sonnet 4 | 200K | 8192 |
 
 ### Error Handling
 

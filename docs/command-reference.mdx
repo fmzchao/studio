@@ -120,11 +120,14 @@ Shows status of production containers.
 
 ### Clean Production
 
+<Danger>This deletes all data.</Danger>
+
 ```bash
 just prod clean
 ```
 
-Stops containers, removes volumes, and prunes Docker system. **This deletes all data.**
+Stops containers, removes volumes, and prunes Docker system.
+
 
 ---
 
@@ -165,7 +168,9 @@ Streams logs from infrastructure containers.
 just infra clean
 ```
 
-Stops infrastructure and removes all volumes. **This deletes all data.**
+Stops infrastructure and removes all volumes. 
+
+<Danger>This deletes all data.</Danger>
 
 ---
 
