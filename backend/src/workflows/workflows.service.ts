@@ -1,6 +1,7 @@
 import { randomUUID, createHash } from 'node:crypto';
 
 import { Injectable, Logger, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { status as grpcStatus, type ServiceError } from '@grpc/grpc-js';
 
 import { compileWorkflowGraph } from '../dsl/compiler';
 import { WorkflowDefinition } from '../dsl/types';
@@ -424,7 +425,25 @@ export class WorkflowsService {
       });
       currentStatus = this.normalizeStatus(status.status);
     } catch (error) {
-      this.logger.warn(`Failed to get status for run ${run.runId}: ${error}`);
+      // If Temporal can't find the workflow (NOT_FOUND), check if events have stopped
+      // If events stopped more than 5 minutes ago, assume the workflow completed
+      const isNotFound = this.isNotFoundError(error);
+      if (isNotFound && eventTimeRange.lastTimestamp) {
+        const lastEventTime = new Date(eventTimeRange.lastTimestamp);
+        const minutesSinceLastEvent = (Date.now() - lastEventTime.getTime()) / (1000 * 60);
+        if (minutesSinceLastEvent > 5) {
+          // Events stopped more than 5 minutes ago and Temporal can't find it
+          // Assume the workflow completed successfully
+          currentStatus = 'COMPLETED';
+          this.logger.log(
+            `Run ${run.runId} not found in Temporal but last event was ${minutesSinceLastEvent.toFixed(1)} minutes ago, assuming COMPLETED`,
+          );
+        } else {
+          this.logger.warn(`Failed to get status for run ${run.runId}: ${error}`);
+        }
+      } else {
+        this.logger.warn(`Failed to get status for run ${run.runId}: ${error}`);
+      }
     }
 
     const triggerType = (run.triggerType as ExecutionTriggerType) ?? 'manual';
@@ -1261,6 +1280,15 @@ export class WorkflowsService {
         this.logger.warn(`Unknown Temporal status '${status}', defaulting to RUNNING`);
         return 'RUNNING';
     }
+  }
+
+  private isNotFoundError(error: unknown): error is ServiceError {
+    if (!error || typeof error !== 'object') {
+      return false;
+    }
+
+    const serviceError = error as ServiceError;
+    return serviceError.code === grpcStatus.NOT_FOUND;
   }
 
   private buildFailure(status: ExecutionStatus, failure?: unknown): FailureSummary | undefined {
