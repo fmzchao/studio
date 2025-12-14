@@ -5,6 +5,7 @@ import './index.css'
 import { PostHogProvider } from 'posthog-js/react'
 import posthog from 'posthog-js'
 import { initializeTimelineStore } from '@/store/executionTimelineStore'
+import { initializeTheme } from '@/store/themeStore'
 import { isAnalyticsEnabled } from '@/features/analytics/config'
 
 const hasPostHog = isAnalyticsEnabled()
@@ -35,6 +36,7 @@ if (hasPostHog) {
 }
 
 initializeTimelineStore()
+initializeTheme()
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

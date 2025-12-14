@@ -22,27 +22,27 @@ export function getNodeStyle(state: NodeStatus): NodeStateStyle {
     },
     running: {
       border: 'border-blue-500',
-      bg: 'bg-blue-50',
+      bg: 'bg-blue-50 dark:bg-blue-950/30',
       icon: 'Activity',
-      iconClass: 'text-blue-600',
+      iconClass: 'text-blue-600 dark:text-blue-400',
     },
     success: {
       border: 'border-green-500',
-      bg: 'bg-green-50',
+      bg: 'bg-green-50 dark:bg-green-950/30',
       icon: 'CheckCircle',
-      iconClass: 'text-green-600',
+      iconClass: 'text-green-600 dark:text-green-400',
     },
     error: {
       border: 'border-red-500',
-      bg: 'bg-red-50',
+      bg: 'bg-red-50 dark:bg-red-950/30',
       icon: 'XCircle',
-      iconClass: 'text-red-600',
+      iconClass: 'text-red-600 dark:text-red-400',
     },
     waiting: {
-      border: 'border-gray-400',
-      bg: 'bg-gray-50',
+      border: 'border-gray-400 dark:border-gray-600',
+      bg: 'bg-gray-50 dark:bg-gray-900/30',
       icon: 'Clock',
-      iconClass: 'text-gray-500',
+      iconClass: 'text-gray-500 dark:text-gray-400',
     },
   }
 

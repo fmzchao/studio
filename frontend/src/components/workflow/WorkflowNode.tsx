@@ -223,8 +223,8 @@ export const WorkflowNode = ({ data, selected, id }: NodeProps<NodeData>) => {
       )
     }
     return (
-      <div className="px-4 py-3 shadow-md rounded-lg border-2 border-red-500 bg-red-50 min-w-[200px]">
-        <div className="text-sm text-red-600">
+      <div className="px-4 py-3 shadow-md rounded-lg border-2 border-red-500 dark:border-red-700 bg-red-50 dark:bg-red-900/40 min-w-[200px]">
+        <div className="text-sm text-red-700 dark:text-red-300 font-medium">
           Component not found: {componentRef ?? 'unknown'}
         </div>
       </div>
@@ -522,8 +522,8 @@ export const WorkflowNode = ({ data, selected, id }: NodeProps<NodeData>) => {
         // Enhanced border styling for timeline
         isTimelineActive && effectiveStatus === 'running' && 'border-blue-400',
         isTimelineActive && effectiveStatus === 'running' && !isPlaying && 'border-dashed',
-        isTimelineActive && effectiveStatus === 'error' && 'border-red-400 bg-red-50/20',
-        isTimelineActive && effectiveStatus === 'success' && 'border-green-400 bg-green-50/20',
+        isTimelineActive && effectiveStatus === 'error' && 'border-red-400 bg-red-50/20 dark:bg-red-950/20',
+        isTimelineActive && effectiveStatus === 'success' && 'border-green-400 bg-green-50/20 dark:bg-green-950/20',
 
         // Existing styling
         nodeData.status ? nodeStyle.border : getTypeBorderColor(component.type),
@@ -891,7 +891,7 @@ export const WorkflowNode = ({ data, selected, id }: NodeProps<NodeData>) => {
                               isDefault
                                 ? "text-muted-foreground bg-muted/50 italic"
                                 : param.type === 'select'
-                                  ? "text-blue-600 bg-blue-50 font-semibold"
+                                  ? "text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/50 font-semibold"
                                   : "text-foreground bg-muted"
                             )}
                             title={isDefault ? `Default: ${String(displayValue)}` : String(displayValue)}

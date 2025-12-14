@@ -388,11 +388,9 @@ export function ConfigPanel({
             <X className="h-4 w-4" />
           </Button>
         </div>
-        <div className="flex-1 flex items-center justify-center p-6">
-          <div className="text-center">
-            <AlertCircle className="h-8 w-8 text-destructive mx-auto mb-2" />
-            <p className="text-sm text-destructive">Component not found</p>
-            <p className="text-xs text-muted-foreground mt-1">{componentRef ?? 'unknown'}</p>
+        <div className="flex-1 p-4">
+          <div className="text-sm text-red-700 dark:text-red-300 font-medium bg-red-50 dark:bg-red-900/40 p-3 rounded-lg border border-red-200 dark:border-red-800">
+            Component not found: {componentRef ?? 'unknown'}
           </div>
         </div>
       </div>

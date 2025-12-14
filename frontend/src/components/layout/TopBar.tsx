@@ -184,16 +184,16 @@ export function TopBar({
   const saveBadgeText = saveState === 'clean' ? 'Synced' : saveState === 'saving' ? 'Syncing' : 'Pending'
   const saveBadgeTone =
     saveState === 'clean'
-      ? 'bg-emerald-50 text-emerald-600 border-emerald-200'
+      ? 'bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700'
       : saveState === 'saving'
-        ? 'bg-blue-50 text-blue-600 border-blue-200'
-        : 'bg-amber-50 text-amber-600 border-amber-200'
+        ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700'
+        : 'bg-amber-100 dark:bg-gray-900/50 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-700'
 
   const saveButtonClasses = cn(
     'gap-2 min-w-[110px]',
-    saveState === 'clean' && 'border-emerald-200',
-    saveState === 'dirty' && 'border-amber-300',
-    saveState === 'saving' && 'border-blue-300'
+    saveState === 'clean' && 'border-emerald-200 dark:border-emerald-700',
+    saveState === 'dirty' && 'border-gray-300 dark:border-gray-600',
+    saveState === 'saving' && 'border-blue-300 dark:border-blue-700'
   )
 
   const saveIcon =

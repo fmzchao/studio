@@ -29,31 +29,57 @@
     --color-success: 142.1 76.2% 36.3%;
     --color-warning: 37.7 92.1% 50.2%;
     --color-error: 0 84.2% 60.2%;
+    --tertiary: 220 9% 46%;
+    /* Edge colors for React Flow */
+    --edge-default: 214.3 31.8% 80%;
+    --edge-highlighted: 217 92% 60%;
+    --edge-active: 217 92% 70%;
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 217.2 91.2% 59.8%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 224.3 76.3% 48%;
-    --color-success: 142.1 70.6% 45.3%;
-    --color-warning: 47.9 95.8% 53.1%;
-    --color-error: 0 72.2% 50.6%;
+    /* BG: #1C1C1C */
+    --background: 0 0% 11%;
+    /* Text Primary: #FFFFFF */
+    --foreground: 0 0% 100%;
+    /* Card: #232427 */
+    --card: 225 8% 15%;
+    --card-foreground: 0 0% 100%;
+    /* BG Alt: #1F2023 */
+    --popover: 225 6% 13%;
+    --popover-foreground: 0 0% 100%;
+    /* Accent Blue: #3C82F6 */
+    --primary: 217 92% 60%;
+    --primary-foreground: 0 0% 100%;
+    /* BG Alt: #1F2023 */
+    --secondary: 225 6% 13%;
+    --secondary-foreground: 0 0% 100%;
+    /* Card: #232427 */
+    --muted: 225 8% 15%;
+    /* Text Secondary: #C6C7C8 */
+    --muted-foreground: 210 2% 78%;
+    /* Slightly lighter than card for hover states */
+    --accent: 225 8% 18%;
+    --accent-foreground: 0 0% 100%;
+    /* Accent Error: #EF4444 */
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    /* Border: #2A2B2D */
+    --border: 220 5% 17%;
+    --input: 220 5% 17%;
+    /* Accent Blue: #3C82F6 */
+    --ring: 217 92% 60%;
+    /* Accent Success: #4ADE80 */
+    --color-success: 142 69% 58%;
+    /* Accent Warning: #FACC15 */
+    --color-warning: 48 96% 53%;
+    /* Accent Error: #EF4444 */
+    --color-error: 0 84% 60%;
+    /* Text Tertiary: #7A7C80 */
+    --tertiary: 220 3% 49%;
+    /* Edge colors for React Flow - Dark */
+    --edge-default: 220 5% 30%;
+    --edge-highlighted: 217 92% 60%;
+    --edge-active: 217 92% 55%;
   }
 }
 
@@ -193,6 +219,120 @@ table tbody tr:hover {
 .dark table tbody tr:hover {
   background-color: hsl(var(--accent) / 0.3);
   box-shadow: inset 3px 0 0 0 hsl(var(--primary));
+}
+
+/* React Flow Controls - Dark Theme */
+.dark .react-flow__controls {
+  background-color: hsl(var(--card)) !important;
+  border: 1px solid hsl(var(--border)) !important;
+  border-radius: 0.375rem !important;
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.3), 0 2px 4px -2px rgb(0 0 0 / 0.2) !important;
+}
+
+.dark .react-flow__controls-button {
+  background-color: hsl(var(--card)) !important;
+  border-bottom: 1px solid hsl(var(--border)) !important;
+  fill: hsl(var(--foreground)) !important;
+  color: hsl(var(--foreground)) !important;
+}
+
+.dark .react-flow__controls-button:hover {
+  background-color: hsl(var(--accent)) !important;
+}
+
+.dark .react-flow__controls-button:last-child {
+  border-bottom: none !important;
+}
+
+.dark .react-flow__controls-button svg {
+  fill: hsl(var(--foreground)) !important;
+}
+
+.dark .react-flow__controls-button svg path {
+  fill: hsl(var(--foreground)) !important;
+}
+
+/* React Flow MiniMap - Dark Theme */
+.dark .react-flow__minimap {
+  background-color: hsl(var(--card)) !important;
+  border: 1px solid hsl(var(--border)) !important;
+  border-radius: 0.375rem !important;
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.3), 0 2px 4px -2px rgb(0 0 0 / 0.2) !important;
+}
+
+.dark .react-flow__minimap svg {
+  background-color: hsl(var(--card)) !important;
+}
+
+.dark .react-flow__minimap-mask {
+  fill: hsl(var(--background)) !important;
+  opacity: 0.6 !important;
+}
+
+.dark .react-flow__minimap-node {
+  fill: hsl(var(--muted-foreground)) !important;
+}
+
+/* React Flow Background - Dark Theme */
+.dark .react-flow__background {
+  background-color: hsl(var(--background)) !important;
+}
+
+.dark .react-flow__background pattern circle,
+.dark .react-flow__background pattern line {
+  stroke: hsl(var(--border)) !important;
+}
+
+/* Override the default grid dot color in dark mode */
+.dark .react-flow .react-flow__background svg circle {
+  fill: hsl(var(--border)) !important;
+}
+
+/* React Flow Attribution - Dark Theme */
+.dark .react-flow__attribution {
+  background-color: hsl(var(--card) / 0.9) !important;
+  color: hsl(var(--muted-foreground)) !important;
+}
+
+.dark .react-flow__attribution a {
+  color: hsl(var(--muted-foreground)) !important;
+}
+
+.dark .react-flow__panel {
+  background-color: transparent !important;
+}
+
+/* React Flow Edges - Dark Theme */
+.dark .react-flow__edge-path {
+  stroke: hsl(var(--border));
+}
+
+.dark .react-flow__edge.selected .react-flow__edge-path,
+.dark .react-flow__edge:focus .react-flow__edge-path,
+.dark .react-flow__edge:focus-visible .react-flow__edge-path {
+  stroke: hsl(var(--primary));
+}
+
+/* React Flow Handles - Dark Theme */
+.dark .react-flow__handle {
+  background-color: hsl(var(--primary));
+  border-color: hsl(var(--border));
+}
+
+/* React Flow Selection Box - Dark Theme */
+.dark .react-flow__selection {
+  background-color: hsl(var(--primary) / 0.1);
+  border: 1px dashed hsl(var(--primary));
+}
+
+/* React Flow Pane - Dark Theme */
+.dark .react-flow__pane {
+  background-color: hsl(var(--background));
+}
+
+/* React Flow Node Selection - Dark Theme */
+.dark .react-flow__node.selected {
+  box-shadow: 0 0 0 2px hsl(var(--primary));
 }
 
 /* Resize handle styles */

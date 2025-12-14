@@ -605,14 +605,14 @@ export function Canvas({
   return (
     <div className={className}>
       <div className="flex h-full">
-        <div className="flex-1 relative bg-white">
+        <div className="flex-1 relative bg-background">
           <ReactFlow
             nodes={nodes}
             edges={edges}
             onNodesChange={onNodesChange}
             onEdgesChange={handleEdgesChange}
             onConnect={onConnect}
-            onInit={(instance) => {
+            onInit={(instance : any) => {
               setReactFlowInstance(instance)
               if (nodes.length > 0) {
                 try {
@@ -656,14 +656,15 @@ export function Canvas({
               </defs>
             </svg>
 
-            <Background color="#aaa" gap={16} style={{ backgroundColor: '#ffffff' }} />
-            <Controls position="bottom-left" />
+            <Background gap={16} className="!bg-background [&>pattern>circle]:!fill-muted-foreground/30" />
+            <Controls position="bottom-left" className="!bg-card !border !border-border !rounded-md !shadow-lg [&>button]:!bg-card [&>button]:!border-border [&>button]:!fill-foreground [&>button:hover]:!bg-accent" />
             <MiniMap
               position="bottom-right"
               pannable
               zoomable
-              className="cursor-grab active:cursor-grabbing"
-              nodeColor={(node) => {
+              className="cursor-grab active:cursor-grabbing !bg-card !border !border-border !rounded-md"
+              maskColor="hsl(var(--background) / 0.7)"
+              nodeColor={(node : any) => {
                 switch (node.data?.status) {
                   case 'running':
                     return '#f59e0b'
