@@ -25,7 +25,7 @@ const baseGraph: WorkflowGraphDto = WorkflowGraphSchema.parse({
   nodes: [
     {
       id: 'trigger',
-      type: 'core.trigger.manual',
+      type: 'core.workflow.entrypoint',
       position: { x: 0, y: 0 },
       data: {
         label: 'Trigger',
@@ -299,6 +299,13 @@ describe('WorkflowsController', () => {
       async countByType() {
         return 1;
       },
+      async getEventTimeRange() {
+        const base = Date.now();
+        return {
+          earliest: base - 100,
+          latest: base,
+        };
+      },
     };
 
     const workflowRoleRepositoryStub = {
@@ -308,6 +315,15 @@ describe('WorkflowsController', () => {
       async hasRole() {
         return false;
       },
+    };
+
+    const analyticsServiceMock = {
+      trackWorkflowStarted: vi.fn(),
+      trackWorkflowCompleted: vi.fn(),
+      trackComponentExecuted: vi.fn(),
+      trackApiCall: vi.fn(),
+      track: vi.fn(),
+      isEnabled: vi.fn().mockReturnValue(true),
     };
 
     const temporalStub: Pick<
@@ -352,6 +368,7 @@ describe('WorkflowsController', () => {
       runRepositoryStub as any,
       traceRepositoryStub as any,
       temporalStub as TemporalService,
+      analyticsServiceMock as any,
     );
     const traceService = new TraceService({
       listByRunId: async () => [],

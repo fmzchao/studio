@@ -30,6 +30,10 @@
     --color-warning: 37.7 92.1% 50.2%;
     --color-error: 0 84.2% 60.2%;
     --tertiary: 220 9% 46%;
+    /* Edge colors for React Flow */
+    --edge-default: 214.3 31.8% 80%;
+    --edge-highlighted: 217 92% 60%;
+    --edge-active: 217 92% 70%;
   }
 
   .dark {
@@ -72,6 +76,10 @@
     --color-error: 0 84% 60%;
     /* Text Tertiary: #7A7C80 */
     --tertiary: 220 3% 49%;
+    /* Edge colors for React Flow - Dark */
+    --edge-default: 220 5% 30%;
+    --edge-highlighted: 217 92% 60%;
+    --edge-active: 217 92% 55%;
   }
 }
 
@@ -110,6 +118,29 @@ textarea {
 .config-panel {
   z-index: 100;
   pointer-events: auto !important;
+}
+
+/* Config panel scrollbar styling */
+.config-panel::-webkit-scrollbar {
+  width: 6px;
+}
+
+.config-panel::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.config-panel::-webkit-scrollbar-thumb {
+  background: hsl(var(--border));
+  border-radius: 3px;
+}
+
+.config-panel::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.5);
+}
+
+/* Smooth scrolling for config panel content */
+.config-panel > div {
+  scroll-behavior: smooth;
 }
 
 /* Semantic color utilities for light/dark mode compatibility */
@@ -192,52 +223,64 @@ table tbody tr:hover {
 
 /* React Flow Controls - Dark Theme */
 .dark .react-flow__controls {
-  background-color: hsl(var(--card));
-  border: 1px solid hsl(var(--border));
-  border-radius: 0.375rem;
-  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.3), 0 2px 4px -2px rgb(0 0 0 / 0.2);
+  background-color: hsl(var(--card)) !important;
+  border: 1px solid hsl(var(--border)) !important;
+  border-radius: 0.375rem !important;
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.3), 0 2px 4px -2px rgb(0 0 0 / 0.2) !important;
 }
 
 .dark .react-flow__controls-button {
-  background-color: hsl(var(--card));
-  border-bottom: 1px solid hsl(var(--border));
-  fill: hsl(var(--foreground));
-  color: hsl(var(--foreground));
+  background-color: hsl(var(--card)) !important;
+  border-bottom: 1px solid hsl(var(--border)) !important;
+  fill: hsl(var(--foreground)) !important;
+  color: hsl(var(--foreground)) !important;
 }
 
 .dark .react-flow__controls-button:hover {
-  background-color: hsl(var(--accent));
+  background-color: hsl(var(--accent)) !important;
 }
 
 .dark .react-flow__controls-button:last-child {
-  border-bottom: none;
+  border-bottom: none !important;
 }
 
 .dark .react-flow__controls-button svg {
-  fill: hsl(var(--foreground));
+  fill: hsl(var(--foreground)) !important;
+}
+
+.dark .react-flow__controls-button svg path {
+  fill: hsl(var(--foreground)) !important;
 }
 
 /* React Flow MiniMap - Dark Theme */
 .dark .react-flow__minimap {
-  background-color: hsl(var(--card));
-  border: 1px solid hsl(var(--border));
-  border-radius: 0.375rem;
-  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.3), 0 2px 4px -2px rgb(0 0 0 / 0.2);
+  background-color: hsl(var(--card)) !important;
+  border: 1px solid hsl(var(--border)) !important;
+  border-radius: 0.375rem !important;
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.3), 0 2px 4px -2px rgb(0 0 0 / 0.2) !important;
+}
+
+.dark .react-flow__minimap svg {
+  background-color: hsl(var(--card)) !important;
 }
 
 .dark .react-flow__minimap-mask {
-  fill: hsl(var(--background));
-  opacity: 0.8;
+  fill: hsl(var(--background)) !important;
+  opacity: 0.6 !important;
+}
+
+.dark .react-flow__minimap-node {
+  fill: hsl(var(--muted-foreground)) !important;
 }
 
 /* React Flow Background - Dark Theme */
 .dark .react-flow__background {
-  background-color: hsl(var(--background));
+  background-color: hsl(var(--background)) !important;
 }
 
 .dark .react-flow__background pattern circle,
 .dark .react-flow__background pattern line {
-  stroke: hsl(var(--border));
+  stroke: hsl(var(--border)) !important;
 }
 
 /* Override the default grid dot color in dark mode */
@@ -247,10 +290,98 @@ table tbody tr:hover {
 
 /* React Flow Attribution - Dark Theme */
 .dark .react-flow__attribution {
-  background-color: hsl(var(--card) / 0.8);
-  color: hsl(var(--muted-foreground));
+  background-color: hsl(var(--card) / 0.9) !important;
+  color: hsl(var(--muted-foreground)) !important;
 }
 
 .dark .react-flow__attribution a {
-  color: hsl(var(--muted-foreground));
+  color: hsl(var(--muted-foreground)) !important;
+}
+
+.dark .react-flow__panel {
+  background-color: transparent !important;
+}
+
+/* React Flow Edges - Dark Theme */
+.dark .react-flow__edge-path {
+  stroke: hsl(var(--border));
+}
+
+.dark .react-flow__edge.selected .react-flow__edge-path,
+.dark .react-flow__edge:focus .react-flow__edge-path,
+.dark .react-flow__edge:focus-visible .react-flow__edge-path {
+  stroke: hsl(var(--primary));
+}
+
+/* React Flow Handles - Dark Theme */
+.dark .react-flow__handle {
+  background-color: hsl(var(--primary));
+  border-color: hsl(var(--border));
+}
+
+/* React Flow Selection Box - Dark Theme */
+.dark .react-flow__selection {
+  background-color: hsl(var(--primary) / 0.1);
+  border: 1px dashed hsl(var(--primary));
+}
+
+/* React Flow Pane - Dark Theme */
+.dark .react-flow__pane {
+  background-color: hsl(var(--background));
+}
+
+/* React Flow Node Selection - Dark Theme */
+.dark .react-flow__node.selected {
+  box-shadow: 0 0 0 2px hsl(var(--primary));
+}
+
+/* Resize handle styles */
+.resize-handle-horizontal {
+  cursor: col-resize;
+  transition: background-color 0.15s ease;
+}
+
+.resize-handle-horizontal:hover {
+  background-color: hsl(var(--primary) / 0.2);
+}
+
+.resize-handle-horizontal:active {
+  background-color: hsl(var(--primary) / 0.4);
+}
+
+.resize-handle-vertical {
+  cursor: row-resize;
+  transition: background-color 0.15s ease;
+}
+
+.resize-handle-vertical:hover {
+  background-color: hsl(var(--primary) / 0.2);
+}
+
+.resize-handle-vertical:active {
+  background-color: hsl(var(--primary) / 0.4);
+}
+
+/* Timeline resize indicator */
+.timeline-resize-handle {
+  position: relative;
+}
+
+.timeline-resize-handle::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 40px;
+  height: 4px;
+  border-radius: 2px;
+  background: hsl(var(--border));
+  opacity: 0.6;
+  transition: opacity 0.15s, background-color 0.15s;
+}
+
+.timeline-resize-handle:hover::after {
+  opacity: 1;
+  background: hsl(var(--primary) / 0.5);
 }

@@ -1,4 +1,4 @@
-import { memo, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Handle, NodeResizer, Position, type NodeProps, useReactFlow, useUpdateNodeInternals } from 'reactflow'
 import { Loader2, CheckCircle, XCircle, Clock, Activity, AlertCircle, Pause, Terminal as TerminalIcon, Pencil } from 'lucide-react'
@@ -139,7 +139,7 @@ function TerminalButton({
 /**
  * Enhanced WorkflowNode - Visual representation with timeline states
  */
-export const WorkflowNode = memo(({ data, selected, id }: NodeProps<NodeData>) => {
+export const WorkflowNode = ({ data, selected, id }: NodeProps<NodeData>) => {
   const { getComponent, loading } = useComponentStore()
   const { getNodes, getEdges, setNodes } = useReactFlow()
   const updateNodeInternals = useUpdateNodeInternals()
@@ -172,12 +172,25 @@ export const WorkflowNode = memo(({ data, selected, id }: NodeProps<NodeData>) =
       return
     }
 
-    setIsTerminalLoading(true)
-    prefetchTerminal(id, 'pty', selectedRunId ?? undefined)
-      .catch((error) => {
+    let cancelled = false
+    const loadTerminal = async () => {
+      setIsTerminalLoading(true)
+      try {
+        await prefetchTerminal(id, 'pty', selectedRunId ?? undefined)
+      } catch (error) {
         console.error('Failed to prefetch terminal output', error)
-      })
-      .finally(() => setIsTerminalLoading(false))
+      } finally {
+        if (!cancelled) {
+          setIsTerminalLoading(false)
+        }
+      }
+    }
+
+    void loadTerminal()
+
+    return () => {
+      cancelled = true
+    }
   }, [id, isTerminalOpen, prefetchTerminal, selectedRunId])
 
   // Cast to access extended frontend fields (componentId, componentSlug, status, etc.)
@@ -210,8 +223,8 @@ export const WorkflowNode = memo(({ data, selected, id }: NodeProps<NodeData>) =
       )
     }
     return (
-      <div className="px-4 py-3 shadow-md rounded-lg border-2 border-red-500 bg-red-50 dark:bg-red-950/30 min-w-[200px]">
-        <div className="text-sm text-red-600 dark:text-red-400">
+      <div className="px-4 py-3 shadow-md rounded-lg border-2 border-red-500 dark:border-red-700 bg-red-50 dark:bg-red-900/40 min-w-[200px]">
+        <div className="text-sm text-red-700 dark:text-red-300 font-medium">
           Component not found: {componentRef ?? 'unknown'}
         </div>
       </div>
@@ -235,7 +248,9 @@ export const WorkflowNode = memo(({ data, selected, id }: NodeProps<NodeData>) =
   const isTimelineActive = mode === 'execution' && selectedRunId && visualState.status !== 'idle'
   const hasEvents = isTimelineActive && visualState.eventCount > 0
 
-  const isTextBlock = component.id === 'core.ui.text'
+  const isTextBlock = component?.id === 'core.ui.text'
+
+  // Always call useEffect hooks in the same order (Rules of Hooks)
   useEffect(() => {
     if (!isTextBlock) return
     const uiSize = (nodeData as any)?.ui?.size as { width?: number; height?: number } | undefined
@@ -253,6 +268,7 @@ export const WorkflowNode = memo(({ data, selected, id }: NodeProps<NodeData>) =
       return clamped
     })
   }, [isTextBlock, nodeData])
+
   useEffect(() => {
     if (isTextBlock) {
       updateNodeInternals(id)
@@ -273,9 +289,9 @@ export const WorkflowNode = memo(({ data, selected, id }: NodeProps<NodeData>) =
   const requiredParams = componentParameters.filter(param => param.required)
   const requiredInputs = componentInputs.filter(input => input.required)
 
-  // DYNAMIC OUTPUTS: For Manual Trigger, generate outputs based on runtimeInputs parameter
+  // DYNAMIC OUTPUTS: For Entry Point, generate outputs based on runtimeInputs parameter
   let effectiveOutputs = component.outputs ?? []
-  if (component.id === 'core.trigger.manual' && nodeData.parameters?.runtimeInputs) {
+  if (component.id === 'core.workflow.entrypoint' && nodeData.parameters?.runtimeInputs) {
     try {
       const runtimeInputs = typeof nodeData.parameters.runtimeInputs === 'string'
         ? JSON.parse(nodeData.parameters.runtimeInputs)
@@ -506,8 +522,8 @@ export const WorkflowNode = memo(({ data, selected, id }: NodeProps<NodeData>) =
         // Enhanced border styling for timeline
         isTimelineActive && effectiveStatus === 'running' && 'border-blue-400',
         isTimelineActive && effectiveStatus === 'running' && !isPlaying && 'border-dashed',
-        isTimelineActive && effectiveStatus === 'error' && 'border-red-400 bg-red-50/20',
-        isTimelineActive && effectiveStatus === 'success' && 'border-green-400 bg-green-50/20',
+        isTimelineActive && effectiveStatus === 'error' && 'border-red-400 bg-red-50/20 dark:bg-red-950/20',
+        isTimelineActive && effectiveStatus === 'success' && 'border-green-400 bg-green-50/20 dark:bg-green-950/20',
 
         // Existing styling
         nodeData.status ? nodeStyle.border : getTypeBorderColor(component.type),
@@ -875,7 +891,7 @@ export const WorkflowNode = memo(({ data, selected, id }: NodeProps<NodeData>) =
                               isDefault
                                 ? "text-muted-foreground bg-muted/50 italic"
                                 : param.type === 'select'
-                                  ? "text-blue-600 bg-blue-50 font-semibold"
+                                  ? "text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/50 font-semibold"
                                   : "text-foreground bg-muted"
                             )}
                             title={isDefault ? `Default: ${String(displayValue)}` : String(displayValue)}
@@ -940,4 +956,4 @@ export const WorkflowNode = memo(({ data, selected, id }: NodeProps<NodeData>) =
       </div>
     </div>
   )
-})
+}

@@ -22,7 +22,8 @@ interface ExecutionStoreState {
   workflowId: string | null
   status: ExecutionLifecycle
   runStatus: ExecutionStatusResponse | null
-  logs: ExecutionLog[]
+  events: ExecutionLog[]
+  historicalLogs: ExecutionLog[]
   liveLogs: ExecutionLog[] // Logs from SSE during live execution
   scrubberLogs: ExecutionLog[] // Logs for timeline scrubbing
   logMode: 'live' | 'scrubbing' | 'historical' // Which log set to display
@@ -50,7 +51,7 @@ interface ExecutionStoreActions {
   pollOnce: () => Promise<void>
   stopPolling: () => void
   reset: () => void
-  connectStream: (runId: string) => void
+  connectStream: (runId: string) => Promise<void>
   disconnectStream: () => void
   getNodeLogs: (nodeId: string) => ExecutionLog[]
   getNodeLogCounts: (nodeId: string) => { total: number; errors: number; warnings: number }
@@ -108,7 +109,7 @@ const mapStatusToLifecycle = (status: ExecutionStatus | undefined): ExecutionLif
   }
 }
 
-const mergeLogs = (existing: ExecutionLog[], incoming: ExecutionLog[]): ExecutionLog[] => {
+const mergeById = (existing: ExecutionLog[], incoming: ExecutionLog[]): ExecutionLog[] => {
   if (incoming.length === 0) return existing
   const seen = new Set(existing.map((event) => event.id))
   const deduped = incoming.filter((event) => {
@@ -119,6 +120,9 @@ const mergeLogs = (existing: ExecutionLog[], incoming: ExecutionLog[]): Executio
   if (deduped.length === 0) return existing
   return [...existing, ...deduped]
 }
+
+const mergeEvents = mergeById
+const mergeLogEntries = mergeById
 
 const deriveNodeStates = (events: ExecutionLog[]): Record<string, NodeStatus> => {
   const states: Record<string, NodeStatus> = {}
@@ -151,7 +155,8 @@ const INITIAL_STATE: ExecutionStoreState = {
   workflowId: null,
   status: 'idle',
   runStatus: null,
-  logs: [],
+  events: [],
+  historicalLogs: [],
   liveLogs: [],
   scrubberLogs: [],
   logMode: 'live',
@@ -184,7 +189,7 @@ export const useExecutionStore = create<ExecutionStore>((set, get) => ({
         status: 'queued', 
         workflowId,
         // Clear only what's needed for new run, keep terminal streams if same workflow
-        logs: [],
+        events: [],
         liveLogs: [],
         scrubberLogs: [],
         logMode: 'live',
@@ -280,7 +285,10 @@ export const useExecutionStore = create<ExecutionStore>((set, get) => ({
     const interval = setInterval(poll, 2000)
     set({ pollingInterval: interval, runId })
 
-    get().connectStream(runId)
+    // Connect stream - errors are handled inside connectStream
+    get().connectStream(runId).catch((error) => {
+      console.error('[ExecutionStore] Failed to connect stream in monitorRun:', error)
+    })
   },
 
   pollOnce: async () => {
@@ -318,15 +326,15 @@ export const useExecutionStore = create<ExecutionStore>((set, get) => ({
         // Double check inside setter to be absolutely sure
         if (state.runId !== runId) return state
 
-        const mergedLogs = mergeLogs(state.logs, validEvents)
-        const nodeStates = deriveNodeStates(mergedLogs)
+        const mergedEvents = mergeEvents(state.events, validEvents)
+        const nodeStates = deriveNodeStates(mergedEvents)
         const status = (statusPayload as any)?.status as ExecutionStatus | undefined
         const lifecycle = mapStatusToLifecycle(status)
 
         return {
           runStatus: statusPayload as ExecutionStatusResponse,
           status: lifecycle,
-          logs: mergedLogs,
+          events: mergedEvents,
           nodeStates,
           cursor: traceEnvelope.cursor ?? state.cursor,
         }
@@ -370,13 +378,14 @@ export const useExecutionStore = create<ExecutionStore>((set, get) => ({
       return
     }
 
-    const { cursor, terminalCursor } = get()
+    const { cursor, terminalCursor, logCursor } = get()
     get().disconnectStream()
 
     try {
       const streamParams: Record<string, string> = {}
       if (cursor) streamParams.cursor = cursor
       if (terminalCursor) streamParams.terminalCursor = terminalCursor
+      if (logCursor) streamParams.logCursor = logCursor
       const source = await api.executions.stream(runId, Object.keys(streamParams).length ? streamParams : undefined)
 
       source.addEventListener('trace', (event) => {
@@ -390,13 +399,13 @@ export const useExecutionStore = create<ExecutionStore>((set, get) => ({
           }
 
           set((state) => {
-            const mergedLogs = mergeLogs(state.logs, payload.events as ExecutionLog[])
-            const nodeStates = deriveNodeStates(mergedLogs)
+            const mergedEvents = mergeEvents(state.events, payload.events as ExecutionLog[])
+            const nodeStates = deriveNodeStates(mergedEvents)
             const nextCursor =
               payload.cursor ?? payload.events![payload.events!.length - 1]?.id ?? state.cursor
 
             return {
-              logs: mergedLogs,
+              events: mergedEvents,
               nodeStates,
               cursor: nextCursor ?? null,
             }
@@ -556,7 +565,7 @@ export const useExecutionStore = create<ExecutionStore>((set, get) => ({
             }));
 
             // Merge with existing live logs
-            const mergedLogs = mergeLogs(state.liveLogs, newLogs);
+            const mergedLogs = mergeLogEntries(state.liveLogs, newLogs);
 
             return {
               liveLogs: mergedLogs,
@@ -676,7 +685,7 @@ export const useExecutionStore = create<ExecutionStore>((set, get) => ({
   },
 
   getNodeLogs: (nodeId: string) => {
-    const { logs } = get()
+    const logs = get().getDisplayLogs()
     return logs.filter(log => log.nodeId === nodeId)
   },
 
@@ -724,7 +733,8 @@ export const useExecutionStore = create<ExecutionStore>((set, get) => ({
       })
 
       set(() => ({
-        logs: result.logs as ExecutionLog[],
+        runId, // keep run association for the log viewer
+        historicalLogs: result.logs as ExecutionLog[],
         logMode: 'historical',
       }))
     } catch (error) {
@@ -744,7 +754,7 @@ export const useExecutionStore = create<ExecutionStore>((set, get) => ({
       case 'scrubbing':
         return state.scrubberLogs
       case 'historical':
-        return state.logs
+        return state.historicalLogs
       default:
         return state.liveLogs
     }

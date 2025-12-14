@@ -13,7 +13,6 @@ import {
   CheckCircle2,
   Loader2,
 } from 'lucide-react'
-import { useWorkflowExecution } from '@/hooks/useWorkflowExecution'
 import { useWorkflowStore } from '@/store/workflowStore'
 import { useWorkflowUiStore } from '@/store/workflowUiStore'
 import { cn } from '@/lib/utils'
@@ -44,13 +43,8 @@ export function TopBar({
   const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   const { metadata, isDirty, setWorkflowName } = useWorkflowStore()
-  const { runStatus } = useWorkflowExecution()
   const { mode, setMode } = useWorkflowUiStore()
   const canEdit = Boolean(canManageWorkflows)
-  const failureReason =
-    runStatus?.status === 'FAILED'
-      ? runStatus.failure?.reason ?? 'Unknown error'
-      : null
 
   const handleChangeWorkflowName = () => {
     const trimmed = (tempWorkflowName ?? '').trim()
@@ -184,28 +178,22 @@ export function TopBar({
     </div>
   )
 
-  const statusItems: Array<{ text: string; tone: 'neutral' | 'error' }> = []
-  if (failureReason) {
-    statusItems.push({ text: `Failed: ${failureReason}`, tone: 'error' })
-  }
-  const compactStatusItems = statusItems.slice(0, 2)
-
   const saveState = isSaving ? 'saving' : isDirty ? 'dirty' : 'clean'
 
   const saveLabel = saveState === 'clean' ? 'Saved' : saveState === 'saving' ? 'Saving…' : 'Save'
   const saveBadgeText = saveState === 'clean' ? 'Synced' : saveState === 'saving' ? 'Syncing' : 'Pending'
   const saveBadgeTone =
     saveState === 'clean'
-      ? 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800'
+      ? 'bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700'
       : saveState === 'saving'
-        ? 'bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800'
-        : 'bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-800'
+        ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700'
+        : 'bg-amber-100 dark:bg-gray-900/50 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-700'
 
   const saveButtonClasses = cn(
     'gap-2 min-w-[110px]',
-    saveState === 'clean' && 'border-emerald-200',
-    saveState === 'dirty' && 'border-amber-300',
-    saveState === 'saving' && 'border-blue-300'
+    saveState === 'clean' && 'border-emerald-200 dark:border-emerald-700',
+    saveState === 'dirty' && 'border-gray-300 dark:border-gray-600',
+    saveState === 'saving' && 'border-blue-300 dark:border-blue-700'
   )
 
   const saveIcon =
@@ -317,21 +305,6 @@ export function TopBar({
                 </Button>
               </div>
 
-              {compactStatusItems.length > 0 && (
-                <div className="flex flex-wrap justify-end gap-x-3 gap-y-0.5 text-[11px] leading-tight">
-                  {compactStatusItems.map((item, index) => (
-                    <span
-                      key={`${item.text}-${index}`}
-                      className={cn(
-                        'text-muted-foreground',
-                        item.tone === 'error' && 'text-red-500 font-semibold'
-                      )}
-                    >
-                      {item.text}
-                    </span>
-                  ))}
-                </div>
-              )}
             </div>
           </div>
         </div>

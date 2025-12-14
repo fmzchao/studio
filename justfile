@@ -88,8 +88,14 @@ dev action="start":
             pm2 status
             docker compose -f docker/docker-compose.infra.yml ps
             ;;
+        clean)
+            echo "🧹 Cleaning development environment..."
+            pm2 delete shipsec-frontend shipsec-backend shipsec-worker shipsec-test-worker 2>/dev/null || true
+            docker compose -f docker/docker-compose.infra.yml down -v
+            echo "✅ Development environment cleaned (PM2 stopped, infrastructure volumes removed)"
+            ;;
         *)
-            echo "Usage: just dev [start|stop|logs|status]"
+            echo "Usage: just dev [start|stop|logs|status|clean]"
             ;;
     esac
 
@@ -141,6 +147,91 @@ prod action="start":
             ;;
         *)
             echo "Usage: just prod [start|stop|build|logs|status|clean]"
+            ;;
+    esac
+
+# === Production Images (GHCR-based) ===
+
+# Run production environment using prebuilt GHCR images
+prod-images action="start":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    case "{{action}}" in
+        start)
+            echo "🚀 Starting production environment with GHCR images..."
+
+            # Check if images exist locally, pull if needed
+            echo "🔍 Checking for local images..."
+            if ! docker images --format "{{{{.Repository}}}}:{{{{.Tag}}}}" | grep -q "ghcr.io/shipsecai/studio-frontend"; then
+                echo "📥 Pulling GHCR images..."
+                docker pull ghcr.io/shipsecai/studio-frontend:latest || echo "⚠️  Frontend image not found, will build locally"
+            else
+                echo "✅ Frontend image found locally"
+            fi
+            if ! docker images --format "{{{{.Repository}}}}:{{{{.Tag}}}}" | grep -q "ghcr.io/shipsecai/studio-backend"; then
+                docker pull ghcr.io/shipsecai/studio-backend:latest || echo "⚠️  Backend image not found, will build locally"
+            else
+                echo "✅ Backend image found locally"
+            fi
+            if ! docker images --format "{{{{.Repository}}}}:{{{{.Tag}}}}" | grep -q "ghcr.io/shipsecai/studio-worker"; then
+                docker pull ghcr.io/shipsecai/studio-worker:latest || echo "⚠️  Worker image not found, will build locally"
+            else
+                echo "✅ Worker image found locally"
+            fi
+
+            # Start with GHCR images, fallback to local build
+            DOCKER_BUILDKIT=1 docker compose -f docker/docker-compose.full.yml up -d
+            echo ""
+            echo "✅ Production environment ready"
+            echo "   Frontend:    http://localhost:8090"
+            echo "   Backend:     http://localhost:3211"
+            echo "   Temporal UI: http://localhost:8081"
+            ;;
+        stop)
+            docker compose -f docker/docker-compose.full.yml down
+            echo "✅ Production stopped"
+            ;;
+        build-test)
+            echo "🔨 Building test images with PostHog analytics..."
+            if [ -z "${POSTHOG_API_KEY:-}" ] || [ -z "${POSTHOG_HOST:-}" ]; then
+                echo "❌ POSTHOG_API_KEY and POSTHOG_HOST must be set in your environment for this command"
+                exit 1
+            fi
+
+            # Build with PostHog keys (debug version - non-minified)
+            DOCKER_BUILDKIT=1 docker build \
+                --target frontend-debug \
+                --build-arg VITE_PUBLIC_POSTHOG_KEY=$POSTHOG_API_KEY \
+                --build-arg VITE_PUBLIC_POSTHOG_HOST=$POSTHOG_HOST \
+                -t ghcr.io/shipsecai/studio-frontend:latest \
+                .
+
+            DOCKER_BUILDKIT=1 docker build \
+                --target backend \
+                -t ghcr.io/shipsecai/studio-backend:latest \
+                .
+
+            DOCKER_BUILDKIT=1 docker build \
+                --target worker \
+                -t ghcr.io/shipsecai/studio-worker:latest \
+                .
+
+            echo "✅ Test images built with PostHog analytics"
+            echo "   Run: just prod-images start"
+            ;;
+        logs)
+            docker compose -f docker/docker-compose.full.yml logs -f
+            ;;
+        status)
+            docker compose -f docker/docker-compose.full.yml ps
+            ;;
+        clean)
+            docker compose -f docker/docker-compose.full.yml down -v
+            docker system prune -f
+            echo "✅ Production cleaned"
+            ;;
+        *)
+            echo "Usage: just prod-images [start|stop|build-test|logs|status|clean]"
             ;;
     esac
 
@@ -214,19 +305,27 @@ help:
     @echo "  just init       Set up dependencies and environment files"
     @echo ""
     @echo "Development (hot-reload):"
-    @echo "  just dev        Start development environment"
-    @echo "  just dev stop   Stop everything"
-    @echo "  just dev logs   View application logs"
+    @echo "  just dev          Start development environment"
+    @echo "  just dev stop     Stop everything"
+    @echo "  just dev logs     View application logs"
+    @echo "  just dev status   Check service status"
+    @echo "  just dev clean    Stop and remove all data"
     @echo ""
     @echo "Production (Docker):"
-    @echo "  just prod         Start with cached images"
-    @echo "  just prod build   Rebuild and start"
-    @echo "  just prod stop    Stop production"
-    @echo "  just prod logs    View production logs"
-    @echo "  just prod clean   Remove all data"
+    @echo "  just prod          Start with cached images"
+    @echo "  just prod build    Rebuild and start"
+    @echo "  just prod stop     Stop production"
+    @echo "  just prod logs     View production logs"
+    @echo "  just prod status   Check production status"
+    @echo "  just prod clean    Remove all data"
+    @echo ""
+    @echo "Infrastructure:"
+    @echo "  just infra up      Start infrastructure only"
+    @echo "  just infra down    Stop infrastructure"
+    @echo "  just infra logs    View infrastructure logs"
+    @echo "  just infra clean   Remove infrastructure data"
     @echo ""
     @echo "Utilities:"
-    @echo "  just status       Show status of all services"
-    @echo "  just infra up     Start only infrastructure"
-    @echo "  just db-reset     Reset database"
-    @echo "  just build        Build images only"
+    @echo "  just status        Show status of all services"
+    @echo "  just db-reset      Reset database"
+    @echo "  just build         Build images only"

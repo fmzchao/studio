@@ -1,6 +1,7 @@
-import { randomUUID } from 'node:crypto';
+import { randomUUID, createHash } from 'node:crypto';
 
 import { Injectable, Logger, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { status as grpcStatus, type ServiceError } from '@grpc/grpc-js';
 
 import { compileWorkflowGraph } from '../dsl/compiler';
 import { WorkflowDefinition } from '../dsl/types';
@@ -22,12 +23,16 @@ import { WorkflowRoleRepository } from './repository/workflow-role.repository';
 import { WorkflowRunRepository } from './repository/workflow-run.repository';
 import { WorkflowVersionRepository } from './repository/workflow-version.repository';
 import { TraceRepository } from '../trace/trace.repository';
+import { AnalyticsService } from '../analytics/analytics.service';
 import {
   ExecutionStatus,
   FailureSummary,
   WorkflowRunStatusPayload,
   TraceEventPayload,
   WorkflowRunConfigPayload,
+  ExecutionTriggerType,
+  ExecutionInputPreview,
+  ExecutionTriggerMetadata,
 } from '@shipsec/shared';
 import type { WorkflowRunRecord, WorkflowVersionRecord } from '../database/schema';
 import type { AuthContext } from '../auth/types';
@@ -61,9 +66,25 @@ export interface WorkflowRunSummary {
   eventCount: number;
   nodeCount: number;
   duration: number;
+  triggerType: ExecutionTriggerType;
+  triggerSource?: string | null;
+  triggerLabel?: string | null;
+  inputPreview: ExecutionInputPreview;
 }
 
 const SHIPSEC_WORKFLOW_TYPE = 'shipsecWorkflowRun';
+export interface PreparedRunPayload {
+  runId: string;
+  workflowId: string;
+  workflowVersionId: string;
+  workflowVersion: number;
+  organizationId: string;
+  definition: WorkflowDefinition;
+  inputs: Record<string, unknown>;
+  triggerMetadata: ExecutionTriggerMetadata;
+  inputPreview: ExecutionInputPreview;
+  totalActions: number;
+}
 
 export interface DataFlowPacketDto {
   id: string;
@@ -105,10 +126,59 @@ export class WorkflowsService {
     private readonly runRepository: WorkflowRunRepository,
     private readonly traceRepository: TraceRepository,
     private readonly temporalService: TemporalService,
+    private readonly analyticsService: AnalyticsService,
   ) {}
 
   private resolveOrganizationId(auth?: AuthContext | null): string | null {
     return auth?.organizationId ?? null;
+  }
+
+  async ensureWorkflowAdminAccess(
+    workflowId: string,
+    auth?: AuthContext | null,
+  ): Promise<string> {
+    return this.requireWorkflowAdmin(workflowId, auth);
+  }
+
+  private normalizeIdempotencyKey(key?: string | null): string | undefined {
+    if (!key) {
+      return undefined;
+    }
+    const trimmed = key.trim();
+    if (!trimmed) {
+      return undefined;
+    }
+    return trimmed.slice(0, 128);
+  }
+
+  private runIdFromIdempotencyKey(key: string): string {
+    const hash = createHash('sha256').update(key).digest('hex');
+    return `shipsec-run-${hash}`;
+  }
+
+  async getCompiledWorkflowContext(
+    workflowId: string,
+    request: WorkflowRunRequest = {},
+    auth?: AuthContext | null,
+  ): Promise<{
+    workflow: WorkflowRecord;
+    version: WorkflowVersionRecord;
+    definition: WorkflowDefinition;
+    organizationId: string;
+  }> {
+    const organizationId = this.requireOrganizationId(auth);
+    const workflow = await this.repository.findById(workflowId, { organizationId });
+    if (!workflow) {
+      throw new NotFoundException(`Workflow ${workflowId} not found`);
+    }
+    const version = await this.resolveWorkflowVersion(workflowId, request, organizationId);
+    const definition = await this.ensureDefinitionForVersion(workflow, version, organizationId);
+    return {
+      workflow,
+      version,
+      definition,
+      organizationId,
+    };
   }
 
   private requireOrganizationId(auth?: AuthContext | null): string {
@@ -338,6 +408,15 @@ export class WorkflowsService {
       organizationId,
     );
 
+    // Calculate duration from events (more accurate than createdAt/updatedAt)
+    const eventTimeRange = await this.traceRepository.getEventTimeRange(
+      run.runId,
+      organizationId,
+    );
+    const duration = eventTimeRange.firstTimestamp && eventTimeRange.lastTimestamp
+      ? this.computeDuration(eventTimeRange.firstTimestamp, eventTimeRange.lastTimestamp)
+      : this.computeDuration(run.createdAt, run.updatedAt);
+
     let currentStatus: ExecutionStatus = 'RUNNING';
     try {
       const status = await this.temporalService.describeWorkflow({
@@ -346,8 +425,32 @@ export class WorkflowsService {
       });
       currentStatus = this.normalizeStatus(status.status);
     } catch (error) {
-      this.logger.warn(`Failed to get status for run ${run.runId}: ${error}`);
+      // If Temporal can't find the workflow (NOT_FOUND), check if events have stopped
+      // If events stopped more than 5 minutes ago, assume the workflow completed
+      const isNotFound = this.isNotFoundError(error);
+      if (isNotFound && eventTimeRange.lastTimestamp) {
+        const lastEventTime = new Date(eventTimeRange.lastTimestamp);
+        const minutesSinceLastEvent = (Date.now() - lastEventTime.getTime()) / (1000 * 60);
+        if (minutesSinceLastEvent > 5) {
+          // Events stopped more than 5 minutes ago and Temporal can't find it
+          // Assume the workflow completed successfully
+          currentStatus = 'COMPLETED';
+          this.logger.log(
+            `Run ${run.runId} not found in Temporal but last event was ${minutesSinceLastEvent.toFixed(1)} minutes ago, assuming COMPLETED`,
+          );
+        } else {
+          this.logger.warn(`Failed to get status for run ${run.runId}: ${error}`);
+        }
+      } else {
+        this.logger.warn(`Failed to get status for run ${run.runId}: ${error}`);
+      }
     }
+
+    const triggerType = (run.triggerType as ExecutionTriggerType) ?? 'manual';
+    const triggerSource = run.triggerSource ?? null;
+    const triggerLabel = run.triggerLabel ?? (triggerType === 'manual' ? 'Manual run' : null);
+    const inputPreview: ExecutionInputPreview =
+      run.inputPreview ?? { runtimeInputs: {}, nodeOverrides: {} };
 
     return {
       id: run.runId,
@@ -361,7 +464,11 @@ export class WorkflowsService {
       workflowName,
       eventCount,
       nodeCount,
-      duration: this.computeDuration(run.createdAt, run.updatedAt),
+      duration,
+      triggerType,
+      triggerSource,
+      triggerLabel,
+      inputPreview,
     };
   }
 
@@ -427,16 +534,167 @@ export class WorkflowsService {
     id: string,
     request: WorkflowRunRequest = {},
     auth?: AuthContext | null,
+    options: {
+      trigger?: ExecutionTriggerMetadata;
+      nodeOverrides?: Record<string, Record<string, unknown>>;
+      runId?: string;
+      idempotencyKey?: string;
+    } = {},
   ): Promise<WorkflowRunHandle> {
+    const prepared = await this.prepareRunPayload(id, request, auth, {
+      trigger: options.trigger,
+      nodeOverrides: options.nodeOverrides,
+      runId: options.runId,
+      idempotencyKey: options.idempotencyKey,
+    });
+
+    return this.startPreparedRun(prepared);
+  }
+
+  async startPreparedRun(prepared: PreparedRunPayload): Promise<WorkflowRunHandle> {
+    const inputSummary = this.formatInputSummary(prepared.inputs);
+    this.logger.log(
+      `Starting workflow ${prepared.workflowId} (runId=${prepared.runId}, inputs=${inputSummary})`,
+    );
+
+    const existingRecord = await this.runRepository.findByRunId(prepared.runId, {
+      organizationId: prepared.organizationId,
+    });
+
+    if (existingRecord?.temporalRunId) {
+      this.logger.log(
+        `Run ${prepared.runId} already started (temporalRunId=${existingRecord.temporalRunId})`,
+      );
+      return {
+        runId: existingRecord.runId,
+        workflowId: existingRecord.workflowId,
+        workflowVersionId: existingRecord.workflowVersionId ?? prepared.workflowVersionId,
+        workflowVersion: existingRecord.workflowVersion ?? prepared.workflowVersion,
+        temporalRunId: existingRecord.temporalRunId,
+        status: 'RUNNING',
+        taskQueue: this.temporalService.getDefaultTaskQueue(),
+      };
+    }
+
+    await this.repository.incrementRunCount(prepared.workflowId, {
+      organizationId: prepared.organizationId,
+    });
+
+    let temporalRunId: string | null = null;
+    try {
+      const temporalRun = await this.temporalService.startWorkflow({
+        workflowType: SHIPSEC_WORKFLOW_TYPE,
+        workflowId: prepared.runId,
+        args: [
+          {
+            runId: prepared.runId,
+            workflowId: prepared.workflowId,
+            definition: prepared.definition,
+            inputs: prepared.inputs,
+            workflowVersionId: prepared.workflowVersionId,
+            workflowVersion: prepared.workflowVersion,
+            organizationId: prepared.organizationId,
+          },
+        ],
+      });
+      temporalRunId = temporalRun.runId;
+
+      this.logger.log(
+        `Started workflow run ${prepared.runId} (workflowVersion=${prepared.workflowVersion}, temporalRunId=${temporalRun.runId}, taskQueue=${temporalRun.taskQueue}, actions=${prepared.totalActions})`,
+      );
+
+      await this.runRepository.upsert({
+        runId: prepared.runId,
+        workflowId: prepared.workflowId,
+        workflowVersionId: prepared.workflowVersionId,
+        workflowVersion: prepared.workflowVersion,
+        temporalRunId: temporalRun.runId,
+        totalActions: prepared.totalActions,
+        inputs: prepared.inputs,
+        organizationId: prepared.organizationId,
+        triggerType: prepared.triggerMetadata.type,
+        triggerSource: prepared.triggerMetadata.sourceId,
+        triggerLabel: prepared.triggerMetadata.label,
+        inputPreview: prepared.inputPreview,
+      });
+
+      return {
+        runId: prepared.runId,
+        workflowId: prepared.workflowId,
+        workflowVersionId: prepared.workflowVersionId,
+        workflowVersion: prepared.workflowVersion,
+        temporalRunId: temporalRun.runId,
+        status: 'RUNNING',
+        taskQueue: temporalRun.taskQueue,
+      };
+    } catch (error) {
+      if (temporalRunId) {
+        this.logger.warn(
+          `Temporal workflow ${prepared.runId} reported error after start: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+      }
+
+      if (
+        error &&
+        typeof error === 'object' &&
+        'message' in error &&
+        typeof (error as any).message === 'string' &&
+        (error as any).message.includes('Workflow execution already started')
+      ) {
+        const existing = await this.runRepository.findByRunId(prepared.runId, {
+          organizationId: prepared.organizationId,
+        });
+        if (existing?.temporalRunId) {
+          this.logger.warn(
+            `Workflow run ${prepared.runId} already active (temporalRunId=${existing.temporalRunId})`,
+          );
+          return {
+            runId: existing.runId,
+            workflowId: existing.workflowId,
+            workflowVersionId: existing.workflowVersionId ?? prepared.workflowVersionId,
+            workflowVersion: existing.workflowVersion ?? prepared.workflowVersion,
+            temporalRunId: existing.temporalRunId,
+            status: 'RUNNING',
+            taskQueue: this.temporalService.getDefaultTaskQueue(),
+          };
+        }
+      }
+
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorStack = error instanceof Error ? error.stack : undefined;
+
+      this.logger.error(
+        `Failed to start workflow ${prepared.workflowId} run ${prepared.runId}: ${errorMessage}`,
+      );
+
+      if (errorStack) {
+        this.logger.error(`Stack trace: ${errorStack}`);
+      }
+
+      this.logger.debug(`Full error object: ${JSON.stringify(error, Object.getOwnPropertyNames(error))}`);
+
+      throw error;
+    }
+  }
+
+  async prepareRunPayload(
+    id: string,
+    request: WorkflowRunRequest = {},
+    auth?: AuthContext | null,
+    options: {
+      trigger?: ExecutionTriggerMetadata;
+      nodeOverrides?: Record<string, Record<string, unknown>>;
+      runId?: string;
+      idempotencyKey?: string;
+    } = {},
+  ): Promise<PreparedRunPayload> {
     const organizationId = this.requireOrganizationId(auth);
     const workflow = await this.repository.findById(id, { organizationId });
     if (!workflow) {
       throw new NotFoundException(`Workflow ${id} not found`);
     }
-    const inputSummary = this.formatInputSummary(request.inputs);
-    this.logger.log(
-      `Received run request for workflow ${workflow.id} (inputs=${inputSummary})`,
-    );
 
     const version = await this.resolveWorkflowVersion(workflow.id, request, organizationId);
     const compiledDefinition = await this.ensureDefinitionForVersion(
@@ -444,69 +702,54 @@ export class WorkflowsService {
       version,
       organizationId,
     );
-    const runId = `shipsec-run-${randomUUID()}`;
 
-    // Track execution stats
-    await this.repository.incrementRunCount(id, { organizationId });
+    const nodeOverrides = options.nodeOverrides ?? {};
+    const definitionWithOverrides = this.applyNodeOverrides(compiledDefinition, nodeOverrides);
+    const normalizedKey = this.normalizeIdempotencyKey(options.idempotencyKey);
+    const runId = options.runId ?? (normalizedKey ? this.runIdFromIdempotencyKey(normalizedKey) : `shipsec-run-${randomUUID()}`);
+    const triggerMetadata = options.trigger ?? this.buildEntryPointTriggerMetadata(auth);
+    const inputs = request.inputs ?? {};
+    const inputPreview = this.buildInputPreview(inputs, nodeOverrides);
 
-    try {
-      const temporalRun = await this.temporalService.startWorkflow({
-        workflowType: SHIPSEC_WORKFLOW_TYPE,
-        workflowId: runId,
-        args: [
-          {
-            runId,
-            workflowId: workflow.id,
-            definition: compiledDefinition,
-            inputs: request.inputs ?? {},
-            workflowVersionId: version.id,
-            workflowVersion: version.version,
-            organizationId,
-          },
-        ],
-      });
+    await this.runRepository.upsert({
+      runId,
+      workflowId: workflow.id,
+      workflowVersionId: version.id,
+      workflowVersion: version.version,
+      totalActions: definitionWithOverrides.actions.length,
+      inputs,
+      organizationId,
+      triggerType: triggerMetadata.type,
+      triggerSource: triggerMetadata.sourceId,
+      triggerLabel: triggerMetadata.label,
+      inputPreview,
+    });
 
-      this.logger.log(
-        `Started workflow run ${runId} (workflowVersion=${version.version}, temporalRunId=${temporalRun.runId}, taskQueue=${temporalRun.taskQueue}, actions=${compiledDefinition.actions.length})`,
-      );
-
-      await this.runRepository.upsert({
-        runId,
+    this.analyticsService.trackWorkflowStarted({
         workflowId: workflow.id,
         workflowVersionId: version.id,
         workflowVersion: version.version,
-        temporalRunId: temporalRun.runId,
-        totalActions: compiledDefinition.actions.length,
-        inputs: request.inputs ?? {},
+        runId,
         organizationId,
-      });
+        nodeCount: compiledDefinition.actions.length,
+        inputCount: Object.keys(request.inputs ?? {}).length,
+        triggerType: triggerMetadata.type,
+        triggerSource: triggerMetadata.sourceId ?? undefined,
+        triggerLabel: triggerMetadata.label ?? undefined
+    });
 
-      return {
-        runId,
-        workflowId: workflow.id,
-        workflowVersionId: version.id,
-        workflowVersion: version.version,
-        temporalRunId: temporalRun.runId,
-        status: 'RUNNING',
-        taskQueue: temporalRun.taskQueue,
-      };
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      const errorStack = error instanceof Error ? error.stack : undefined;
-
-      this.logger.error(
-        `Failed to start workflow ${workflow.id} run ${runId}: ${errorMessage}`,
-      );
-
-      if (errorStack) {
-        this.logger.error(`Stack trace: ${errorStack}`);
-      }
-
-      // Log the full error object for debugging
-      this.logger.debug(`Full error object: ${JSON.stringify(error, Object.getOwnPropertyNames(error))}`);
-
-      throw error;
-    }
+    return {
+      runId,
+      workflowId: workflow.id,
+      workflowVersionId: version.id,
+      workflowVersion: version.version,
+      organizationId,
+      definition: definitionWithOverrides,
+      inputs,
+      triggerMetadata,
+      inputPreview,
+      totalActions: definitionWithOverrides.actions.length,
+    };
   }
 
   private async resolveWorkflowVersion(
@@ -555,7 +798,32 @@ export class WorkflowsService {
     organizationId: string | null,
   ): Promise<WorkflowDefinition> {
     if (version.compiledDefinition) {
-      return version.compiledDefinition as WorkflowDefinition;
+      const definition = version.compiledDefinition as WorkflowDefinition;
+      const entryAction = definition.actions.find(
+        (action) => action.componentId === 'core.workflow.entrypoint',
+      );
+
+      if (
+        entryAction &&
+        (!definition.entrypoint || definition.entrypoint.ref !== entryAction.ref)
+      ) {
+        const patchedDefinition: WorkflowDefinition = {
+          ...definition,
+          entrypoint: { ref: entryAction.ref },
+        };
+
+        await this.versionRepository.setCompiledDefinition(
+          version.id,
+          patchedDefinition,
+          {
+            organizationId: organizationId ?? undefined,
+          },
+        );
+
+        return patchedDefinition;
+      }
+
+      return definition;
     }
 
     this.logger.log(
@@ -594,7 +862,26 @@ export class WorkflowsService {
       );
     }
 
-    return this.mapTemporalStatus(runId, temporalStatus, run, completedActions);
+    const statusPayload = this.mapTemporalStatus(runId, temporalStatus, run, completedActions);
+
+    // Track workflow completion/failure when status changes to terminal state
+    if (['COMPLETED', 'FAILED', 'CANCELLED', 'TERMINATED', 'TIMED_OUT'].includes(statusPayload.status)) {
+      const startTime = run.createdAt;
+      const endTime = statusPayload.completedAt ? new Date(statusPayload.completedAt) : new Date();
+      const durationMs = endTime.getTime() - startTime.getTime();
+
+      this.analyticsService.trackWorkflowCompleted({
+        workflowId: run.workflowId,
+        runId,
+        organizationId,
+        durationMs,
+        nodeCount: run.totalActions ?? 0,
+        success: statusPayload.status === 'COMPLETED',
+        failureReason: statusPayload.failure?.reason,
+      });
+    }
+
+    return statusPayload;
   }
 
   async getRunResult(runId: string, temporalRunId?: string, auth?: AuthContext | null) {
@@ -863,6 +1150,61 @@ export class WorkflowsService {
       .join(', ');
   }
 
+  private applyNodeOverrides(
+    definition: WorkflowDefinition,
+    overrides?: Record<string, Record<string, unknown>>,
+  ): WorkflowDefinition {
+    if (!overrides || Object.keys(overrides).length === 0) {
+      return definition;
+    }
+
+    const updatedActions = definition.actions.map((action) => {
+      const override = overrides[action.ref];
+      if (!override || Object.keys(override).length === 0) {
+        return action;
+      }
+
+      return {
+        ...action,
+        params: {
+          ...(action.params ?? {}),
+          ...override,
+        },
+      };
+    });
+
+    return {
+      ...definition,
+      actions: updatedActions,
+    };
+  }
+
+  private buildEntryPointTriggerMetadata(auth?: AuthContext | null): {
+    type: ExecutionTriggerType;
+    sourceId: string | null;
+    label: string;
+  } {
+    const sourceId = auth?.userId ?? null;
+    const label = sourceId ? `Manual run by ${sourceId}` : 'Manual run';
+    return {
+      type: 'manual',
+      sourceId,
+      label,
+    };
+  }
+
+  private buildInputPreview(
+    inputs?: Record<string, unknown>,
+    nodeOverrides?: Record<string, Record<string, unknown>>,
+  ): ExecutionInputPreview {
+    const runtimeInputs = inputs ? { ...inputs } : {};
+    const overrides = nodeOverrides ? { ...nodeOverrides } : {};
+    return {
+      runtimeInputs,
+      nodeOverrides: overrides,
+    };
+  }
+
   private describeValue(value: unknown): string {
     if (value === null || value === undefined) {
       return String(value);
@@ -938,6 +1280,15 @@ export class WorkflowsService {
         this.logger.warn(`Unknown Temporal status '${status}', defaulting to RUNNING`);
         return 'RUNNING';
     }
+  }
+
+  private isNotFoundError(error: unknown): error is ServiceError {
+    if (!error || typeof error !== 'object') {
+      return false;
+    }
+
+    const serviceError = error as ServiceError;
+    return serviceError.code === grpcStatus.NOT_FOUND;
   }
 
   private buildFailure(status: ExecutionStatus, failure?: unknown): FailureSummary | undefined {

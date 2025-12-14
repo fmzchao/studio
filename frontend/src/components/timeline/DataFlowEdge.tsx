@@ -46,7 +46,7 @@ const DataPacket = memo(({ packet, onHover }: {
   return (
     <div
       className={cn(
-        "w-6 h-6 bg-white border-2 border-blue-500 rounded-full shadow-lg cursor-pointer transition-all duration-200 hover:scale-110 hover:shadow-xl z-10",
+        "w-6 h-6 bg-background border-2 border-blue-500 rounded-full shadow-lg cursor-pointer transition-all duration-200 hover:scale-110 hover:shadow-xl z-10",
         "flex items-center justify-center"
       )}
       onMouseEnter={() => onHover(packet)}
@@ -240,7 +240,7 @@ export const DataFlowEdge = memo(({ id, source, target, sourceX, sourceY, target
       {/* Packet hover tooltip */}
       {hoveredPacket && (
         <div
-          className="absolute z-50 p-3 bg-white border border-gray-200 rounded-lg shadow-xl max-w-xs"
+          className="absolute z-50 p-3 bg-popover border border-border rounded-lg shadow-xl max-w-xs"
           style={{
             left: '50%',
             top: '-60px',
@@ -249,19 +249,19 @@ export const DataFlowEdge = memo(({ id, source, target, sourceX, sourceY, target
         >
           <div className="space-y-2">
             <div className="flex items-center gap-2">
-              <span className="text-xs font-semibold uppercase text-gray-500">
+              <span className="text-xs font-semibold uppercase text-muted-foreground">
                 {hoveredPacket.type}
               </span>
-              <span className="text-xs text-gray-400">
+              <span className="text-xs text-muted-foreground/70">
                 {(hoveredPacket.size / 1024).toFixed(1)}KB
               </span>
             </div>
 
-            <div className="text-xs font-mono bg-gray-50 p-2 rounded">
+            <div className="text-xs font-mono bg-muted p-2 rounded text-foreground">
               {JSON.stringify(hoveredPacket.payload, null, 2)}
             </div>
 
-            <div className="flex items-center gap-2 text-xs text-gray-500">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <span>{hoveredPacket.sourceNode}</span>
               <span>→</span>
               <span>{hoveredPacket.targetNode}</span>
