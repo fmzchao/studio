@@ -37,11 +37,27 @@ export const useThemeStore = create<ThemeState>()(
 
 function applyTheme(theme: Theme) {
   const root = document.documentElement
+  
+  // Disable all transitions during theme switch for instant, uniform change
+  root.classList.add('theme-switching')
+  
+  // Apply the theme
   if (theme === 'dark') {
     root.classList.add('dark')
   } else {
     root.classList.remove('dark')
   }
+  
+  // Force a reflow to ensure the theme is applied before re-enabling transitions
+  // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+  root.offsetHeight
+  
+  // Re-enable transitions after a brief delay
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      root.classList.remove('theme-switching')
+    })
+  })
 }
 
 // Initialize theme on module load (handles initial page load)
