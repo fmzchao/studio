@@ -1,6 +1,6 @@
 import { useParams, useNavigate } from 'react-router-dom'
 import { useEffect, useLayoutEffect, useState, useRef, useCallback, useMemo } from 'react'
-import { PanelLeftClose, PanelLeftOpen, Plus, ChevronRight, Loader2, Pencil, Play, Pause, Zap, ExternalLink, Trash2 } from 'lucide-react'
+import { PanelLeftClose, PanelLeftOpen, Plus, ChevronRight, Loader2, Pencil, Play, Pause, Zap, ExternalLink, Trash2, X } from 'lucide-react'
 import {
   ReactFlowProvider,
   useNodesState,
@@ -2034,7 +2034,22 @@ function WorkflowBuilderContent() {
               onScheduleAction={handleScheduleAction}
               onScheduleDelete={handleScheduleDelete}
               onViewSchedules={navigateToSchedules}
-              onNodeSelectionChange={(node) => setHasSelectedNode(!!node)}
+              onOpenScheduleSidebar={() => {
+                // Close config panel when opening schedule sidebar
+                setSchedulePanelExpanded(true)
+              }}
+              onCloseScheduleSidebar={() => setSchedulePanelExpanded(false)}
+              onClearNodeSelection={() => {
+                // Clear selected node to close config panel when schedule sidebar opens
+                // This callback will be called from Canvas when schedule sidebar opens
+              }}
+              onNodeSelectionChange={(node) => {
+                setHasSelectedNode(!!node)
+                // Close schedule sidebar when node is selected (config panel opens)
+                if (node) {
+                  setSchedulePanelExpanded(false)
+                }
+              }}
             />
           </div>
           {mode === 'design' && workflowId && (
@@ -2260,18 +2275,21 @@ function WorkflowSchedulesSidebar({
 
   return (
     <div className="flex h-full flex-col border-l bg-background">
-      <div className="border-b px-4 py-3 space-y-3">
-        <div>
-          <div className="flex items-center gap-2">
-            <p className="text-sm font-semibold text-foreground">Schedules</p>
-            <Badge variant="outline" className="text-[11px] font-medium">
-              {schedules.length}
-            </Badge>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Create, pause, and run workflow cadences.
-          </p>
+      {/* Header - matching ConfigPanel design */}
+      <div className="flex items-center justify-between px-4 py-3 border-b">
+        <div className="flex items-center gap-2">
+          <h3 className="font-medium text-sm">Schedules</h3>
+          <Badge variant="outline" className="text-[11px] font-medium">
+            {schedules.length}
+          </Badge>
         </div>
+        <Button variant="ghost" size="icon" className="h-7 w-7 hover:bg-muted" onClick={onClose}>
+          <X className="h-4 w-4" />
+        </Button>
+      </div>
+      
+      {/* Action buttons */}
+      <div className="px-4 py-3 border-b bg-muted/20">
         <div className="flex flex-wrap items-center gap-2">
           <Button size="sm" onClick={onCreate}>
             <Plus className="mr-1 h-4 w-4" />
@@ -2279,17 +2297,6 @@ function WorkflowSchedulesSidebar({
           </Button>
           <Button size="sm" variant="outline" onClick={onManage}>
             View page
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            className="gap-1"
-            aria-label="Collapse schedules"
-            onClick={onClose}
-          >
-            <ChevronRight className="h-4 w-4" />
-            Hide
           </Button>
         </div>
       </div>

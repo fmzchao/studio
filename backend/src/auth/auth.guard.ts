@@ -1,8 +1,9 @@
 import type { CanActivate, ExecutionContext } from '@nestjs/common';
-import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
+import { Injectable, Logger, UnauthorizedException, Inject, forwardRef } from '@nestjs/common';
 import type { Request } from 'express';
 
 import { AuthService } from './auth.service';
+import { ApiKeysService } from '../api-keys/api-keys.service';
 import type { AuthContext } from './types';
 import { DEFAULT_ROLES } from './types';
 import { DEFAULT_ORGANIZATION_ID } from './constants';
@@ -15,7 +16,11 @@ export interface RequestWithAuthContext extends Request {
 export class AuthGuard implements CanActivate {
   private readonly logger = new Logger(AuthGuard.name);
 
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    @Inject(forwardRef(() => ApiKeysService))
+    private readonly apiKeysService: ApiKeysService,
+  ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const http = context.switchToHttp();
@@ -75,6 +80,29 @@ export class AuthGuard implements CanActivate {
       roles: DEFAULT_ROLES,
       isAuthenticated: true,
       provider: 'internal',
+    };
+  }
+
+
+  private async tryApiKeyAuth(request: Request): Promise<AuthContext | null> {
+    const authHeader = request.header('authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer sk_')) {
+      return null;
+    }
+
+    const token = authHeader.replace(/^Bearer\s+/, '');
+    const apiKey = await this.apiKeysService.validateKey(token);
+
+    if (!apiKey) {
+      return null;
+    }
+
+    return {
+      userId: apiKey.id,
+      organizationId: apiKey.organizationId,
+      roles: ['MEMBER'], // API keys have MEMBER role by default
+      isAuthenticated: true,
+      provider: 'api-key',
     };
   }
 }
