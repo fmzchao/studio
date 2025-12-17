@@ -16,6 +16,7 @@ import {
 import 'reactflow/dist/style.css'
 
 import { WorkflowNode } from './WorkflowNode'
+import { TerminalNode } from './TerminalNode'
 import { ConfigPanel } from './ConfigPanel'
 import { ValidationDock } from './ValidationDock'
 import { DataFlowEdge } from '../timeline/DataFlowEdge'
@@ -125,6 +126,7 @@ export function Canvas({
   const nodeTypes = useMemo(
     () => ({
       workflow: WorkflowNode,
+      terminal: TerminalNode,
     }),
     []
   )
@@ -307,13 +309,20 @@ export function Canvas({
     }
     
     const modeChanged = prevModeRef.current !== mode
-    const nodesCountChanged = prevNodesLengthRef.current !== nodes.length
+    
+    // Count only workflow nodes (exclude terminal nodes) for change detection
+    const workflowNodes = nodes.filter((n) => n.type !== 'terminal')
+    const workflowNodesCount = workflowNodes.length
+    const prevWorkflowNodesCount = prevNodesLengthRef.current
+    
+    const nodesCountChanged = prevWorkflowNodesCount !== workflowNodesCount
     const edgesCountChanged = prevEdgesLengthRef.current !== edges.length
     
-    // Run fitView when mode changes or when nodes/edges count changes
+    // Run fitView when mode changes or when workflow nodes/edges count changes
+    // Don't trigger fitView when terminal nodes are added/removed
     if (modeChanged || nodesCountChanged || edgesCountChanged) {
       prevModeRef.current = mode
-      prevNodesLengthRef.current = nodes.length
+      prevNodesLengthRef.current = workflowNodesCount
       prevEdgesLengthRef.current = edges.length
       
       // When mode changes, wait a bit longer to ensure nodes are fully set and rendered
@@ -325,21 +334,27 @@ export function Canvas({
         if (!reactFlowInstance) return
         
         // Double check nodes are still available (they might have been cleared)
-        if (nodes.length === 0) return
+        if (workflowNodes.length === 0) return
         
         // Use double requestAnimationFrame to ensure nodes are fully rendered and positioned
         requestAnimationFrame(() => {
           requestAnimationFrame(() => {
-            if (!reactFlowInstance || nodes.length === 0) return
+            if (!reactFlowInstance) return
+            
+            // Re-check workflow nodes (terminal nodes might have been added/removed)
+            // Use the nodes prop directly since we're inside the effect
+            const currentWorkflowNodes = nodes.filter((n: Node<NodeData>) => n.type !== 'terminal')
+            if (currentWorkflowNodes.length === 0) return
             
             try {
               // Use simple fitView - ReactFlow handles centering automatically
-              // Ensure we're fitting visible nodes only
+              // Exclude terminal nodes from fitView - they should not affect the viewport
               reactFlowInstance.fitView({ 
                 padding: 0.2, 
                 duration: modeChanged ? 0 : 300, // Instant for mode changes to avoid jarring animation
                 maxZoom: 0.85,
                 includeHiddenNodes: false,
+                nodes: currentWorkflowNodes, // Only fit workflow nodes, exclude terminals
               })
             } catch (error) {
               console.warn('Failed to fit view:', error)
@@ -348,7 +363,7 @@ export function Canvas({
         })
       }, delay)
     }
-  }, [reactFlowInstance, nodes.length, edges.length, mode, nodes])
+  }, [reactFlowInstance, edges.length, mode, nodes.length]) // Use nodes.length instead of nodes to avoid triggering on position changes
 
   const onDragOver = useCallback((event: React.DragEvent) => {
     if (mode !== 'design') return
@@ -758,7 +773,7 @@ export function Canvas({
       <div className={className}>
         <div className="flex h-full">
         <div 
-          className="flex-1 relative bg-background"
+          className="flex-1 relative bg-background overflow-hidden"
           style={{
             opacity: canvasOpacity,
             transition: 'opacity 200ms ease-in-out',

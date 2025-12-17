@@ -301,7 +301,7 @@ export function Sidebar({ canManageWorkflows = true }: SidebarProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchQuery])
 
-  // Custom scrollbar logic
+  // Custom scrollbar logic - setup event listeners (only once)
   useEffect(() => {
     const container = scrollContainerRef.current
     if (!container) return
@@ -361,7 +361,43 @@ export function Sidebar({ canManageWorkflows = true }: SidebarProps) {
         clearTimeout(scrollTimeoutRef.current)
       }
     }
-  }, [filteredComponentsByCategory, loading])
+    // Only setup event listeners once - don't depend on content changes
+  }, [])
+
+  // Update scrollbar when content changes (without re-setting up listeners)
+  // Calculate a stable value for component count to use as dependency
+  const componentCount = useMemo(() => {
+    return Object.values(filteredComponentsByCategory).reduce(
+      (total, components) => total + components.length,
+      0
+    )
+  }, [filteredComponentsByCategory])
+  
+  useEffect(() => {
+    const container = scrollContainerRef.current
+    if (!container) return
+
+    // Use requestAnimationFrame to ensure DOM has updated after content changes
+    requestAnimationFrame(() => {
+      const { scrollTop, scrollHeight, clientHeight } = container
+      const maxScroll = scrollHeight - clientHeight
+      
+      if (maxScroll <= 0) {
+        setScrollbarVisible(false)
+        setScrollbarHeight(0)
+        setScrollbarPosition(0)
+        return
+      }
+
+      // Calculate scrollbar thumb position and height
+      const thumbHeight = Math.max((clientHeight / scrollHeight) * clientHeight, 30)
+      const thumbPosition = (scrollTop / maxScroll) * (clientHeight - thumbHeight)
+      
+      setScrollbarHeight(thumbHeight)
+      setScrollbarPosition(thumbPosition)
+      // Don't show scrollbar automatically when content changes - only on scroll
+    })
+  }, [componentCount, loading]) // Use stable componentCount instead of filteredComponentsByCategory object
 
   return (
     <div className="h-full w-full max-w-[320px] border-r bg-background flex flex-col">

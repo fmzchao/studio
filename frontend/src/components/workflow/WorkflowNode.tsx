@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
-import { Handle, NodeResizer, Position, type NodeProps, useReactFlow, useUpdateNodeInternals } from 'reactflow'
+import { Handle, NodeResizer, Position, type NodeProps, type Node, useReactFlow, useUpdateNodeInternals } from 'reactflow'
 import { Loader2, CheckCircle, XCircle, Clock, Activity, AlertCircle, Pause, Terminal as TerminalIcon, Pencil } from 'lucide-react'
 import * as LucideIcons from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -10,7 +9,6 @@ import { useExecutionStore } from '@/store/executionStore'
 import { useExecutionTimelineStore, type NodeVisualState } from '@/store/executionTimelineStore'
 import { useWorkflowStore } from '@/store/workflowStore'
 import { getNodeStyle } from './nodeStyles'
-import { NodeTerminalPanel } from '../terminal/NodeTerminalPanel'
 import type { NodeData } from '@/schemas/node'
 import type { NodeStatus } from '@/schemas/node'
 import type { InputPort } from '@/schemas/component'
@@ -65,43 +63,212 @@ function TerminalButton({
   mode,
   playbackMode,
   isLiveFollowing,
-  focusedTerminalNodeId,
   bringTerminalToFront,
 }: TerminalButtonProps) {
-  const buttonRef = useRef<HTMLButtonElement>(null)
-  const [portalPosition, setPortalPosition] = useState({ top: 0, left: 0 })
+  const { getNodes, setNodes } = useReactFlow()
+  const terminalNodeId = `terminal-${id}`
+  const parentPositionRef = useRef<{ x: number; y: number; width: number } | null>(null)
+  const terminalCreatedAtRef = useRef<number | null>(null)
 
-  // Update portal position when terminal opens or button moves
+  // Terminal dimensions (from NodeTerminalPanel: w-[520px], h-[360px] content + header ~40px + borders)
+  const TERMINAL_WIDTH = 520
+  const TERMINAL_HEIGHT = 402 // 360px content + ~40px header + 2px borders
+  const TERMINAL_GAP = 35 // Gap between terminal bottom and parent top (30-40px as requested)
+
+  // Get parent node width from node data (simpler, more reliable)
+  const getParentNodeWidth = (parentNode: Node): number => {
+    // Check if node has explicit width in data
+    const uiSize = (parentNode.data as any)?.ui?.size as { width?: number } | undefined
+    if (uiSize?.width) {
+      return uiSize.width
+    }
+    
+    // Check if node has width property directly (ReactFlow sometimes adds this)
+    if ((parentNode as any).width) {
+      return (parentNode as any).width
+    }
+    
+    // Default width based on node type
+    const isEntryPoint = (parentNode.data as any)?.componentSlug === 'entry-point'
+    return isEntryPoint ? 205 : 320
+  }
+
+  // Calculate terminal position: render above parent, align right edges
+  const calculateTerminalPosition = (parentNode: Node): { x: number; y: number } => {
+    const parentWidth = getParentNodeWidth(parentNode)
+    
+    // Simple approach: position terminal above parent with gap, align right edges
+    return {
+      // Align right edges: terminal's right edge = parent's right edge
+      // terminal.x + TERMINAL_WIDTH = parent.x + parentWidth
+      x: parentNode.position.x + parentWidth - TERMINAL_WIDTH,
+      // Position terminal above parent with gap
+      // terminal.y + TERMINAL_HEIGHT + GAP = parent.y
+      // So: terminal.y = parent.y - TERMINAL_HEIGHT - GAP
+      y: parentNode.position.y - TERMINAL_HEIGHT - TERMINAL_GAP,
+    }
+  }
+
+  // Create or remove terminal node when isTerminalOpen changes
   useEffect(() => {
-    if (!isTerminalOpen || !buttonRef.current) return
-
-    const updatePosition = () => {
-      const rect = buttonRef.current?.getBoundingClientRect()
-      if (rect) {
-        // Position above the button, centered
-        setPortalPosition({
-          top: rect.top - 16, // 16px gap above button
-          left: rect.left + rect.width / 2,
-        })
+    if (!isTerminalOpen) {
+      // Only remove terminal when explicitly closed
+      const nodes = getNodes()
+      const terminalNode = nodes.find(n => n.id === terminalNodeId)
+      if (terminalNode) {
+        setNodes((nds) => nds.filter((n) => n.id !== terminalNodeId))
       }
+      parentPositionRef.current = null
+      return
     }
 
-    updatePosition()
+    // Use double requestAnimationFrame to ensure nodes are fully rendered and measured
+    // This prevents the initial positioning artifact where the node appears too low
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const nodes = getNodes()
+        const terminalNode = nodes.find(n => n.id === terminalNodeId)
+        const parentNode = nodes.find(n => n.id === id)
 
-    // Update position on scroll/resize
-    window.addEventListener('scroll', updatePosition, true)
-    window.addEventListener('resize', updatePosition)
+        // Only proceed if parent node exists - don't remove terminal if parent temporarily missing
+        if (!parentNode) {
+          // Parent node not found - don't remove terminal, just skip update
+          // This prevents terminal from closing when nodes are being updated/filtered
+          return
+        }
 
-    return () => {
-      window.removeEventListener('scroll', updatePosition, true)
-      window.removeEventListener('resize', updatePosition)
+        const parentWidth = getParentNodeWidth(parentNode)
+        const expectedPosition = calculateTerminalPosition(parentNode)
+
+        // Create terminal node if it doesn't exist
+        if (!terminalNode) {
+          const newTerminalNode: Node = {
+            id: terminalNodeId,
+            type: 'terminal',
+            position: expectedPosition,
+            data: {
+              parentNodeId: id,
+              runId: selectedRunId,
+              timelineSync: mode === 'execution' && (playbackMode !== 'live' || !isLiveFollowing),
+              onClose: () => setIsTerminalOpen(false),
+            },
+            draggable: true,
+            selectable: true,
+          }
+          setNodes((nds) => [...nds, newTerminalNode])
+          parentPositionRef.current = { 
+            x: parentNode.position.x, 
+            y: parentNode.position.y,
+            width: parentWidth,
+          }
+          terminalCreatedAtRef.current = Date.now()
+        } else {
+          // Update terminal node data if needed (runId, timelineSync might have changed)
+          const needsDataUpdate = 
+            terminalNode.data.runId !== selectedRunId ||
+            terminalNode.data.timelineSync !== (mode === 'execution' && (playbackMode !== 'live' || !isLiveFollowing))
+
+          // Update terminal node position to follow parent node if parent moved or resized
+          const lastPosition = parentPositionRef.current
+          const needsPositionUpdate = 
+            !lastPosition ||
+            Math.abs(lastPosition.x - parentNode.position.x) > 1 ||
+            Math.abs(lastPosition.y - parentNode.position.y) > 1 ||
+            Math.abs(lastPosition.width - parentWidth) > 1 ||
+            Math.abs(terminalNode.position.x - expectedPosition.x) > 1 ||
+            Math.abs(terminalNode.position.y - expectedPosition.y) > 1
+
+          if (needsDataUpdate || needsPositionUpdate) {
+            setNodes((nds) =>
+              nds.map((n) =>
+                n.id === terminalNodeId
+                  ? {
+                      ...n,
+                      position: needsPositionUpdate ? expectedPosition : n.position,
+                      data: needsDataUpdate ? {
+                        ...n.data,
+                        runId: selectedRunId,
+                        timelineSync: mode === 'execution' && (playbackMode !== 'live' || !isLiveFollowing),
+                      } : n.data,
+                    }
+                  : n
+              )
+            )
+            if (needsPositionUpdate) {
+              parentPositionRef.current = { 
+                x: parentNode.position.x, 
+                y: parentNode.position.y,
+                width: parentWidth,
+              }
+            }
+          }
+        }
+      })
+    })
+    // getNodes and setNodes from useReactFlow are stable, but we'll exclude them to prevent infinite loops
+    // setIsTerminalOpen is also stable (from useState), but excluding to be safe
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isTerminalOpen, id, selectedRunId, mode, playbackMode, isLiveFollowing, terminalNodeId])
+
+  // Periodically check if parent node moved or resized (for smooth following)
+  useEffect(() => {
+    if (!isTerminalOpen) {
+      terminalCreatedAtRef.current = null
+      return
     }
-  }, [isTerminalOpen])
+
+    const intervalId = setInterval(() => {
+      // Skip position updates for the first 300ms after creation to avoid visual artifacts
+      // The double requestAnimationFrame should handle initial positioning correctly
+      if (terminalCreatedAtRef.current && Date.now() - terminalCreatedAtRef.current < 300) {
+        return
+      }
+
+      const nodes = getNodes()
+      const parentNode = nodes.find(n => n.id === id)
+      const terminalNode = nodes.find(n => n.id === terminalNodeId)
+
+      if (parentNode && terminalNode) {
+        const parentWidth = getParentNodeWidth(parentNode)
+        const expectedPosition = calculateTerminalPosition(parentNode)
+
+        const lastPosition = parentPositionRef.current
+        if (
+          !lastPosition ||
+          Math.abs(lastPosition.x - parentNode.position.x) > 1 ||
+          Math.abs(lastPosition.y - parentNode.position.y) > 1 ||
+          Math.abs(lastPosition.width - parentWidth) > 1 ||
+          Math.abs(terminalNode.position.x - expectedPosition.x) > 1 ||
+          Math.abs(terminalNode.position.y - expectedPosition.y) > 1
+        ) {
+          setNodes((nds) =>
+            nds.map((n) =>
+              n.id === terminalNodeId
+                ? {
+                    ...n,
+                    position: expectedPosition,
+                  }
+                : n
+            )
+          )
+          parentPositionRef.current = { 
+            x: parentNode.position.x, 
+            y: parentNode.position.y,
+            width: parentWidth,
+          }
+        }
+      }
+    }, 100) // Check every 100ms
+
+    return () => clearInterval(intervalId)
+    // getNodes and setNodes from useReactFlow are stable, but we'll exclude them to be safe
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isTerminalOpen, id, terminalNodeId])
+
 
   return (
     <div className="relative flex justify-center">
       <button
-        ref={buttonRef}
         type="button"
         onClick={() => {
           setIsTerminalOpen((prev) => !prev)
@@ -122,27 +289,6 @@ function TerminalButton({
           <span className="w-2 h-2 rounded-full bg-green-400" />
         ) : null}
       </button>
-      {isTerminalOpen &&
-        createPortal(
-          <div
-            className="fixed -translate-x-1/2"
-            style={{
-              top: portalPosition.top,
-              left: portalPosition.left,
-              transform: 'translate(-50%, -100%)',
-              zIndex: focusedTerminalNodeId === id ? 1070 : 1060,
-            }}
-          >
-            <NodeTerminalPanel
-              nodeId={id}
-              runId={selectedRunId}
-              onClose={() => setIsTerminalOpen(false)}
-              timelineSync={mode === 'execution' && (playbackMode !== 'live' || !isLiveFollowing)}
-              onFocus={() => bringTerminalToFront(id)}
-            />
-          </div>,
-          document.body
-        )}
     </div>
   )
 }
@@ -577,12 +723,8 @@ export const WorkflowNode = ({ data, selected, id }: NodeProps<NodeData>) => {
 
   // Get category-based header background color (only for the header section)
   const getHeaderBackgroundColor = (): string | undefined => {
-    // Only apply category colors when node is idle
-    if ((!isTimelineActive || visualState.status === 'idle') &&
-        (!nodeData.status || nodeData.status === 'idle')) {
-      return getCategoryHeaderBackgroundColor(componentCategory, isDarkMode)
-    }
-    return undefined
+    // Always apply category colors in both design and execution modes
+    return getCategoryHeaderBackgroundColor(componentCategory, isDarkMode)
   }
 
   const separatorColor = getSeparatorColor()
@@ -662,7 +804,7 @@ export const WorkflowNode = ({ data, selected, id }: NodeProps<NodeData>) => {
       {/* Header */}
       <div 
         className={cn(
-          'px-3 py-2 border-b relative overflow-hidden',
+          'px-3 py-2 border-b relative', // Removed overflow-hidden to allow badge to exceed boundary
           // Match parent's rounded corners at the top
           isEntryPoint ? 'rounded-t-[1.5rem]' : 'rounded-t-lg'
         )}
