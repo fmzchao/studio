@@ -546,12 +546,18 @@ export function Canvas({
       return
     }
 
+    // If clicking the same node that's already selected, close the config panel
+    if (selectedNode?.id === node.id) {
+      setSelectedNode(null)
+      return
+    }
+
     // Close schedule sidebar when opening config panel
     if (onCloseScheduleSidebar) {
       onCloseScheduleSidebar()
     }
     setSelectedNode(node as Node<NodeData>)
-  }, [mode, selectNode, selectEvent, onCloseScheduleSidebar])
+  }, [mode, selectNode, selectEvent, onCloseScheduleSidebar, selectedNode])
 
   // Handle node double-click for text-block editing
   const onNodeDoubleClick: NodeMouseHandler = useCallback((event, node) => {

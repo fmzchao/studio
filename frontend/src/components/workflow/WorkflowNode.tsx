@@ -9,12 +9,18 @@ import { useComponentStore } from '@/store/componentStore'
 import { useExecutionStore } from '@/store/executionStore'
 import { useExecutionTimelineStore, type NodeVisualState } from '@/store/executionTimelineStore'
 import { useWorkflowStore } from '@/store/workflowStore'
-import { getNodeStyle, getTypeBorderColor } from './nodeStyles'
+import { getNodeStyle } from './nodeStyles'
 import { NodeTerminalPanel } from '../terminal/NodeTerminalPanel'
 import type { NodeData } from '@/schemas/node'
 import type { NodeStatus } from '@/schemas/node'
 import type { InputPort } from '@/schemas/component'
 import { useWorkflowUiStore } from '@/store/workflowUiStore'
+import { useThemeStore } from '@/store/themeStore'
+import { 
+  type ComponentCategory, 
+  getCategorySeparatorColor,
+  getCategoryHeaderBackgroundColor
+} from '@/utils/categoryColors'
 import { inputSupportsManualValue, runtimeInputTypeToPortDataType } from '@/utils/portUtils'
 import { WebhookDetails } from './WebhookDetails'
 import { useApiKeyStore } from '@/store/apiKeyStore'
@@ -215,6 +221,14 @@ export const WorkflowNode = ({ data, selected, id }: NodeProps<NodeData>) => {
   const component = getComponent(componentRef)
   const isTextBlock = component?.id === 'core.ui.text'
   const isEntryPoint = component?.id === 'core.workflow.entrypoint'
+  
+  // Detect dark mode using theme store (reacts to theme changes)
+  const theme = useThemeStore((state) => state.theme)
+  const isDarkMode = theme === 'dark'
+  
+  // Get component category (default to 'input' for entry points)
+  const componentCategory: ComponentCategory = (component?.category as ComponentCategory) || 
+    (isEntryPoint ? 'input' : 'input')
 
   // Entry Point Helper Data
   // Get workflowId from store first, then from node data (passed from Canvas), then from route params
@@ -277,6 +291,62 @@ export const WorkflowNode = ({ data, selected, id }: NodeProps<NodeData>) => {
       updateNodeInternals(id)
     }
   }, [id, isTextBlock, updateNodeInternals])
+
+  // Resize handling hooks - must be called before any early returns
+  const isResizing = useRef(false)
+
+  const clampWidth = (width: number) =>
+    Math.max(MIN_TEXT_WIDTH, Math.min(MAX_TEXT_WIDTH, width))
+
+  const clampHeight = (height: number) =>
+    Math.max(MIN_TEXT_HEIGHT, Math.min(MAX_TEXT_HEIGHT, height))
+
+  const persistSize = (width: number, height: number) => {
+    const clampedWidth = clampWidth(width)
+    const clampedHeight = clampHeight(height)
+    setTextSize({ width: clampedWidth, height: clampedHeight })
+    setNodes((nodes) =>
+      nodes.map((node) =>
+        node.id === id
+          ? {
+              ...node,
+              data: {
+                ...(node.data as any),
+                ui: {
+                  ...(node.data as any).ui,
+                  size: {
+                    width: clampedWidth,
+                    height: clampedHeight,
+                  },
+                },
+              },
+            }
+          : node
+      )
+    )
+    updateNodeInternals(id)
+    markDirty()
+  }
+
+  const handleResizeStart = () => {
+    isResizing.current = true
+  }
+
+  const handleResize = (_evt: unknown, params: { width: number; height: number }) => {
+    const clampedWidth = clampWidth(params.width)
+    const clampedHeight = clampHeight(params.height)
+
+    // Direct DOM update for performance to avoid re-renders during drag
+    if (nodeRef.current) {
+      nodeRef.current.style.width = `${clampedWidth}px`
+      nodeRef.current.style.minHeight = `${clampedHeight}px`
+    }
+  }
+
+  const handleResizeEnd = (_evt: unknown, params: { width: number; height: number }) => {
+    isResizing.current = false
+    persistSize(params.width, params.height)
+  }
 
   // Get timeline visual state for this node
   const visualState: NodeVisualState = nodeStates[id] || {
@@ -495,83 +565,39 @@ export const WorkflowNode = ({ data, selected, id }: NodeProps<NodeData>) => {
     </div>
   )
 
-
-  const clampWidth = (width: number) =>
-    Math.max(MIN_TEXT_WIDTH, Math.min(MAX_TEXT_WIDTH, width))
-
-  const clampHeight = (height: number) =>
-    Math.max(MIN_TEXT_HEIGHT, Math.min(MAX_TEXT_HEIGHT, height))
-
-  const persistSize = (width: number, height: number) => {
-    const clampedWidth = clampWidth(width)
-    const clampedHeight = clampHeight(height)
-    setTextSize({ width: clampedWidth, height: clampedHeight })
-    setNodes((nodes) =>
-      nodes.map((node) =>
-        node.id === id
-          ? {
-            ...node,
-            data: {
-              ...(node.data as any),
-              ui: {
-                ...(node.data as any).ui,
-                size: {
-                  width: clampedWidth,
-                  height: clampedHeight,
-                },
-              },
-            },
-          }
-          : node
-      )
-    )
-    updateNodeInternals(id)
-    markDirty()
-  }
-
-  const isResizing = useRef(false)
-
-  const handleResizeStart = () => {
-    isResizing.current = true
-  }
-
-  const handleResize = (_evt: unknown, params: { width: number; height: number }) => {
-    const clampedWidth = clampWidth(params.width)
-    const clampedHeight = clampHeight(params.height)
-
-    // Direct DOM update for performance to avoid re-renders during drag
-    if (nodeRef.current) {
-      nodeRef.current.style.width = `${clampedWidth}px`
-      nodeRef.current.style.minHeight = `${clampedHeight}px`
+  // Get category-based separator color (only for the header separator)
+  const getSeparatorColor = (): string | undefined => {
+    // Only apply category colors when node is idle
+    if ((!isTimelineActive || visualState.status === 'idle') &&
+        (!nodeData.status || nodeData.status === 'idle')) {
+      return getCategorySeparatorColor(componentCategory, isDarkMode)
     }
+    return undefined
   }
 
-  const handleResizeEnd = (_evt: unknown, params: { width: number; height: number }) => {
-    isResizing.current = false
-    persistSize(params.width, params.height)
+  // Get category-based header background color (only for the header section)
+  const getHeaderBackgroundColor = (): string | undefined => {
+    // Only apply category colors when node is idle
+    if ((!isTimelineActive || visualState.status === 'idle') &&
+        (!nodeData.status || nodeData.status === 'idle')) {
+      return getCategoryHeaderBackgroundColor(componentCategory, isDarkMode)
+    }
+    return undefined
   }
+
+  const separatorColor = getSeparatorColor()
+  const headerBackgroundColor = getHeaderBackgroundColor()
 
   return (
     <div
       className={cn(
-        'shadow-lg rounded-lg border-2 transition-[box-shadow,background-color,border-color,transform] relative',
+        'shadow-lg border-2 transition-[box-shadow,background-color,border-color,transform] relative',
+        // Entry point nodes have more rounded corners (even more rounded)
+        isEntryPoint ? 'rounded-[1.5rem]' : 'rounded-lg',
         isTextBlock ? 'min-w-[240px] max-w-none flex flex-col' : 'min-w-[240px] max-w-[280px]',
-        // ENTRY POINT STYLING - Apply green background when entry point is idle
-        // Check: is entry point AND (not timeline active OR timeline status is idle) AND (no status OR status is idle)
-        isEntryPoint &&
-        (!isTimelineActive || visualState.status === 'idle') &&
-        (!nodeData.status || nodeData.status === 'idle') && [
-          'bg-green-50/80',
-          'dark:bg-green-950/30',
-          'border-green-200',
-          'dark:border-green-800',
-        ],
 
         // Timeline active states for entry point (when it has active execution status)
-        isEntryPoint && isTimelineActive && effectiveStatus === 'running' && 'border-blue-400',
         isEntryPoint && isTimelineActive && effectiveStatus === 'running' && !isPlaying && 'border-dashed',
-        isEntryPoint && isTimelineActive && effectiveStatus === 'error' && 'border-red-400 bg-red-50/20 dark:bg-red-950/20',
-        isEntryPoint && isTimelineActive && effectiveStatus === 'success' && 'border-green-400 bg-green-50/20 dark:bg-green-950/20',
 
         // Enhanced border styling for timeline (non-entry-point nodes only)
         !isEntryPoint && isTimelineActive && effectiveStatus === 'running' && 'border-blue-400',
@@ -588,10 +614,10 @@ export const WorkflowNode = ({ data, selected, id }: NodeProps<NodeData>) => {
           nodeStyle.border,
         ],
 
-        // Default state (non-entry-point nodes only, when idle)
-        !isEntryPoint && (!nodeData.status || nodeData.status === 'idle') && !isTimelineActive && [
+        // Default state (all nodes when idle) - white/grey background
+        (!nodeData.status || nodeData.status === 'idle') && !isTimelineActive && [
           'bg-background',
-          getTypeBorderColor(component.type),
+          'border-border',
         ],
 
         // Selected state: blue gradient shadow highlight (pure glow, no border)
@@ -607,16 +633,17 @@ export const WorkflowNode = ({ data, selected, id }: NodeProps<NodeData>) => {
       )}
       ref={nodeRef}
       onClick={() => selectedRunId && selectNode(id)}
-      style={
-        isTextBlock
+      style={{
+        // Text block and entry point sizing
+        ...(isTextBlock
           ? {
-            width: Math.max(MIN_TEXT_WIDTH, textSize.width ?? DEFAULT_TEXT_WIDTH),
-            minHeight: Math.max(MIN_TEXT_HEIGHT, textSize.height ?? DEFAULT_TEXT_HEIGHT),
-          }
+              width: Math.max(MIN_TEXT_WIDTH, textSize.width ?? DEFAULT_TEXT_WIDTH),
+              minHeight: Math.max(MIN_TEXT_HEIGHT, textSize.height ?? DEFAULT_TEXT_HEIGHT),
+            }
           : isEntryPoint
-            ? { width: 240, minHeight: 120 } // Compact size for entry point
-            : undefined
-      }
+            ? { width: 160, minHeight: 160 } 
+            : {}),
+      }}
     >
       {isTextBlock && mode === 'design' && (
         <NodeResizer
@@ -633,7 +660,17 @@ export const WorkflowNode = ({ data, selected, id }: NodeProps<NodeData>) => {
         />
       )}
       {/* Header */}
-      <div className="px-3 py-2 border-b border-border/50 relative">
+      <div 
+        className={cn(
+          'px-3 py-2 border-b relative overflow-hidden',
+          // Match parent's rounded corners at the top
+          isEntryPoint ? 'rounded-t-[1.5rem]' : 'rounded-t-lg'
+        )}
+        style={{
+          borderColor: separatorColor || 'hsl(var(--border) / 0.5)',
+          backgroundColor: headerBackgroundColor || undefined,
+        }}
+      >
         {/* Event count badge */}
         {hasEvents && <EventBadge count={visualState.eventCount} />}
 
@@ -827,63 +864,92 @@ export const WorkflowNode = ({ data, selected, id }: NodeProps<NodeData>) => {
             </div>
           )
         )}
-        {/* Input Ports - Compact Pill Actions for Entry Point */}
+        {/* Entry Point - Split Layout: Left (Actions) 60% / Right (Outputs) 40% */}
         {isEntryPoint ? (
-          <div className="flex flex-wrap items-center gap-1.5 mt-1">
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation()
-                setShowWebhookDialog(true)
-              }}
-              className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border border-green-300 dark:border-green-700/60 bg-green-100/80 dark:bg-green-900/40 hover:bg-green-200 dark:hover:bg-green-900/60 transition-colors text-[10px] font-medium text-green-800 dark:text-green-300"
-            >
-              <LucideIcons.Webhook className="h-3 w-3 flex-shrink-0" />
-              <span>Webhook</span>
-            </button>
+          <div className="flex gap-3 mt-1">
+            {/* Left side: Action buttons stacked vertically as pills */}
+            <div className="flex-[0.6] flex flex-col gap-1.5">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setShowWebhookDialog(true)
+                }}
+                className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border border-green-300 dark:border-green-700/60 bg-green-100/80 dark:bg-green-900/40 hover:bg-green-200 dark:hover:bg-green-900/60 transition-colors text-[10px] font-medium text-green-800 dark:text-green-300 w-fit"
+              >
+                <LucideIcons.Webhook className="h-3 w-3 flex-shrink-0" />
+                <span>Webhook</span>
+              </button>
 
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation()
-                // Open schedule sidebar instead of navigating
-                if (onOpenScheduleSidebar) {
-                  onOpenScheduleSidebar()
-                } else {
-                  // Fallback to navigation if callback not available
-                  navigate(`/schedules?workflowId=${workflowId}`)
-                }
-              }}
-              className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border border-green-300 dark:border-green-700/60 bg-green-100/80 dark:bg-green-900/40 hover:bg-green-200 dark:hover:bg-green-900/60 transition-colors text-[10px] font-medium text-green-800 dark:text-green-300"
-            >
-              <LucideIcons.CalendarClock className="h-3 w-3 flex-shrink-0" />
-              <span>Schedules</span>
-            </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  // Open schedule sidebar instead of navigating
+                  if (onOpenScheduleSidebar) {
+                    onOpenScheduleSidebar()
+                  } else {
+                    // Fallback to navigation if callback not available
+                    navigate(`/schedules?workflowId=${workflowId}`)
+                  }
+                }}
+                className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border border-green-300 dark:border-green-700/60 bg-green-100/80 dark:bg-green-900/40 hover:bg-green-200 dark:hover:bg-green-900/60 transition-colors text-[10px] font-medium text-green-800 dark:text-green-300 w-fit"
+              >
+                <LucideIcons.CalendarClock className="h-3 w-3 flex-shrink-0" />
+                <span>Schedules</span>
+              </button>
 
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation()
-                // In design mode, programmatically trigger node selection by clicking the node element
-                // This will open the config panel where inputs are managed
-                if (mode === 'design' && nodeRef.current) {
-                  // Create a synthetic click event that will bubble up to React Flow
-                  const clickEvent = new MouseEvent('click', {
-                    bubbles: true,
-                    cancelable: true,
-                    view: window,
-                  })
-                  // Use setTimeout to ensure this happens after the current event handler
-                  setTimeout(() => {
-                    nodeRef.current?.dispatchEvent(clickEvent)
-                  }, 10)
-                }
-              }}
-              className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border border-green-300 dark:border-green-700/60 bg-green-100/80 dark:bg-green-900/40 hover:bg-green-200 dark:hover:bg-green-900/60 transition-colors text-[10px] font-medium text-green-800 dark:text-green-300"
-            >
-              <LucideIcons.Settings className="h-3 w-3 flex-shrink-0" />
-              <span>Inputs</span>
-            </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  // In design mode, programmatically trigger node selection by clicking the node element
+                  // This will open the config panel where inputs are managed
+                  if (mode === 'design' && nodeRef.current) {
+                    // Create a synthetic click event that will bubble up to React Flow
+                    const clickEvent = new MouseEvent('click', {
+                      bubbles: true,
+                      cancelable: true,
+                      view: window,
+                    })
+                    // Use setTimeout to ensure this happens after the current event handler
+                    setTimeout(() => {
+                      nodeRef.current?.dispatchEvent(clickEvent)
+                    }, 10)
+                  }
+                }}
+                className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border border-green-300 dark:border-green-700/60 bg-green-100/80 dark:bg-green-900/40 hover:bg-green-200 dark:hover:bg-green-900/60 transition-colors text-[10px] font-medium text-green-800 dark:text-green-300 w-fit"
+              >
+                <LucideIcons.Settings className="h-3 w-3 flex-shrink-0" />
+                <span>Inputs</span>
+              </button>
+            </div>
+
+            {/* Right side: Output ports */}
+            <div className="flex-[0.4] flex flex-col justify-start">
+              {effectiveOutputs.length > 0 ? (
+                <div className="space-y-1.5">
+                  {effectiveOutputs.map((output) => (
+                    <div key={output.id} className="relative flex items-center justify-end gap-2 text-xs">
+                      <div className="flex-1 text-right">
+                        <div className="text-muted-foreground font-medium">{output.label}</div>
+                      </div>
+                      <Handle
+                        type="source"
+                        position={Position.Right}
+                        id={output.id}
+                        className="!w-[10px] !h-[10px] !border-2 !border-green-500 !bg-green-500 !rounded-full"
+                        style={{ top: '50%', right: '-18px', transform: 'translateY(-50%)' }}
+                      />
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-xs text-muted-foreground/60 text-center py-2">
+                  No outputs
+                </div>
+              )}
+            </div>
           </div>
         ) : componentInputs.length > 0 && (
           <div className="space-y-1.5">
@@ -965,8 +1031,8 @@ export const WorkflowNode = ({ data, selected, id }: NodeProps<NodeData>) => {
           </div>
         )}
 
-        {/* Output Ports */}
-        {effectiveOutputs.length > 0 && (
+        {/* Output Ports (not shown for entry points - they're in the split layout) */}
+        {!isEntryPoint && effectiveOutputs.length > 0 && (
           <div className="space-y-1.5">
             {effectiveOutputs.map((output) => (
               <div key={output.id} className="relative flex items-center justify-end gap-2 text-xs">
