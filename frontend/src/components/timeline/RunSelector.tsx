@@ -42,7 +42,7 @@ export function RunSelector({ onRerun }: RunSelectorProps = {}) {
   const [triggerFilter, setTriggerFilter] = useState<TriggerFilter>('all')
   const navigate = useNavigate()
   const location = useLocation()
-  const { runId: routeRunId } = useParams<{ id?: string; runId?: string }>()
+  const { id: routeWorkflowId, runId: routeRunId } = useParams<{ id?: string; runId?: string }>()
   const { toast } = useToast()
   const {
     selectedRunId,
@@ -52,8 +52,9 @@ export function RunSelector({ onRerun }: RunSelectorProps = {}) {
   } = useExecutionTimelineStore()
   const workflowMetadata = useWorkflowStore((state) => state.metadata)
   const workflowId = workflowMetadata.id
+  const targetWorkflowId = routeWorkflowId ?? workflowId
   const currentWorkflowVersion = workflowMetadata.currentVersion
-  const workflowCacheKey = workflowId ?? '__global__'
+  const workflowCacheKey = targetWorkflowId ?? '__global__'
   const scopedRuns = useRunStore((state) => state.cache[workflowCacheKey]?.runs)
   const runs = scopedRuns ?? []
   const fetchRuns = useRunStore((state) => state.fetchRuns)
@@ -67,25 +68,30 @@ export function RunSelector({ onRerun }: RunSelectorProps = {}) {
 
   const navigateToRun = useCallback(
     (runId?: string, options?: { replace?: boolean }) => {
-      if (!workflowId || workflowId === 'new') {
+      // Avoid navigating while a workflow switch is in progress (store vs route mismatch)
+      if (routeWorkflowId && workflowId && workflowId !== routeWorkflowId) {
         return
       }
-      const basePath = `/workflows/${workflowId}`
+
+      if (!targetWorkflowId || targetWorkflowId === 'new') {
+        return
+      }
+      const basePath = `/workflows/${targetWorkflowId}`
       const targetPath = runId ? `${basePath}/runs/${runId}` : basePath
       if (location.pathname === targetPath) {
         return
       }
       navigate(targetPath, { replace: options?.replace ?? false })
     },
-    [workflowId, navigate, location.pathname],
+    [workflowId, routeWorkflowId, targetWorkflowId, navigate, location.pathname],
   )
 
   const filteredRuns = useMemo(() => {
-    if (!workflowId) {
+    if (!targetWorkflowId) {
       return runs
     }
-    return runs.filter((run) => run.workflowId === workflowId)
-  }, [runs, workflowId])
+    return runs.filter((run) => run.workflowId === targetWorkflowId)
+  }, [runs, targetWorkflowId])
 
   const filteredRunsByTrigger = useMemo(() => {
     if (triggerFilter === 'all') {
@@ -115,17 +121,25 @@ export function RunSelector({ onRerun }: RunSelectorProps = {}) {
 
   // Load runs on mount
   useEffect(() => {
-    fetchRuns({ workflowId }).catch(() => undefined)
-  }, [fetchRuns, workflowId])
+    if (!targetWorkflowId) {
+      return
+    }
+    fetchRuns({ workflowId: targetWorkflowId }).catch(() => undefined)
+  }, [fetchRuns, targetWorkflowId])
 
   // Auto-load a live run if it exists and nothing is selected
   useEffect(() => {
+    // If we're mid-switch between workflows, avoid auto-selecting runs for the previous workflow
+    if (routeWorkflowId && workflowId && workflowId !== routeWorkflowId) {
+      return
+    }
+
     if (selectedRunId || routeRunId) {
       return
     }
     if (currentLiveRunId) {
       const liveRun = runs.find((run) => run.id === currentLiveRunId)
-      if (!workflowId || liveRun?.workflowId === workflowId) {
+      if (!targetWorkflowId || liveRun?.workflowId === targetWorkflowId) {
         const initialMode = liveRun ? (isRunLive(liveRun) ? 'live' : 'replay') : 'live'
         void selectRun(currentLiveRunId, initialMode)
         if (liveRun && isRunLive(liveRun)) {
@@ -150,11 +164,20 @@ export function RunSelector({ onRerun }: RunSelectorProps = {}) {
     monitorRun,
     navigateToRun,
     routeRunId,
+    routeWorkflowId,
+    targetWorkflowId,
+    workflowId,
   ])
 
   // Fallback to the most recent historical run when nothing is selected
   useEffect(() => {
-    if (selectedRunId || currentLiveRunId || filteredRuns.length === 0 || routeRunId) {
+    if (
+      selectedRunId ||
+      currentLiveRunId ||
+      filteredRuns.length === 0 ||
+      routeRunId ||
+      (routeWorkflowId && workflowId && workflowId !== routeWorkflowId)
+    ) {
       return
     }
 
@@ -166,17 +189,29 @@ export function RunSelector({ onRerun }: RunSelectorProps = {}) {
       selectRun(latestRun.id)
       navigateToRun(latestRun.id, { replace: true })
     }
-  }, [filteredRuns, selectedRunId, currentLiveRunId, selectRun, navigateToRun, routeRunId])
+  }, [
+    filteredRuns,
+    selectedRunId,
+    currentLiveRunId,
+    selectRun,
+    navigateToRun,
+    routeRunId,
+    routeWorkflowId,
+    workflowId,
+  ])
 
   useEffect(() => {
-    if (!workflowId && !currentLiveRunId && liveRuns.length === 0) {
+    if (
+      (!targetWorkflowId && !currentLiveRunId && liveRuns.length === 0) ||
+      (routeWorkflowId && workflowId && workflowId !== routeWorkflowId)
+    ) {
       return
     }
     const interval = window.setInterval(() => {
-      fetchRuns({ workflowId, force: true }).catch(() => undefined)
+      fetchRuns({ workflowId: targetWorkflowId, force: true }).catch(() => undefined)
     }, 10000)
     return () => window.clearInterval(interval)
-  }, [workflowId, currentLiveRunId, liveRuns.length, fetchRuns])
+  }, [targetWorkflowId, currentLiveRunId, liveRuns.length, fetchRuns, routeWorkflowId, workflowId])
 
   const selectedRun =
     filteredRuns.find(run => run.id === selectedRunId) ??

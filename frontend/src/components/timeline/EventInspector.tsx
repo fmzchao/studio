@@ -390,14 +390,22 @@ export function EventInspector({ className, layoutVariant = 'stacked-soft' }: Ev
                       isRecentLiveEvent && 'animate-pulse bg-slate-50 dark:bg-slate-900/40'
                     )}
                   >
-                    <button
-                      type="button"
-                      onClick={() => handleEventToggle(event, hasExpandableContent)}
+                    <div
                       className={cn(
                         'relative flex w-full items-start justify-between gap-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 transition',
                         preset.button,
                         !hasExpandableContent && 'cursor-default'
                       )}
+                      role={hasExpandableContent ? 'button' : undefined}
+                      tabIndex={hasExpandableContent ? 0 : -1}
+                      onClick={() => hasExpandableContent && handleEventToggle(event, hasExpandableContent)}
+                      onKeyDown={(e) => {
+                        if (!hasExpandableContent) return
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          handleEventToggle(event, hasExpandableContent)
+                        }
+                      }}
                     >
                       <div className="flex flex-1 items-start gap-3 relative z-10">
                         <div
@@ -499,7 +507,7 @@ export function EventInspector({ className, layoutVariant = 'stacked-soft' }: Ev
                           />
                         </button>
                       )}
-                    </button>
+                    </div>
 
                     {isExpanded && normalizedPayload && (
                       <div className="mt-3 space-y-4 rounded-md border bg-background/80 p-3 text-xs">

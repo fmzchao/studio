@@ -15,7 +15,7 @@ This directory contains all React components organized by domain and functionali
 ## Key Components
 
 ### Workflow Builder Components
-- **WorkflowBuilder.tsx** - Main ReactFlow canvas for visual workflow editing
+- **WorkflowBuilderShell.tsx** - Shared layout wrapper for workflow design/execution panes
 - **WorkflowNode.tsx** - Individual workflow node rendering with execution states
 - **ComponentPalette.tsx** - Drag-and-drop component catalog
 - **NodeConfigPanel.tsx** - Component parameter configuration interface

@@ -5,7 +5,7 @@ Top-level page components representing application routes.
 ## Page Structure
 
 - **WorkflowListPage.tsx** - Dashboard with workflow overview and recent runs
-- **WorkflowBuilderPage.tsx** - Main workflow editor with canvas and tools
+- **WorkflowBuilder.tsx** - Main workflow editor with design + execution panes
 - **SecretsManagerPage.tsx** - Secrets and credential management interface
 - **IntegrationsPage.tsx** - OAuth connections and third-party integrations
 - **ArtifactLibraryPage.tsx** - File and artifact browser

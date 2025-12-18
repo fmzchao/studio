@@ -1,6 +1,6 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { WorkflowList } from '@/pages/WorkflowList'
-import { WorkflowBuilder } from '@/pages/WorkflowBuilder'
+import { WorkflowBuilder } from '@/features/workflow-builder2/WorkflowBuilder'
 import { SecretsManager } from '@/pages/SecretsManager'
 import { ApiKeysManager } from '@/pages/ApiKeysManager'
 import { IntegrationsManager } from '@/pages/IntegrationsManager'
