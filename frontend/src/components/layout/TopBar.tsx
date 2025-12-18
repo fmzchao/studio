@@ -20,6 +20,7 @@ import { cn } from '@/lib/utils'
 
 interface TopBarProps {
   workflowId?: string
+  selectedRunId?: string | null
   isNew?: boolean
   onRun?: () => void
   onSave: () => Promise<void> | void
@@ -31,6 +32,8 @@ interface TopBarProps {
 const DEFAULT_WORKFLOW_NAME = 'Untitled Workflow'
 
 export function TopBar({
+  workflowId,
+  selectedRunId,
   onRun,
   onSave,
   onImport,
@@ -47,7 +50,7 @@ export function TopBar({
   const titleInputRef = useRef<HTMLInputElement | null>(null)
 
   const { metadata, isDirty, setWorkflowName } = useWorkflowStore()
-  const { mode, setMode } = useWorkflowUiStore()
+  const mode = useWorkflowUiStore((state) => state.mode)
   const canEdit = Boolean(canManageWorkflows)
 
   const handleChangeWorkflowName = () => {
@@ -161,8 +164,9 @@ export function TopBar({
         size="sm"
         className="h-9 px-3 gap-2 rounded-none"
         onClick={() => {
-          if (!canEdit) return
-          setMode('design')
+          if (!canEdit || !workflowId) return
+          // Navigate to design URL - this triggers mode update via useLayoutEffect
+          navigate(`/workflows/${workflowId}`)
         }}
         disabled={!canEdit}
         aria-pressed={mode === 'design'}
@@ -184,7 +188,15 @@ export function TopBar({
         variant={mode === 'execution' ? 'default' : 'ghost'}
         size="sm"
         className="h-9 px-3 gap-2 rounded-none border-l border-border/50"
-        onClick={() => setMode('execution')}
+        onClick={() => {
+          if (!workflowId) return
+          // Navigate to execution URL - this triggers mode update via useLayoutEffect
+          // If a run is selected, navigate to that specific run
+          const executionPath = selectedRunId
+            ? `/workflows/${workflowId}/runs/${selectedRunId}`
+            : `/workflows/${workflowId}/runs`
+          navigate(executionPath)
+        }}
         aria-pressed={mode === 'execution'}
       >
         <MonitorPlay className="h-4 w-4" />
@@ -209,10 +221,10 @@ export function TopBar({
   const saveBadgeText = saveState === 'clean' ? 'Synced' : saveState === 'saving' ? 'Syncing' : 'Pending'
   const saveBadgeTone =
     saveState === 'clean'
-      ? 'bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700'
+      ? '!bg-emerald-50 !text-emerald-700 !border-emerald-300 dark:!bg-emerald-900 dark:!text-emerald-100 dark:!border-emerald-500'
       : saveState === 'saving'
-        ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700'
-        : 'bg-amber-100 dark:bg-gray-900/50 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-700'
+        ? '!bg-blue-50 !text-blue-700 !border-blue-300 dark:!bg-blue-900 dark:!text-blue-100 dark:!border-blue-500'
+        : '!bg-amber-50 !text-amber-700 !border-amber-300 dark:!bg-amber-900 dark:!text-amber-100 dark:!border-amber-500'
 
   const saveButtonClasses = cn(
     'gap-2 min-w-[110px]',

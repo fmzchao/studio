@@ -31,6 +31,7 @@ import type { NodeData } from '@/schemas/node'
 import { useToast } from '@/components/ui/use-toast'
 import type { WorkflowSchedule } from '@shipsec/shared'
 import { cn } from '@/lib/utils'
+import { useOptionalWorkflowSchedulesContext } from '@/features/workflow-builder/contexts/WorkflowSchedulesContext'
 
 // Context for entry point actions
 interface EntryPointActionsContextValue {
@@ -113,6 +114,17 @@ export function Canvas({
   const { dataFlows, selectedNodeId, selectNode, selectEvent } = useExecutionTimelineStore()
   const mode = useWorkflowUiStore((state) => state.mode)
   const { toast } = useToast()
+  const scheduleContext = useOptionalWorkflowSchedulesContext()
+  const resolvedWorkflowSchedules = workflowSchedules ?? scheduleContext?.schedules ?? []
+  const resolvedSchedulesLoading = schedulesLoading ?? scheduleContext?.isLoading ?? false
+  const resolvedScheduleError = scheduleError ?? scheduleContext?.error ?? null
+  const resolvedOnScheduleCreate = onScheduleCreate ?? scheduleContext?.onScheduleCreate
+  const resolvedOnScheduleEdit = onScheduleEdit ?? scheduleContext?.onScheduleEdit
+  const resolvedOnScheduleAction = onScheduleAction ?? scheduleContext?.onScheduleAction
+  const resolvedOnScheduleDelete = onScheduleDelete ?? scheduleContext?.onScheduleDelete
+  const resolvedOnViewSchedules = onViewSchedules ?? scheduleContext?.onViewSchedules
+  const resolvedOnOpenScheduleSidebar = onOpenScheduleSidebar ?? scheduleContext?.onOpenScheduleSidebar
+  const resolvedOnCloseScheduleSidebar = onCloseScheduleSidebar ?? scheduleContext?.onCloseScheduleSidebar
   const applyEdgesChange = onEdgesChange
   const deleteHistoryRef = useRef<DeleteHistoryEntry[]>([])
   const hasUserInteractedRef = useRef(false)
@@ -496,8 +508,8 @@ export function Canvas({
     }
 
     // Close schedule sidebar when opening config panel
-    if (onCloseScheduleSidebar) {
-      onCloseScheduleSidebar()
+    if (resolvedOnCloseScheduleSidebar) {
+      resolvedOnCloseScheduleSidebar()
     }
     setSelectedNode(node as Node<NodeData>)
   }, [mode, selectNode, selectEvent, onCloseScheduleSidebar, selectedNode])
@@ -753,18 +765,17 @@ export function Canvas({
   const entryPointActionsValue = useMemo(
     () => ({
       onOpenScheduleSidebar: () => {
-        // Clear selected node to close config panel when opening schedule sidebar
         if (onClearNodeSelection) {
           onClearNodeSelection()
         }
         setSelectedNode(null)
-        if (onOpenScheduleSidebar) {
-          onOpenScheduleSidebar()
+        if (resolvedOnOpenScheduleSidebar) {
+          resolvedOnOpenScheduleSidebar()
         }
       },
-      onScheduleCreate,
+      onScheduleCreate: resolvedOnScheduleCreate,
     }),
-    [onOpenScheduleSidebar, onScheduleCreate, onClearNodeSelection]
+    [resolvedOnOpenScheduleSidebar, resolvedOnScheduleCreate, onClearNodeSelection]
   )
 
   return (
@@ -858,14 +869,14 @@ export function Canvas({
                 onClose={() => setSelectedNode(null)}
                 onUpdateNode={handleUpdateNode}
                 workflowId={workflowId}
-                workflowSchedules={workflowSchedules}
-                schedulesLoading={schedulesLoading}
-                scheduleError={scheduleError}
-                onScheduleCreate={onScheduleCreate}
-                onScheduleEdit={onScheduleEdit}
-                onScheduleAction={onScheduleAction}
-                onScheduleDelete={onScheduleDelete}
-                onViewSchedules={onViewSchedules}
+                workflowSchedules={resolvedWorkflowSchedules}
+                schedulesLoading={resolvedSchedulesLoading}
+                scheduleError={resolvedScheduleError}
+                onScheduleCreate={resolvedOnScheduleCreate}
+                onScheduleEdit={resolvedOnScheduleEdit}
+                onScheduleAction={resolvedOnScheduleAction}
+                onScheduleDelete={resolvedOnScheduleDelete}
+                onViewSchedules={resolvedOnViewSchedules}
                 onWidthChange={setConfigPanelWidth}
               />
             )}

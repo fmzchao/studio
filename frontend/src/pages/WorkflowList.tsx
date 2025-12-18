@@ -28,6 +28,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton'
 import { Workflow, AlertCircle, Trash2, Loader2, Info } from 'lucide-react'
 import { api } from '@/services/api'
+import { getStatusBadgeClassFromStatus } from '@/utils/statusBadgeStyles'
 import {
   WorkflowMetadataSchema,
   type WorkflowMetadataNormalized,
@@ -446,25 +447,20 @@ function WorkflowRowItem({
   const latestRun = useRunStore((state) => state.getLatestRun(workflow.id))
 
   useEffect(() => {
-    fetchRuns({ workflowId: workflow.id }).catch(()=>undefined)
+    fetchRuns({ workflowId: workflow.id }).catch(() => undefined)
   }, [workflow.id, fetchRuns])
 
   const nodeCount = workflow.nodes.length
 
   const statusBadge = latestRun ? (
     <Badge
-      variant={
-        latestRun.status === 'RUNNING' ? 'default' :
-        latestRun.status === 'FAILED' ? 'destructive' :
-        latestRun.status === 'COMPLETED' ? 'success' :
-        'secondary'
-      }
-      className="text-xs"
+      variant="outline"
+      className={getStatusBadgeClassFromStatus(latestRun.status, 'text-xs')}
     >
       {latestRun.status}
     </Badge>
   ) : (
-    <Badge variant="outline" className="text-xs">
+    <Badge variant="outline" className={getStatusBadgeClassFromStatus('NONE', 'text-xs')}>
       NOT TRIGGERED
     </Badge>
   )

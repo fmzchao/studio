@@ -1,6 +1,6 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { WorkflowList } from '@/pages/WorkflowList'
-import { WorkflowBuilder } from '@/pages/WorkflowBuilder'
+import { WorkflowBuilder } from '@/features/workflow-builder/WorkflowBuilder'
 import { SecretsManager } from '@/pages/SecretsManager'
 import { ApiKeysManager } from '@/pages/ApiKeysManager'
 import { IntegrationsManager } from '@/pages/IntegrationsManager'
@@ -36,6 +36,14 @@ function App() {
                   <Route path="/" element={<WorkflowList />} />
                   <Route
                     path="/workflows/:id"
+                    element={
+                      <ProtectedRoute>
+                        <WorkflowBuilder />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/workflows/:id/runs"
                     element={
                       <ProtectedRoute>
                         <WorkflowBuilder />
