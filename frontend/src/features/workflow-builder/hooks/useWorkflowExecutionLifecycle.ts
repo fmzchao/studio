@@ -51,6 +51,9 @@ interface UseWorkflowExecutionLifecycleResult {
   resetHistoricalTracking: () => void
 }
 
+// Stable empty array to prevent useSyncExternalStore infinite loop warnings
+const EMPTY_RUNS: never[] = []
+
 export function useWorkflowExecutionLifecycle({
   workflowId,
   metadata,
@@ -90,7 +93,7 @@ export function useWorkflowExecutionLifecycle({
   const getRunById = useRunStore((state) => state.getRunById)
   const upsertRun = useRunStore((state) => state.upsertRun)
   const workflowCacheKey = workflowId ?? '__global__'
-  const workflowRuns = useRunStore((state) => state.cache[workflowCacheKey]?.runs ?? [])
+  const workflowRuns = useRunStore((state) => state.cache[workflowCacheKey]?.runs ?? EMPTY_RUNS)
   const [historicalVersionId, setHistoricalVersionId] = useState<string | null>(null)
   const prevRunIdRef = useRef<string | null>(null)
   const prevVersionIdRef = useRef<string | null>(null)

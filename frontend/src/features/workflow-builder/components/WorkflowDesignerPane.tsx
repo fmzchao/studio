@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import type { SetStateAction } from 'react'
 import type { Node as ReactFlowNode, Edge as ReactFlowEdge } from 'reactflow'
 import { Canvas } from '@/components/workflow/Canvas'
@@ -71,6 +71,18 @@ export function WorkflowDesignerPane({
 
   const shouldRenderSummary = Boolean(showSummary && workflowId)
 
+  // Memoize callbacks to prevent infinite re-render loops in Canvas useEffect
+  const handleClearNodeSelection = useCallback(() => {
+    setHasSelectedNode(false)
+  }, [])
+
+  const handleNodeSelectionChange = useCallback((node: ReactFlowNode<FrontendNodeData> | null) => {
+    setHasSelectedNode(Boolean(node))
+    if (node) {
+      setSchedulePanelExpanded(false)
+    }
+  }, [setSchedulePanelExpanded])
+
   const summaryNode = shouldRenderSummary ? (
     <WorkflowSchedulesSummaryBar
       schedules={schedules}
@@ -113,15 +125,8 @@ export function WorkflowDesignerPane({
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           workflowId={workflowId}
-          onClearNodeSelection={() => {
-            setHasSelectedNode(false)
-          }}
-          onNodeSelectionChange={(node) => {
-            setHasSelectedNode(Boolean(node))
-            if (node) {
-              setSchedulePanelExpanded(false)
-            }
-          }}
+          onClearNodeSelection={handleClearNodeSelection}
+          onNodeSelectionChange={handleNodeSelectionChange}
         />
 
         {schedulePanelExpanded && (
