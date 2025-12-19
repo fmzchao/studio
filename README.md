@@ -25,7 +25,12 @@ ShipSec Studio is a security workflow orchestration platform that combines the p
 
 ## Demo
 
-<demo here>
+<div align="center">
+  <a href="https://youtu.be/7uyv43VforM">
+    <img src="https://img.youtube.com/vi/7uyv43VforM/maxresdefault.jpg" alt="ShipSec Studio Demo" width="600">
+  </a>
+  <p><em>Click to watch the demo (hosted on <a href="https://www.youtube.com/@hackingsimplifiedas">Hacking Simplified</a> YouTube)</em></p>
+</div>
 
 ## Why ShipSec Studio?
 
@@ -40,6 +45,10 @@ ShipSec Studio is a security workflow orchestration platform that combines the p
 🛡️ **Secure by Default** : Encrypted secrets, role-based access, and audit trails
 
 💻 **Run Anywhere** : Cloud hosted or self-hosted on your own infrastructure
+
+📅 **Scheduled Workflows** : Schedule your scans to run at specific times or intervals
+
+🔗 **Codify Your Workflows** : Trigger workflows via a simple POST request, through cURL, python etc.
 
 ## Quick Start
 
