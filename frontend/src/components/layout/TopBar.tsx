@@ -208,14 +208,14 @@ export function TopBar({
       >
         <MonitorPlay className="h-4 w-4 flex-shrink-0" />
         <span className="flex flex-col leading-tight text-left">
-          <span className="text-xs font-semibold hidden sm:inline">Runs</span>
+          <span className="text-xs font-semibold hidden sm:inline">Execute</span>
           <span
             className={cn(
               'text-[10px] hidden xl:inline',
               mode === 'execution' ? 'text-primary-foreground/80' : 'text-muted-foreground'
             )}
           >
-            Inspect runs
+            Inspect executions
           </span>
         </span>
       </Button>
@@ -260,7 +260,7 @@ export function TopBar({
       </Button>
 
       <div className="flex-1 min-w-0 overflow-hidden">
-        <div className="flex w-full gap-2 md:gap-4 items-center">
+        <div className="flex w-full gap-2 md:gap-4 items-center relative">
           {/* Workflow name - always visible, truncated on mobile, tappable to edit */}
           <div className="flex items-center justify-start gap-2 min-w-0 flex-shrink">
             <div
@@ -310,9 +310,9 @@ export function TopBar({
               </span>
             )}
           </div>
-          {/* Mode toggle - centered with flex-1 spacers */}
-          <div className="flex-1" />
-          <div className="flex justify-center shrink-0">{modeToggle}</div>
+          {/* Mode toggle - absolutely positioned to stay centered */}
+          <div className="absolute left-1/2 -translate-x-1/2 z-10">{modeToggle}</div>
+          {/* Spacer to push actions to the right */}
           <div className="flex-1" />
           <div className="flex items-center justify-end gap-1 md:gap-2 shrink-0">
             <div className="flex items-center gap-1 md:gap-2">

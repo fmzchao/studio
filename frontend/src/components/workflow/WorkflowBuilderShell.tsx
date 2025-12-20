@@ -137,7 +137,7 @@ export function WorkflowBuilderShell({
         {/* Mobile backdrop for library panel */}
         {isMobile && isLibraryVisible && (
           <div
-            className="fixed inset-0 z-20 bg-black/50 backdrop-blur-sm md:hidden"
+            className="fixed inset-0 z-[25] bg-black/50 backdrop-blur-sm md:hidden"
             onClick={onToggleLibrary}
             aria-hidden="true"
           />
