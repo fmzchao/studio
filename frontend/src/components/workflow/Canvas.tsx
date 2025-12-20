@@ -32,6 +32,7 @@ import { useToast } from '@/components/ui/use-toast'
 import type { WorkflowSchedule } from '@shipsec/shared'
 import { cn } from '@/lib/utils'
 import { useOptionalWorkflowSchedulesContext } from '@/features/workflow-builder/contexts/WorkflowSchedulesContext'
+import { mobilePlacementState, clearMobilePlacement } from '@/components/layout/Sidebar'
 
 // Context for entry point actions
 interface EntryPointActionsContextValue {
@@ -108,6 +109,7 @@ export function Canvas({
 }: CanvasProps) {
   const [reactFlowInstance, setReactFlowInstance] = useState<any>(null)
   const [selectedNode, setSelectedNode] = useState<Node<NodeData> | null>(null)
+  const canvasContainerRef = useRef<HTMLDivElement>(null)
   const { getComponent } = useComponentStore()
   const { nodeStates } = useExecutionStore()
   const { markDirty } = useWorkflowStore()
@@ -289,18 +291,18 @@ export function Canvas({
           nds.map((node) =>
             node.id === params.target
               ? {
-                  ...node,
-                  data: {
-                    ...node.data,
-                    inputs: {
-                      ...(node.data.inputs as Record<string, unknown>),
-                      [targetHandle]: {
-                        source: params.source,
-                        output: params.sourceHandle,
-                      },
-                    } as Record<string, unknown>,
-                  },
-                }
+                ...node,
+                data: {
+                  ...node.data,
+                  inputs: {
+                    ...(node.data.inputs as Record<string, unknown>),
+                    [targetHandle]: {
+                      source: params.source,
+                      output: params.sourceHandle,
+                    },
+                  } as Record<string, unknown>,
+                },
+              }
               : node
           )
         )
@@ -318,50 +320,50 @@ export function Canvas({
     if (!reactFlowInstance || nodes.length === 0) {
       return
     }
-    
+
     const modeChanged = prevModeRef.current !== mode
-    
+
     // Count only workflow nodes (exclude terminal nodes) for change detection
     const workflowNodes = nodes.filter((n) => n.type !== 'terminal')
     const workflowNodesCount = workflowNodes.length
     const prevWorkflowNodesCount = prevNodesLengthRef.current
-    
+
     const nodesCountChanged = prevWorkflowNodesCount !== workflowNodesCount
     const edgesCountChanged = prevEdgesLengthRef.current !== edges.length
-    
+
     // Run fitView when mode changes or when workflow nodes/edges count changes
     // Don't trigger fitView when terminal nodes are added/removed
     if (modeChanged || nodesCountChanged || edgesCountChanged) {
       prevModeRef.current = mode
       prevNodesLengthRef.current = workflowNodesCount
       prevEdgesLengthRef.current = edges.length
-      
+
       // When mode changes, wait a bit longer to ensure nodes are fully set and rendered
       // This is especially important when switching to execution mode without a run loaded
       // as execution nodes might be set asynchronously
       const delay = modeChanged ? 100 : 0
-      
+
       setTimeout(() => {
         if (!reactFlowInstance) return
-        
+
         // Double check nodes are still available (they might have been cleared)
         if (workflowNodes.length === 0) return
-        
+
         // Use double requestAnimationFrame to ensure nodes are fully rendered and positioned
         requestAnimationFrame(() => {
           requestAnimationFrame(() => {
             if (!reactFlowInstance) return
-            
+
             // Re-check workflow nodes (terminal nodes might have been added/removed)
             // Use the nodes prop directly since we're inside the effect
             const currentWorkflowNodes = nodes.filter((n: Node<NodeData>) => n.type !== 'terminal')
             if (currentWorkflowNodes.length === 0) return
-            
+
             try {
               // Use simple fitView - ReactFlow handles centering automatically
               // Exclude terminal nodes from fitView - they should not affect the viewport
-              reactFlowInstance.fitView({ 
-                padding: 0.2, 
+              reactFlowInstance.fitView({
+                padding: 0.2,
                 duration: modeChanged ? 0 : 300, // Instant for mode changes to avoid jarring animation
                 maxZoom: 0.85,
                 includeHiddenNodes: false,
@@ -382,17 +384,10 @@ export function Canvas({
     event.dataTransfer.dropEffect = 'move'
   }, [mode])
 
-  const onDrop = useCallback(
-    (event: React.DragEvent) => {
-      event.preventDefault()
-
+  // Helper function to create node from component ID and screen position
+  const createNodeFromComponent = useCallback(
+    (componentId: string, clientX: number, clientY: number) => {
       if (mode !== 'design') return
-
-      const componentId = event.dataTransfer.getData('application/reactflow')
-
-      if (typeof componentId === 'undefined' || !componentId) {
-        return
-      }
 
       const component = getComponent(componentId)
       if (!component) {
@@ -414,8 +409,8 @@ export function Canvas({
       }
 
       const position = reactFlowInstance?.screenToFlowPosition({
-        x: event.clientX,
-        y: event.clientY,
+        x: clientX,
+        y: clientY,
       })
 
       if (!position) return
@@ -480,13 +475,62 @@ export function Canvas({
           workflow_id: workflowId ?? undefined,
           component_slug: String(component.slug ?? component.id),
         })
-      } catch {}
+      } catch { }
 
       // Mark workflow as dirty
       markDirty()
     },
-    [reactFlowInstance, setNodes, getComponent, markDirty, mode, nodes, toast]
+    [reactFlowInstance, setNodes, getComponent, markDirty, mode, nodes, toast, workflowId]
   )
+
+  const onDrop = useCallback(
+    (event: React.DragEvent) => {
+      event.preventDefault()
+
+      if (mode !== 'design') return
+
+      const componentId = event.dataTransfer.getData('application/reactflow')
+
+      if (typeof componentId === 'undefined' || !componentId) {
+        return
+      }
+
+      createNodeFromComponent(componentId, event.clientX, event.clientY)
+    },
+    [createNodeFromComponent, mode]
+  )
+
+  // Handle mobile tap-to-place: when user taps on canvas after selecting a component
+  const handleCanvasTap = useCallback((event: React.MouseEvent | React.TouchEvent) => {
+    if (mode !== 'design') return
+
+    // Check if there's a component selected for placement (mobile flow)
+    if (mobilePlacementState.isActive && mobilePlacementState.componentId) {
+      let clientX: number
+      let clientY: number
+
+      if ('touches' in event) {
+        // Touch event
+        const touch = event.changedTouches?.[0] || event.touches?.[0]
+        if (!touch) return
+        clientX = touch.clientX
+        clientY = touch.clientY
+      } else {
+        // Mouse event
+        clientX = event.clientX
+        clientY = event.clientY
+      }
+
+      // Create node at tap position
+      createNodeFromComponent(mobilePlacementState.componentId, clientX, clientY)
+
+      // Clear placement state
+      clearMobilePlacement()
+
+      event.preventDefault()
+      event.stopPropagation()
+    }
+  }, [createNodeFromComponent, mode])
 
 
   // Handle node click for config panel
@@ -782,107 +826,153 @@ export function Canvas({
     <EntryPointActionsContext.Provider value={entryPointActionsValue}>
       <div className={className}>
         <div className="flex h-full">
-        <div 
-          className="flex-1 relative bg-background overflow-hidden"
-          style={{
-            opacity: canvasOpacity,
-            transition: 'opacity 200ms ease-in-out',
-          }}
-        >
-          {/* Validation Dock - positioned relative to canvas */}
-          <ValidationDock
-            nodes={nodes}
-            edges={edges}
-            mode={mode}
-            onNodeClick={handleValidationNodeClick}
-          />
-          <ReactFlow
-            nodes={nodes}
-            edges={edges}
-            onNodesChange={onNodesChange}
-            onEdgesChange={handleEdgesChange}
-            onConnect={onConnect}
-            onInit={(instance : any) => {
-              setReactFlowInstance(instance)
-              if (nodes.length > 0) {
-                try {
-                  instance.fitView({ padding: 0.2, duration: 0, maxZoom: 0.85 })
-                } catch (error) {
-                  console.warn('Failed to fit view on init:', error)
-                }
-              }
+          <div
+            ref={canvasContainerRef}
+            className="flex-1 relative bg-background overflow-hidden"
+            style={{
+              opacity: canvasOpacity,
+              transition: 'opacity 200ms ease-in-out',
             }}
-            onDrop={onDrop}
-            onDragOver={onDragOver}
-            onNodeClick={onNodeClick}
-            onNodeDoubleClick={onNodeDoubleClick}
-            onPaneClick={onPaneClick}
-            onMoveStart={() => {
-              hasUserInteractedRef.current = true
-            }}
-            nodeTypes={nodeTypes}
-            edgeTypes={edgeTypes}
-            nodesDraggable
-            nodesConnectable={mode === 'design'}
-            elementsSelectable
+            onClick={handleCanvasTap}
+            onTouchEnd={handleCanvasTap}
           >
-
-            <Background gap={16} className="!bg-background [&>pattern>circle]:!fill-muted-foreground/30" />
-            <Controls position="bottom-left" className="!bg-card !border !border-border !rounded-md !shadow-lg [&>button]:!bg-card [&>button]:!border-border [&>button]:!fill-foreground [&>button:hover]:!bg-accent" />
-            <MiniMap
-              position="bottom-right"
-              pannable
-              zoomable
-              className="cursor-grab active:cursor-grabbing !bg-card !border !border-border !rounded-md"
-              maskColor="hsl(var(--background) / 0.7)"
-              nodeColor={(node : any) => {
-                switch (node.data?.status) {
-                  case 'running':
-                    return '#f59e0b'
-                  case 'success':
-                    return '#10b981'
-                  case 'error':
-                    return '#ef4444'
-                  default:
-                    return '#6b7280'
+            {/* Mobile placement indicator - shows when a component is selected */}
+            {mobilePlacementState.isActive && mobilePlacementState.componentName && (
+              <div className="absolute top-[52px] left-[10px] z-50">
+                {/* Rotating border wrapper */}
+                <div
+                  className="relative rounded-full p-[2px]"
+                  style={{
+                    background: 'conic-gradient(from var(--angle), hsl(var(--primary)) 0deg, transparent 60deg, transparent 300deg, hsl(var(--primary)) 360deg)',
+                    animation: 'rotate-border 2s linear infinite',
+                  }}
+                >
+                  {/* Inner pill */}
+                  <div className="bg-background px-3 py-1.5 rounded-full shadow-lg flex items-center gap-2">
+                    <span className="text-xs font-medium text-foreground whitespace-nowrap">
+                      Tap to place: <span className="text-primary font-semibold">{mobilePlacementState.componentName}</span>
+                    </span>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        clearMobilePlacement()
+                      }}
+                      className="hover:bg-muted rounded-full p-0.5 transition-colors"
+                    >
+                      <svg className="h-3.5 w-3.5 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+                {/* Keyframe animation with CSS property */}
+                <style>{`
+                  @property --angle {
+                    syntax: '<angle>';
+                    initial-value: 0deg;
+                    inherits: false;
+                  }
+                  @keyframes rotate-border {
+                    from { --angle: 0deg; }
+                    to { --angle: 360deg; }
+                  }
+                `}</style>
+              </div>
+            )}
+            {/* Validation Dock - positioned relative to canvas */}
+            <ValidationDock
+              nodes={nodes}
+              edges={edges}
+              mode={mode}
+              onNodeClick={handleValidationNodeClick}
+            />
+            <ReactFlow
+              nodes={nodes}
+              edges={edges}
+              onNodesChange={onNodesChange}
+              onEdgesChange={handleEdgesChange}
+              onConnect={onConnect}
+              onInit={(instance: any) => {
+                setReactFlowInstance(instance)
+                if (nodes.length > 0) {
+                  try {
+                    instance.fitView({ padding: 0.2, duration: 0, maxZoom: 0.85 })
+                  } catch (error) {
+                    console.warn('Failed to fit view on init:', error)
+                  }
                 }
               }}
-            />
-          </ReactFlow>
-        </div>
+              onDrop={onDrop}
+              onDragOver={onDragOver}
+              onNodeClick={onNodeClick}
+              onNodeDoubleClick={onNodeDoubleClick}
+              onPaneClick={onPaneClick}
+              onMoveStart={() => {
+                hasUserInteractedRef.current = true
+              }}
+              nodeTypes={nodeTypes}
+              edgeTypes={edgeTypes}
+              nodesDraggable
+              nodesConnectable={mode === 'design'}
+              elementsSelectable
+            >
 
-        {/* Config Panel */}
-        {mode === 'design' && (
-          <div
-            className={cn(
-              'relative overflow-hidden transition-all duration-150 ease-out',
-              selectedNode ? 'opacity-100' : 'opacity-0 pointer-events-none'
-            )}
-            style={{
-              width: selectedNode ? configPanelWidth : 0,
-              transition: 'width 150ms ease-out, opacity 150ms ease-out',
-            }}
-          >
-            {selectedNode && (
-              <ConfigPanel
-                selectedNode={selectedNode}
-                onClose={() => setSelectedNode(null)}
-                onUpdateNode={handleUpdateNode}
-                workflowId={workflowId}
-                workflowSchedules={resolvedWorkflowSchedules}
-                schedulesLoading={resolvedSchedulesLoading}
-                scheduleError={resolvedScheduleError}
-                onScheduleCreate={resolvedOnScheduleCreate}
-                onScheduleEdit={resolvedOnScheduleEdit}
-                onScheduleAction={resolvedOnScheduleAction}
-                onScheduleDelete={resolvedOnScheduleDelete}
-                onViewSchedules={resolvedOnViewSchedules}
-                onWidthChange={setConfigPanelWidth}
+              <Background gap={16} className="!bg-background [&>pattern>circle]:!fill-muted-foreground/30" />
+              <Controls position="bottom-left" className="!bg-card !border !border-border !rounded-md !shadow-lg [&>button]:!bg-card [&>button]:!border-border [&>button]:!fill-foreground [&>button:hover]:!bg-accent max-md:!bottom-14" />
+              <MiniMap
+                position="bottom-right"
+                pannable
+                zoomable
+                className="cursor-grab active:cursor-grabbing !bg-card !border !border-border !rounded-md"
+                maskColor="hsl(var(--background) / 0.7)"
+                nodeColor={(node: any) => {
+                  switch (node.data?.status) {
+                    case 'running':
+                      return '#f59e0b'
+                    case 'success':
+                      return '#10b981'
+                    case 'error':
+                      return '#ef4444'
+                    default:
+                      return '#6b7280'
+                  }
+                }}
               />
-            )}
+            </ReactFlow>
           </div>
-        )}
-      </div>
+
+          {/* Config Panel */}
+          {mode === 'design' && (
+            <div
+              className={cn(
+                'relative overflow-hidden transition-all duration-150 ease-out',
+                selectedNode ? 'opacity-100' : 'opacity-0 pointer-events-none'
+              )}
+              style={{
+                width: selectedNode ? configPanelWidth : 0,
+                transition: 'width 150ms ease-out, opacity 150ms ease-out',
+              }}
+            >
+              {selectedNode && (
+                <ConfigPanel
+                  selectedNode={selectedNode}
+                  onClose={() => setSelectedNode(null)}
+                  onUpdateNode={handleUpdateNode}
+                  workflowId={workflowId}
+                  workflowSchedules={resolvedWorkflowSchedules}
+                  schedulesLoading={resolvedSchedulesLoading}
+                  scheduleError={resolvedScheduleError}
+                  onScheduleCreate={resolvedOnScheduleCreate}
+                  onScheduleEdit={resolvedOnScheduleEdit}
+                  onScheduleAction={resolvedOnScheduleAction}
+                  onScheduleDelete={resolvedOnScheduleDelete}
+                  onViewSchedules={resolvedOnViewSchedules}
+                  onWidthChange={setConfigPanelWidth}
+                />
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </EntryPointActionsContext.Provider>
   )
