@@ -131,6 +131,75 @@ export function AppLayout({ children }: AppLayoutProps) {
     setWasExplicitlyOpened(newState)
   }, [sidebarOpen])
 
+  // --- Swipe Gesture Logic for Mobile ---
+  const [touchStart, setTouchStart] = useState<number | null>(null)
+
+  useEffect(() => {
+    if (!isMobile) return
+
+    const handleTouchStart = (e: TouchEvent) => {
+      const x = e.touches[0].clientX
+      // Start tracking if touching near the left edge to open
+      if (!sidebarOpen && x < 30) {
+        setTouchStart(x)
+      }
+      // Or if sidebar is already open, track anywhere to detect closing swipe
+      else if (sidebarOpen) {
+        setTouchStart(x)
+      }
+    }
+
+    const handleTouchMove = (e: TouchEvent) => {
+      if (touchStart === null) return
+
+      const currentX = e.touches[0].clientX
+      const diff = currentX - touchStart
+
+      // Prevent default scrolling if we are clearly swiping the sidebar
+      if (Math.abs(diff) > 10) {
+        // If sidebar is closed and we're swiping right (opening)
+        if (!sidebarOpen && diff > 0) {
+          // e.preventDefault() // This might trigger passive warning if not careful
+        }
+        // If sidebar is open and we're swiping left (closing)
+        if (sidebarOpen && diff < 0) {
+          // e.preventDefault()
+        }
+      }
+    }
+
+    const handleTouchEnd = (e: TouchEvent) => {
+      if (touchStart === null) return
+
+      const endX = e.changedTouches[0].clientX
+      const diff = endX - touchStart
+      const threshold = 50 // px to trigger toggle
+
+      // Swipe right to open
+      if (!sidebarOpen && diff > threshold && touchStart < 30) {
+        setSidebarOpen(true)
+        setWasExplicitlyOpened(true)
+      }
+      // Swipe left to close
+      else if (sidebarOpen && diff < -threshold) {
+        setSidebarOpen(false)
+        setWasExplicitlyOpened(false)
+      }
+
+      setTouchStart(null)
+    }
+
+    window.addEventListener('touchstart', handleTouchStart, { passive: true })
+    window.addEventListener('touchmove', handleTouchMove, { passive: true })
+    window.addEventListener('touchend', handleTouchEnd, { passive: true })
+
+    return () => {
+      window.removeEventListener('touchstart', handleTouchStart)
+      window.removeEventListener('touchmove', handleTouchMove)
+      window.removeEventListener('touchend', handleTouchEnd)
+    }
+  }, [isMobile, sidebarOpen, touchStart])
+
   // Close sidebar when clicking backdrop on mobile
   const handleBackdropClick = useCallback(() => {
     if (isMobile && sidebarOpen) {
