@@ -327,7 +327,7 @@ export function ConfigPanel({
   const [panelWidth, setPanelWidth] = useState(initialWidth)
   const isResizing = useRef(false)
   const resizeRef = useRef<HTMLDivElement>(null)
-  
+
   // Actual width to use - full width on mobile
   const effectiveWidth = isMobile ? '100%' : panelWidth
 
@@ -865,7 +865,7 @@ export function ConfigPanel({
             <CollapsibleSection
               title="Parameters"
               count={componentParameters.length}
-              defaultOpen={componentInputs.length === 0 && componentOutputs.length === 0}
+              defaultOpen={true}
             >
               <div className="space-y-0 mt-2">
                 {/* Sort parameters: select types first, then others */}
