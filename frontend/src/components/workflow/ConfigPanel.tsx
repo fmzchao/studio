@@ -891,6 +891,7 @@ export function ConfigPanel({
                         componentId={component.id}
                         parameters={nodeData.parameters}
                         onUpdateParameter={handleParameterChange}
+                        allComponentParameters={componentParameters}
                       />
                     </div>
                   )

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Switch } from '@/components/ui/switch'
 import { Button } from '@/components/ui/button'
 import { useNavigate } from 'react-router-dom'
 import { RuntimeInputsEditor } from './RuntimeInputsEditor'
@@ -724,9 +725,9 @@ export function ParameterField({
         }
 
         try {
-          const parsed = JSON.parse(nextValue)
+          JSON.parse(nextValue) // Validate JSON syntax
           setJsonError(null)
-          onChange(parsed)
+          onChange(nextValue) // Pass string, not parsed object - backend expects string
         } catch (error) {
           setJsonError('Invalid JSON')
           // Keep showing error, don't update parent
@@ -1006,6 +1007,7 @@ interface ParameterFieldWrapperProps {
   componentId?: string
   parameters?: Record<string, unknown> | undefined
   onUpdateParameter?: (paramId: string, value: any) => void
+  allComponentParameters?: Parameter[]
 }
 
 /**
@@ -1038,6 +1040,22 @@ function shouldShowParameter(
 }
 
 /**
+ * Checks if a boolean parameter acts as a header toggle (controls visibility of other params).
+ * Returns true if other parameters have visibleWhen conditions referencing this parameter.
+ */
+function isHeaderToggleParameter(
+  parameter: Parameter,
+  allComponentParameters: Parameter[] | undefined
+): boolean {
+  if (parameter.type !== 'boolean' || !allComponentParameters) return false
+
+  // Check if any other parameter has visibleWhen referencing this param
+  return allComponentParameters.some(
+    (p) => p.visibleWhen && parameter.id in p.visibleWhen
+  )
+}
+
+/**
  * ParameterFieldWrapper - Wraps parameter field with label and description
  */
 export function ParameterFieldWrapper({
@@ -1048,6 +1066,7 @@ export function ParameterFieldWrapper({
   componentId,
   parameters,
   onUpdateParameter,
+  allComponentParameters,
 }: ParameterFieldWrapperProps) {
   // Check visibility conditions
   if (!shouldShowParameter(parameter, parameters)) {
@@ -1078,9 +1097,35 @@ export function ParameterFieldWrapper({
   // Check if this is a nested/conditional parameter (has visibleWhen)
   const isNestedParameter = Boolean(parameter.visibleWhen)
 
+  // Check if this is a header toggle (boolean that controls other params' visibility)
+  const isHeaderToggle = isHeaderToggleParameter(parameter, allComponentParameters)
+
+  // Header toggle rendering - label left, switch right
+  if (isHeaderToggle) {
+    return (
+      <div className="space-y-1">
+        <div className="flex items-center justify-between">
+          <label className="text-sm font-medium" htmlFor={parameter.id}>
+            {parameter.label}
+          </label>
+          <Switch
+            id={parameter.id}
+            checked={value || false}
+            onCheckedChange={(checked) => onChange(checked)}
+          />
+        </div>
+        {parameter.description && (
+          <p className="text-xs text-muted-foreground">
+            {parameter.description}
+          </p>
+        )}
+      </div>
+    )
+  }
+
   // Standard parameter field rendering
   return (
-    <div className={`space-y-2 ${isNestedParameter ? 'ml-4 pl-3 border-l-2 border-muted-foreground/20 bg-muted/30 rounded-r-md py-2.5 mt-1' : ''}`}>
+    <div className={`space-y-2 ${isNestedParameter ? 'ml-2 px-3 py-2.5 mt-1 bg-muted/80 rounded-lg' : ''}`}>
       <div className="flex items-center justify-between mb-1">
         <label className={`${isNestedParameter ? 'text-xs' : 'text-sm'} font-medium`} htmlFor={parameter.id}>
           {parameter.label}
