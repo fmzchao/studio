@@ -396,18 +396,18 @@ export function ParameterField({
 
     case 'boolean':
       return (
-        <div className="flex items-center gap-2">
-          <Checkbox
+        <div className="flex items-center justify-between">
+          <label
+            htmlFor={parameter.id}
+            className="text-sm font-medium cursor-pointer select-none"
+          >
+            {parameter.label}
+          </label>
+          <Switch
             id={parameter.id}
             checked={currentValue || false}
             onCheckedChange={(checked) => onChange(checked)}
           />
-          <label
-            htmlFor={parameter.id}
-            className="text-sm text-muted-foreground cursor-pointer select-none"
-          >
-            {currentValue ? 'Enabled' : 'Disabled'}
-          </label>
         </div>
       )
 
@@ -692,13 +692,17 @@ export function ParameterField({
         if (!jsonTextareaRef.current) return
 
         let textValue = ''
+        let needsNormalization = false
+
         if (value === undefined || value === null || value === '') {
           textValue = ''
         } else if (typeof value === 'string') {
           textValue = value
         } else {
+          // If Value is an object - normalize to string
           try {
             textValue = JSON.stringify(value, null, 2)
+            needsNormalization = true
           } catch (error) {
             console.error('Failed to serialize JSON parameter value', error)
             return
@@ -711,7 +715,12 @@ export function ParameterField({
           setJsonError(null)
           isExternalJsonUpdateRef.current = false
         }
-      }, [value])
+
+        // Normalize object values to string
+        if (needsNormalization) {
+          onChange(textValue)
+        }
+      }, [value, onChange])
 
       // Sync to parent only on blur for native undo behavior
       const handleJsonBlur = useCallback(() => {
@@ -727,7 +736,7 @@ export function ParameterField({
         try {
           JSON.parse(nextValue) // Validate JSON syntax
           setJsonError(null)
-          onChange(nextValue) // Pass string, not parsed object - backend expects string
+          onChange(nextValue) // Pass string, not parsed object
         } catch (error) {
           setJsonError('Invalid JSON')
           // Keep showing error, don't update parent
@@ -1100,7 +1109,7 @@ export function ParameterFieldWrapper({
   // Check if this is a header toggle (boolean that controls other params' visibility)
   const isHeaderToggle = isHeaderToggleParameter(parameter, allComponentParameters)
 
-  // Header toggle rendering - label left, switch right
+  // Header toggle rendering
   if (isHeaderToggle) {
     return (
       <div className="space-y-1">
@@ -1124,16 +1133,21 @@ export function ParameterFieldWrapper({
   }
 
   // Standard parameter field rendering
+  const isBooleanParameter = parameter.type === 'boolean'
+
   return (
     <div className={`space-y-2 ${isNestedParameter ? 'ml-2 px-3 py-2.5 mt-1 bg-muted/80 rounded-lg' : ''}`}>
-      <div className="flex items-center justify-between mb-1">
-        <label className={`${isNestedParameter ? 'text-xs' : 'text-sm'} font-medium`} htmlFor={parameter.id}>
-          {parameter.label}
-        </label>
-        {parameter.required && (
-          <span className="text-xs text-red-500">*required</span>
-        )}
-      </div>
+      {/* Label and required indicator - skip for boolean (label is inside) */}
+      {!isBooleanParameter && (
+        <div className="flex items-center justify-between mb-1">
+          <label className={`${isNestedParameter ? 'text-xs' : 'text-sm'} font-medium`} htmlFor={parameter.id}>
+            {parameter.label}
+          </label>
+          {parameter.required && (
+            <span className="text-xs text-red-500">*required</span>
+          )}
+        </div>
+      )}
 
       {parameter.description && (
         <p className="text-xs text-muted-foreground mb-2">

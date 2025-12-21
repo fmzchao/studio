@@ -955,7 +955,7 @@ Loop the Conversation State output back into the next agent invocation to keep m
         type: 'json',
         required: false,
         description: 'Provide an example JSON object. Property types and names will be used to generate the schema. All fields are treated as required.',
-        helpText: 'Example: { "name": "John", "age": 30, "skills": ["coding", "design"] }',
+        helpText: 'Example: { "name": "John", "age": 30, "skills": ["security", "architecture"] }',
         visibleWhen: { structuredOutputEnabled: true, schemaType: 'json-example' },
       },
       {
