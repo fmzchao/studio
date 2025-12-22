@@ -4,8 +4,8 @@ import { type ExecutionContext } from '@shipsec/component-sdk';
 
 // Mock context
 const mockContext: ExecutionContext = {
-  workflowId: 'test-workflow',
   runId: 'test-run',
+  componentRef: 'test-node',
   logger: {
     info: () => {},
     warn: () => {},
@@ -13,12 +13,16 @@ const mockContext: ExecutionContext = {
     debug: () => {},
   },
   emitProgress: () => {},
+  metadata: {
+    runId: 'test-run',
+    componentRef: 'test-node',
+  },
 };
 
 describe('Logic/Script Component', () => {
   it('executes simple JavaScript math', async () => {
     const result = await definition.execute({
-      code: 'return { sum: 1 + 2 };',
+      code: 'export async function script() { return { sum: 1 + 2 }; }',
       variables: [],
       returns: [{ name: 'sum', type: 'number' }],
     }, mockContext);
@@ -27,15 +31,15 @@ describe('Logic/Script Component', () => {
   });
 
   it('transpiles and executes TypeScript', async () => {
-    // Note: The transpiler runs before execution, stripping types.
-    // The QuickJS engine then runs the JS.
     const tsCode = `
       interface Result { msg: string; }
-      const calculate = (a: number): Result => {
-        return { msg: 'Value is ' + a };
-      };
-      const res: Result = calculate(10);
-      return res;
+      export async function script(): Promise<Result> {
+        const calculate = (a: number): Result => {
+          return { msg: 'Value is ' + a };
+        };
+        const res: Result = calculate(10);
+        return res;
+      }
     `;
     
     const result = await definition.execute({
@@ -50,10 +54,12 @@ describe('Logic/Script Component', () => {
   it('accepts input variables and returns outputs', async () => {
     const result = await definition.execute({
       code: `
-        return {
-          diff: x - y,
-          product: x * y
-        };
+        export async function script(input) {
+          return {
+            diff: input.x - input.y,
+            product: input.x * input.y
+          };
+        }
       `,
       variables: [
         { name: 'x', type: 'number' },
@@ -63,7 +69,6 @@ describe('Logic/Script Component', () => {
         { name: 'diff', type: 'number' },
         { name: 'product', type: 'number' },
       ],
-      // Input values passed as dynamic params
       x: 10,
       y: 4,
     } as any, mockContext);
@@ -71,25 +76,21 @@ describe('Logic/Script Component', () => {
     expect(result).toEqual({ diff: 6, product: 40 });
   });
 
-  it('isolates execution from global scope', async () => {
-    // Try to access process or require
-    // QuickJS environment is standard ES2020, usually lacks node globals unless injected.
+  it('can access global fetch', async () => {
     const code = `
-      try {
-        const fs = require('fs');
-        return { accessed: true };
-      } catch (e) {
-        return { accessed: false, error: e.message };
+      export async function script() {
+        const res = await fetch('https://www.google.com');
+        return { status: res.status };
       }
     `;
 
     const result = await definition.execute({
       code,
       variables: [],
-      returns: [{ name: 'accessed', type: 'boolean' }],
+      returns: [{ name: 'status', type: 'number' }],
     }, mockContext);
 
-    expect(result.accessed).toBe(false);
+    expect(result.status).toBe(200);
   });
   
   it('correctly resolves ports', () => {

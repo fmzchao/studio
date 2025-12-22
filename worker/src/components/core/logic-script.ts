@@ -155,10 +155,10 @@ plugin({
 
     // 3. Harness to run the user script
     let processedUserCode = userCode;
-    if (processedUserCode.includes('async function script') && !processedUserCode.includes('export async function script')) {
-      processedUserCode = processedUserCode.replace('async function script', 'export async function script');
-    } else if (processedUserCode.includes('function script') && !processedUserCode.includes('export function script')) {
-      processedUserCode = processedUserCode.replace('function script', 'export function script');
+    // Regex matches optional 'async', then 'function script', but only if NOT preceded by 'export '
+    const exportRegex = /^(?!\s*export\s+)(.*?\s*(?:async\s+)?function\s+script\b)/m;
+    if (exportRegex.test(processedUserCode)) {
+      processedUserCode = processedUserCode.replace(exportRegex, (match) => `export ${match.trimStart()}`);
     }
 
     const harnessCode = `
