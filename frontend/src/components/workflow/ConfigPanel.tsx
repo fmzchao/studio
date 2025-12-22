@@ -19,7 +19,7 @@ import { ParameterFieldWrapper } from './ParameterField'
 import { WebhookDetails } from './WebhookDetails'
 import { SecretSelect } from '@/components/inputs/SecretSelect'
 import type { Node } from 'reactflow'
-import type { NodeData } from '@/schemas/node'
+import type { NodeData, FrontendNodeData } from '@/schemas/node'
 import type { ComponentType, KeyboardEvent } from 'react'
 import {
   describePortDataType,
@@ -72,9 +72,9 @@ function CollapsibleSection({ title, count, defaultOpen = true, children }: Coll
 }
 
 interface ConfigPanelProps {
-  selectedNode: Node<NodeData> | null
+  selectedNode: Node<FrontendNodeData> | null
   onClose: () => void
-  onUpdateNode?: (nodeId: string, data: Partial<NodeData>) => void
+  onUpdateNode?: (id: string, data: Partial<FrontendNodeData>) => void
   initialWidth?: number
   onWidthChange?: (width: number) => void
   workflowId?: string | null
@@ -367,7 +367,7 @@ export function ConfigPanel({
   const handleParameterChange = (paramId: string, value: any) => {
     if (!selectedNode || !onUpdateNode) return
 
-    const nodeData = selectedNode.data as any
+    const nodeData: FrontendNodeData = selectedNode.data
 
     const updatedParameters = {
       ...(nodeData.parameters ?? {}),
@@ -388,7 +388,7 @@ export function ConfigPanel({
     return null
   }
 
-  const nodeData = selectedNode.data as any
+  const nodeData: FrontendNodeData = selectedNode.data
   const componentRef: string | undefined = nodeData.componentId ?? nodeData.componentSlug
   const component = getComponent(componentRef)
 
@@ -472,6 +472,13 @@ export function ConfigPanel({
         const result = await api.components.resolvePorts(component.id, manualParameters)
         if (result && result.inputs) {
           setDynamicInputs(result.inputs)
+
+          // Persist to node data so Canvas updates
+          // Use FrontendNodeData type for access
+          const currentDynamic = selectedNode?.data?.dynamicInputs
+          if (JSON.stringify(currentDynamic) !== JSON.stringify(result.inputs)) {
+            onUpdateNode?.(selectedNode!.id, { dynamicInputs: result.inputs })
+          }
         }
       } catch (e) {
         console.error('Failed to resolve dynamic ports', e)
