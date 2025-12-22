@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { useNavigate } from 'react-router-dom'
 import { RuntimeInputsEditor } from './RuntimeInputsEditor'
 import { SimpleVariableListEditor } from './SimpleVariableListEditor'
+import { ScriptCodeEditor } from './ScriptCodeEditor'
 import type { Parameter } from '@/schemas/component'
 import type { InputMapping } from '@/schemas/node'
 import { useSecretStore } from '@/store/secretStore'
@@ -1068,6 +1069,21 @@ export function ParameterFieldWrapper({
           </p>
         )}
       </div>
+    )
+  }
+
+  // Special case: Logic Script Code Editor
+  if (componentId === 'core.logic.script' && parameter.id === 'code') {
+    const inputVariables = Array.isArray(parameters?.variables) ? parameters.variables as { name: string; type: string }[] : []
+    const outputVariables = Array.isArray(parameters?.returns) ? parameters.returns as { name: string; type: string }[] : []
+
+    return (
+      <ScriptCodeEditor
+        code={value || ''}
+        onCodeChange={onChange}
+        inputVariables={inputVariables}
+        outputVariables={outputVariables}
+      />
     )
   }
 

@@ -4,8 +4,7 @@ import {
   ComponentDefinition,
   port,
 } from '@shipsec/component-sdk';
-import { getQuickJS, QuickJSContext } from 'quickjs-emscripten';
-import { transform } from 'sucrase';
+import { spawn } from 'child_process';
 
 const variableConfigSchema = z.object({
   name: z.string().min(1),
@@ -13,20 +12,19 @@ const variableConfigSchema = z.object({
 });
 
 const parameterSchema = z.object({
-  code: z.string().default('// Write your TypeScript code here\nreturn {};'),
+  code: z.string().default(`function script(input: Input): Output {
+  // Your logic here
+  return {};
+}`),
   variables: z.array(variableConfigSchema).optional().default([]),
   returns: z.array(variableConfigSchema).optional().default([]),
 });
 
-// Since dynamic inputs are passed at root level of `execute` params, 
-// we use passthrough to allow unknown keys (the dynamic variables)
 const inputSchema = parameterSchema.passthrough();
 
 type Input = z.infer<typeof inputSchema>;
 type Output = Record<string, unknown>;
-type Params = z.infer<typeof parameterSchema>;
 
-// Helper to map type string to Port definition
 const mapTypeToPort = (type: string, id: string, label: string) => {
   switch (type) {
     case 'string': return { id, label, dataType: port.text(), required: true };
@@ -45,183 +43,215 @@ const definition: ComponentDefinition<Input, Output> = {
   runner: { kind: 'inline' },
   inputSchema,
   outputSchema: z.record(z.string(), z.unknown()),
-  docs: 'Execute custom TypeScript/JavaScript code in a secure sandbox. Define inputs and outputs to interact with other nodes.',
+  docs: 'Execute custom TypeScript code in a secure Docker container. Supports fetch(), async/await, and modern JS.',
   metadata: {
     slug: 'logic-script',
     version: '1.0.0',
     type: 'process',
     category: 'transform',
-    description: 'Execute custom logic (TypeScript/JS) in a sandbox.',
+    description: 'Execute custom TypeScript in a secure Docker sandbox.',
     icon: 'Code',
     author: { name: 'ShipSecAI', type: 'shipsecai' },
     isLatest: true,
     deprecated: false,
-    inputs: [], // Dynamic
-    outputs: [], // Dynamic
+    inputs: [],
+    outputs: [],
     parameters: [
-      {
-        id: 'code',
-        label: 'Script Code',
-        type: 'textarea',
-        rows: 15,
-        default: '// return { result: variable1 + 1 };',
-        description: 'TypeScript code to execute. Must return an object matching defined Outputs.',
-        required: true,
-      },
       {
         id: 'variables',
         label: 'Input Variables',
         type: 'json',
         default: [],
-        description: 'Define input variables: [{"name": "x", "type": "number"}]',
+        description: 'Define input variables that will be available in your script.',
       },
       {
         id: 'returns',
         label: 'Output Variables',
         type: 'json',
         default: [],
-        description: 'Define return variables: [{"name": "result", "type": "number"}]',
+        description: 'Define output variables your script should return.',
+      },
+      {
+        id: 'code',
+        label: 'Script Code',
+        type: 'textarea',
+        rows: 15,
+        default: 'export async function script(input: Input): Promise<Output> {\n  // Your logic here\n  return {};\n}',
+        description: 'Define a function named `script`. Supports async/await and fetch().',
+        required: true,
       },
     ],
   },
   resolvePorts(params: any) {
     const inputs: any[] = [];
     const outputs: any[] = [];
-    
-    // Parse variables config
     if (Array.isArray(params.variables)) {
-      params.variables.forEach((v: any) => {
-        if (v.name) {
-          inputs.push(mapTypeToPort(v.type || 'json', v.name, v.name));
-        }
-      });
+      params.variables.forEach((v: any) => { if (v.name) inputs.push(mapTypeToPort(v.type || 'json', v.name, v.name)); });
     }
-
-    // Parse returns config
     if (Array.isArray(params.returns)) {
-      params.returns.forEach((v: any) => {
-        if (v.name) {
-          outputs.push(mapTypeToPort(v.type || 'json', v.name, v.name));
-        }
-      });
+      params.returns.forEach((v: any) => { if (v.name) outputs.push(mapTypeToPort(v.type || 'json', v.name, v.name)); });
     }
-
     return { inputs, outputs };
   },
   async execute(params, context) {
     const { code, variables = [], returns = [] } = params;
     
-    // 1. Transpile TS -> JS
-    let jsCode = '';
-    try {
-      const compiled = transform(code, {
-        transforms: ['typescript'],
-        disableESTransforms: true, // Keep modern JS
-      });
-      jsCode = compiled.code;
-    } catch (err: any) {
-      throw new Error(`Compilation Error: ${err.message}`);
-    }
+    // Bun runs TS natively!
+    const userCode = code;
 
-    // 2. Prepare Sandbox
-    const QuickJS = await getQuickJS();
-    const vm = QuickJS.newContext();
-    
-    let result: any = {};
-
-    try {
-      // 3. Inject Inputs
-      // We wrap the user code in an IIFE/function to pass variables safely
-      // and capture return value.
-      
-      // Values come from `params` (due to passthrough).
-      // We filter params to find input values matching defined variables.
-      const inputValues: Record<string, any> = {};
-      variables.forEach((v) => {
-        if (v.name && params[v.name] !== undefined) {
-          inputValues[v.name] = params[v.name];
-        }
-      });
-
-      // Serialize inputs to JSON to pass into VM
-      const inputJson = JSON.stringify(inputValues);
-      
-      // Create a global 'INPUTS' object in VM
-      const vmInputHandle = vm.newString(inputJson);
-      const vmJson = vm.getProp(vm.global, 'JSON');
-      const vmJsonParse = vm.getProp(vmJson, 'parse');
-      const vmInputs = vm.callFunction(vmJsonParse, vm.undefined, vmInputHandle);
-      
-      vmInputHandle.dispose();
-      vmJsonParse.dispose();
-      vmJson.dispose(); // Dispose intermediate handles
-
-      if (vmInputs.error) {
-        const error = vm.dump(vmInputs.error);
-        vmInputs.error.dispose();
-        throw new Error(`Input Serialization Error (VM): ${JSON.stringify(error)}`);
+    // 1. Prepare Inputs
+    const inputValues: Record<string, any> = {};
+    variables.forEach((v) => {
+      if (v.name && params[v.name] !== undefined) {
+        inputValues[v.name] = params[v.name];
       }
-
-      vm.setProp(vm.global, 'INPUTS', vmInputs.value);
-      vmInputs.value.dispose();
-      
-      const varNames = variables.map(v => v.name).join(', ');
-      const userScriptWrapped = `
-        (function() {
-          const { ${varNames} } = INPUTS;
-          ${jsCode}
-        })()
-      `;
-
-      // 5. Execute
-      const vmResult = vm.evalCode(userScriptWrapped);
-      
-      if (vmResult.error) {
-        const error = vm.dump(vmResult.error);
-        vmResult.error.dispose();
-        throw new Error(`Runtime Error: ${JSON.stringify(error)}`);
-      }
-
-      // 6. Extract Result
-      const handle = vmResult.value;
-      const vmJson2 = vm.getProp(vm.global, 'JSON');
-      const jsonStringify = vm.getProp(vmJson2, 'stringify');
-      const jsonResultHandle = vm.callFunction(jsonStringify, vm.undefined, handle);
-      
-      vmJson2.dispose();
-      jsonStringify.dispose();
-      
-      if (jsonResultHandle.error) {
-         const error = vm.dump(jsonResultHandle.error);
-         jsonResultHandle.error.dispose();
-         throw new Error(`Result serialization failed: ${JSON.stringify(error)}`);
-      }
-      
-      const jsonString = vm.getString(jsonResultHandle.value);
-      
-      // Cleanup
-      jsonResultHandle.value.dispose();
-      handle.dispose();
-
-      result = JSON.parse(jsonString);
-
-    } catch (err) {
-      throw err;
-    } finally {
-      vm.dispose();
-    }
-
-    // 7. Validate Outputs
-    const finalOutput: Record<string, unknown> = {};
-    returns.forEach((r) => {
-       if (result && r.name && result[r.name] !== undefined) {
-         finalOutput[r.name] = result[r.name];
-       } else {
-         finalOutput[r.name] = null; // Default null for missing outputs
-       }
     });
 
-    return finalOutput;
+    // 2. Prepare the Plugin
+    const pluginCode = `
+import { plugin } from "bun";
+const rx_any = /./;
+const rx_http = /^https?:\\/\\//;
+const rx_path = /^\\.*\\//;
+
+async function load_http_module(href) {
+    console.log("[http-loader] Fetching:", href);
+    const response = await fetch(href);
+    const text = await response.text();
+    if (response.ok) {
+        return {
+            contents: text,
+            loader: href.match(/\\.(ts|tsx)$/) ? "ts" : "js",
+        };
+    } else {
+        throw new Error("Failed to load module '" + href + "': " + text);
+    }
+}
+
+plugin({
+    name: "http_imports",
+    setup(build) {
+        build.onResolve({ filter: rx_http }, (args) => {
+            const url = new URL(args.path);
+            return {
+                path: url.href.replace(/^(https?):/, ''),
+                namespace: url.protocol.replace(':', ''),
+            };
+        });
+        build.onResolve({ filter: rx_path }, (args) => {
+            if (rx_http.test(args.importer)) {
+                const url = new URL(args.path, args.importer);
+                return {
+                    path: url.href.replace(/^(https?):/, ''),
+                    namespace: url.protocol.replace(':', ''),
+                };
+            }
+        });
+        build.onLoad({ filter: rx_any, namespace: "http" }, (args) => load_http_module("http:" + args.path));
+        build.onLoad({ filter: rx_any, namespace: "https" }, (args) => load_http_module("https:" + args.path));
+    }
+});
+`;
+
+    // 3. Harness to run the user script
+    let processedUserCode = userCode;
+    if (processedUserCode.includes('async function script') && !processedUserCode.includes('export async function script')) {
+      processedUserCode = processedUserCode.replace('async function script', 'export async function script');
+    } else if (processedUserCode.includes('function script') && !processedUserCode.includes('export function script')) {
+      processedUserCode = processedUserCode.replace('function script', 'export function script');
+    }
+
+    const harnessCode = `
+import { script } from "./user_script.ts";
+const INPUTS = JSON.parse(process.env.SHIPSEC_INPUTS || '{}');
+
+async function run() {
+  try {
+    const result = await script(INPUTS);
+    console.log('---RESULT_START---');
+    console.log(JSON.stringify(result));
+    console.log('---RESULT_END---');
+  } catch (err) {
+    console.error('Runtime Error:', err.message);
+    process.exit(1);
+  }
+}
+
+run();
+`;
+
+    // 4. Encode to Base64
+    const pluginB64 = Buffer.from(pluginCode).toString('base64');
+    const userB64 = Buffer.from(processedUserCode).toString('base64');
+    const harnessB64 = Buffer.from(harnessCode).toString('base64');
+
+    // 5. Execute in Docker
+    return new Promise((resolve, reject) => {
+      context.logger.info('[Script] Starting container with HTTP Loader...');
+      
+      const dockerProcess = spawn('docker', [
+        'run', '--rm', '-i',
+        '--name', `shipsec-script-${context.runId}-${Date.now()}`,
+        '--label', 'shipsec-managed=true',
+        '--memory', '256m',
+        '--cpus', '0.5',
+        '-e', `SHIPSEC_INPUTS=${JSON.stringify(inputValues)}`,
+        'oven/bun:alpine',
+        'sh', '-c', 
+        `echo "${pluginB64}" | base64 -d > plugin.ts && ` +
+        `echo "${userB64}" | base64 -d > user_script.ts && ` +
+        `echo "${harnessB64}" | base64 -d > harness.ts && ` +
+        `bun run --preload ./plugin.ts harness.ts`
+      ]);
+
+      let stdout = '';
+      let stderr = '';
+
+      const timeout = setTimeout(() => {
+        dockerProcess.kill();
+        reject(new Error('Script execution timed out (30s)'));
+      }, 30000);
+
+      dockerProcess.stdout.on('data', (data) => {
+        const str = data.toString();
+        stdout += str;
+        const logs = str.replace(/---RESULT_START---[\s\S]*---RESULT_END---/, '').trim();
+        if (logs) context.logger.info('[Script Output]', { output: logs });
+      });
+
+      dockerProcess.stderr.on('data', (data) => {
+        const str = data.toString();
+        stderr += str;
+        context.logger.error('[Script Error]', { output: str.trim() });
+      });
+
+      dockerProcess.on('close', (code) => {
+        clearTimeout(timeout);
+        if (code !== 0) {
+          return reject(new Error(`Script failed with exit code ${code}. ${stderr}`));
+        }
+
+        const match = stdout.match(/---RESULT_START---([\s\S]*)---RESULT_END---/);
+        if (!match) {
+          return reject(new Error('Script finished but no result was returned.'));
+        }
+
+        try {
+          const result = JSON.parse(match[1].trim());
+          const finalOutput: Record<string, unknown> = {};
+          returns.forEach((r) => {
+            if (result && r.name && result[r.name] !== undefined) {
+              finalOutput[r.name] = result[r.name];
+            } else {
+              finalOutput[r.name] = null;
+            }
+          });
+          resolve(finalOutput);
+        } catch (err) {
+          reject(new Error('Failed to parse script result.'));
+        }
+      });
+    });
   },
 };
 
