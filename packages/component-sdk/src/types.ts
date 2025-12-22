@@ -198,6 +198,7 @@ export type ComponentCategory =
   | 'ai'
   | 'security'
   | 'it_ops'
+  | 'notification'
   | 'output';
 
 export type ComponentUiType =

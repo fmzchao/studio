@@ -1043,8 +1043,14 @@ export function ParameterFieldWrapper({
     )
   }
 
-  // Special case: Logic Script Variables
-  if (componentId === 'core.logic.script' && (parameter.id === 'variables' || parameter.id === 'returns')) {
+  // Special case: Logic Script Variables & Slack Notification Variables
+  const isLogicScript = componentId === 'core.logic.script'
+  const isSlackNotification = componentId === 'core.notification.slack'
+
+  if (
+    (isLogicScript && (parameter.id === 'variables' || parameter.id === 'returns')) ||
+    (isSlackNotification && parameter.id === 'variables')
+  ) {
     const isInput = parameter.id === 'variables'
     const title = isInput ? 'Input Variables' : 'Return Variables'
 
