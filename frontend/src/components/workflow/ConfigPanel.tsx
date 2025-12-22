@@ -19,7 +19,7 @@ import { ParameterFieldWrapper } from './ParameterField'
 import { WebhookDetails } from './WebhookDetails'
 import { SecretSelect } from '@/components/inputs/SecretSelect'
 import type { Node } from 'reactflow'
-import type { NodeData, FrontendNodeData } from '@/schemas/node'
+import type { FrontendNodeData } from '@/schemas/node'
 import type { ComponentType, KeyboardEvent } from 'react'
 import {
   describePortDataType,
