@@ -27,7 +27,7 @@ Disallow: /secrets/
 Disallow: /temp/
 Disallow: /*?*sort=
 Disallow: /*?*filter=
-Disallow: /*?*page=*
+Disallow: /*?*page=
 
 # Google-specific rules
 User-agent: Googlebot
