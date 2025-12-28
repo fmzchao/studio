@@ -23,24 +23,26 @@ const {
   runComponentActivity,
   setRunMetadataActivity,
   finalizeRunActivity,
-  createApprovalRequestActivity,
+  createHumanInputRequestActivity,
 } = proxyActivities<{
   runComponentActivity(input: RunComponentActivityInput): Promise<RunComponentActivityOutput>;
   setRunMetadataActivity(input: { runId: string; workflowId: string; organizationId?: string | null }): Promise<void>;
   finalizeRunActivity(input: { runId: string }): Promise<void>;
-  createApprovalRequestActivity(input: {
+  createHumanInputRequestActivity(input: {
     runId: string;
     workflowId: string;
     nodeRef: string;
+    inputType: 'approval' | 'form' | 'selection' | 'review' | 'acknowledge';
+    inputSchema?: Record<string, unknown>;
     title: string;
     description?: string;
     context?: Record<string, unknown>;
     timeoutMs?: number;
     organizationId?: string | null;
   }): Promise<{
-    approvalId: string;
-    approveToken: string;
-    rejectToken: string;
+    requestId: string;
+    resolveToken: string;
+    resolveUrl: string;
   }>;
 }>({
   startToCloseTimeout: '10 minutes',
@@ -167,10 +169,11 @@ export async function shipsecWorkflowRun(
 
           // Create the actual approval request in the database
           const approvalData = output.output as { pending: true; title: string; description?: string; timeoutAt?: string };
-          const approvalResult = await createApprovalRequestActivity({
+          const approvalResult = await createHumanInputRequestActivity({
             runId: input.runId,
             workflowId: input.workflowId,
             nodeRef: action.ref,
+            inputType: 'approval',
             title: approvalData.title,
             description: approvalData.description,
             context: mergedParams.data ? { data: mergedParams.data } : undefined,
@@ -178,7 +181,7 @@ export async function shipsecWorkflowRun(
             organizationId: input.organizationId ?? null,
           });
 
-          console.log(`[Workflow] Created approval request ${approvalResult.approvalId} for ${action.ref}`);
+          console.log(`[Workflow] Created approval request ${approvalResult.requestId} for ${action.ref}`);
 
           // Check if we already have a resolution (signal arrived before we started waiting)
           let resolution = approvalResolutions.get(action.ref);
@@ -222,7 +225,7 @@ export async function shipsecWorkflowRun(
             respondedBy: resolution.respondedBy,
             responseNote: resolution.responseNote,
             respondedAt: resolution.respondedAt,
-            approvalId: approvalResult.approvalId,
+            approvalId: approvalResult.requestId,
           });
 
           // If rejected, we might want to treat this as a failure
