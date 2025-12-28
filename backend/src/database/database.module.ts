@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
 import { MigrationGuard } from './migration.guard';
+import * as schema from './schema';
 
 export const DRIZZLE_TOKEN = Symbol('DRIZZLE_CONNECTION');
 
@@ -50,7 +51,8 @@ export const DRIZZLE_TOKEN = Symbol('DRIZZLE_CONNECTION');
           };
           return createRecursiveMock();
         }
-        return drizzle(pool);
+        // Pass schema to enable relational query API (db.query.tableName)
+        return drizzle(pool, { schema });
       },
       inject: [Pool],
     },
