@@ -980,15 +980,15 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/approvals": {
+    "/api/v1/human-inputs": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** List all approval requests */
-        get: operations["ApprovalsController_list"];
+        /** List human input requests */
+        get: operations["HumanInputsController_list"];
         put?: never;
         post?: never;
         delete?: never;
@@ -997,15 +997,15 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/approvals/{id}": {
+    "/api/v1/human-inputs/{id}": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Get approval request by ID */
-        get: operations["ApprovalsController_get"];
+        /** Get a human input request details */
+        get: operations["HumanInputsController_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1014,7 +1014,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/approvals/{id}/approve": {
+    "/api/v1/human-inputs/{id}/resolve": {
         parameters: {
             query?: never;
             header?: never;
@@ -1023,15 +1023,15 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Approve an approval request */
-        post: operations["ApprovalsController_approve"];
+        /** Resolve a human input request */
+        post: operations["HumanInputsController_resolve"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/approvals/{id}/reject": {
+    "/api/v1/human-inputs/resolve/{token}": {
         parameters: {
             query?: never;
             header?: never;
@@ -1040,42 +1040,8 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Reject an approval request */
-        post: operations["ApprovalsController_reject"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/approve/{token}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Approve via secure token (public link) */
-        get: operations["PublicApproveController_approveByToken"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/reject/{token}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Reject via secure token (public link) */
-        get: operations["PublicRejectController_rejectByToken"];
-        put?: never;
-        post?: never;
+        /** Resolve input via public token */
+        post: operations["HumanInputsController_resolveByToken"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1812,7 +1778,7 @@ export interface components {
             versionId?: string;
             version?: number;
         };
-        ApprovalResponseDto: {
+        HumanInputResponseDto: {
             /** Format: uuid */
             id: string;
             runId: string;
@@ -1820,35 +1786,51 @@ export interface components {
             workflowId: string;
             nodeRef: string;
             /** @enum {string} */
-            status: "pending" | "approved" | "rejected" | "expired" | "cancelled";
+            status: "pending" | "resolved" | "expired" | "cancelled";
+            /** @enum {string} */
+            inputType: "approval" | "form" | "selection" | "review" | "acknowledge";
+            inputSchema: unknown;
             title: string;
             description: string | null;
             context: unknown;
-            approveToken: string;
-            rejectToken: string;
+            resolveToken: string;
             timeoutAt: string | null;
+            responseData: unknown;
             respondedAt: string | null;
             respondedBy: string | null;
-            responseNote: string | null;
             organizationId: string | null;
             createdAt: string;
             updatedAt: string;
         };
-        ResolveApprovalDto: {
-            /** @description User ID or identifier of who resolved the approval */
+        ResolveHumanInputDto: {
+            /** @description The response data from the human */
+            responseData?: {
+                [key: string]: unknown;
+            };
+            /** @description User ID or identifier of who resolved the input */
             respondedBy?: string;
-            /** @description Optional note explaining the decision */
-            responseNote?: string;
         };
-        PublicApprovalResultDto: {
+        ResolveByTokenDto: {
+            /**
+             * @default resolve
+             * @enum {string}
+             */
+            action: "approve" | "reject" | "resolve";
+            data?: {
+                [key: string]: unknown;
+            };
+        };
+        PublicResolveResultDto: {
             success: boolean;
             message: string;
-            approval: {
+            input: {
                 /** Format: uuid */
                 id: string;
                 title: string;
                 /** @enum {string} */
-                status: "pending" | "approved" | "rejected" | "expired" | "cancelled";
+                inputType: "approval" | "form" | "selection" | "review" | "acknowledge";
+                /** @enum {string} */
+                status: "pending" | "resolved" | "expired" | "cancelled";
                 respondedAt: string | null;
             };
         };
@@ -3973,10 +3955,11 @@ export interface operations {
             };
         };
     };
-    ApprovalsController_list: {
+    HumanInputsController_list: {
         parameters: {
             query?: {
-                status?: "pending" | "approved" | "rejected" | "expired" | "cancelled";
+                status?: "pending" | "resolved" | "expired" | "cancelled";
+                inputType?: "approval" | "form" | "selection" | "review" | "acknowledge";
             };
             header?: never;
             path?: never;
@@ -3984,190 +3967,84 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description List of approval requests */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ApprovalResponseDto"][];
+                    "application/json": components["schemas"]["HumanInputResponseDto"][];
                 };
             };
         };
     };
-    ApprovalsController_get: {
+    HumanInputsController_get: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                /** @description Approval request ID */
                 id: string;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Approval request details */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ApprovalResponseDto"];
+                    "application/json": components["schemas"]["HumanInputResponseDto"];
                 };
-            };
-            /** @description Approval request not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
             };
         };
     };
-    ApprovalsController_approve: {
+    HumanInputsController_resolve: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                /** @description Approval request ID */
                 id: string;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["ResolveApprovalDto"];
+                "application/json": components["schemas"]["ResolveHumanInputDto"];
             };
         };
         responses: {
-            /** @description Approval request approved */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ApprovalResponseDto"];
+                    "application/json": components["schemas"]["HumanInputResponseDto"];
                 };
-            };
-            /** @description Approval already resolved or expired */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Approval request not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
             };
         };
     };
-    ApprovalsController_reject: {
+    HumanInputsController_resolveByToken: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                /** @description Approval request ID */
-                id: string;
+                token: string;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["ResolveApprovalDto"];
+                "application/json": components["schemas"]["ResolveByTokenDto"];
             };
         };
         responses: {
-            /** @description Approval request rejected */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ApprovalResponseDto"];
+                    "application/json": components["schemas"]["PublicResolveResultDto"];
                 };
-            };
-            /** @description Approval already resolved or expired */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Approval request not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    PublicApproveController_approveByToken: {
-        parameters: {
-            query: {
-                note: string;
-            };
-            header?: never;
-            path: {
-                /** @description Secure approval token */
-                token: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Approval confirmed */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PublicApprovalResultDto"];
-                };
-            };
-            /** @description Invalid or expired token */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    PublicRejectController_rejectByToken: {
-        parameters: {
-            query: {
-                note: string;
-            };
-            header?: never;
-            path: {
-                /** @description Secure rejection token */
-                token: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Rejection confirmed */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PublicApprovalResultDto"];
-                };
-            };
-            /** @description Invalid or expired token */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
             };
         };
     };

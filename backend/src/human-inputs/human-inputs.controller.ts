@@ -6,11 +6,12 @@ import {
   ResolveHumanInputDto, 
   ListHumanInputsQueryDto,
   HumanInputResponseDto,
-  PublicResolveResultDto
+  PublicResolveResultDto,
+  ResolveByTokenDto,
 } from './dto/human-inputs.dto';
 
 @ApiTags('Human Inputs')
-@Controller('api/v1/human-inputs')
+@Controller('human-inputs')
 export class HumanInputsController {
   constructor(private readonly service: HumanInputsService) {}
 
@@ -50,7 +51,7 @@ export class HumanInputsController {
   @ApiResponse({ status: 200, type: PublicResolveResultDto })
   async resolveByToken(
     @Param('token') token: string,
-    @Body() body: { action?: 'approve' | 'reject' | 'resolve'; data?: Record<string, unknown> }
+    @Body() body: ResolveByTokenDto
   ) {
     return this.service.resolveByToken(
         token, 

@@ -3869,9 +3869,9 @@
         ]
       }
     },
-    "/api/v1/approvals": {
+    "/api/v1/human-inputs": {
       "get": {
-        "operationId": "ApprovalsController_list",
+        "operationId": "HumanInputsController_list",
         "parameters": [
           {
             "name": "status",
@@ -3881,44 +3881,62 @@
               "type": "string",
               "enum": [
                 "pending",
-                "approved",
-                "rejected",
+                "resolved",
                 "expired",
                 "cancelled"
+              ]
+            }
+          },
+          {
+            "name": "inputType",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "approval",
+                "form",
+                "selection",
+                "review",
+                "acknowledge"
               ]
             }
           }
         ],
         "responses": {
           "200": {
-            "description": "List of approval requests",
+            "description": "",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/ApprovalResponseDto"
+                    "$ref": "#/components/schemas/HumanInputResponseDto"
                   }
                 }
               }
             }
           }
         },
-        "summary": "List all approval requests",
+        "security": [
+          {
+            "api-key": []
+          }
+        ],
+        "summary": "List human input requests",
         "tags": [
-          "Approvals"
+          "Human Inputs"
         ]
       }
     },
-    "/api/v1/approvals/{id}": {
+    "/api/v1/human-inputs/{id}": {
       "get": {
-        "operationId": "ApprovalsController_get",
+        "operationId": "HumanInputsController_get",
         "parameters": [
           {
             "name": "id",
             "required": true,
             "in": "path",
-            "description": "Approval request ID",
             "schema": {
               "type": "string"
             }
@@ -3926,34 +3944,35 @@
         ],
         "responses": {
           "200": {
-            "description": "Approval request details",
+            "description": "",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApprovalResponseDto"
+                  "$ref": "#/components/schemas/HumanInputResponseDto"
                 }
               }
             }
-          },
-          "404": {
-            "description": "Approval request not found"
           }
         },
-        "summary": "Get approval request by ID",
+        "security": [
+          {
+            "api-key": []
+          }
+        ],
+        "summary": "Get a human input request details",
         "tags": [
-          "Approvals"
+          "Human Inputs"
         ]
       }
     },
-    "/api/v1/approvals/{id}/approve": {
+    "/api/v1/human-inputs/{id}/resolve": {
       "post": {
-        "operationId": "ApprovalsController_approve",
+        "operationId": "HumanInputsController_resolve",
         "parameters": [
           {
             "name": "id",
             "required": true,
             "in": "path",
-            "description": "Approval request ID",
             "schema": {
               "type": "string"
             }
@@ -3964,44 +3983,42 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ResolveApprovalDto"
+                "$ref": "#/components/schemas/ResolveHumanInputDto"
               }
             }
           }
         },
         "responses": {
           "200": {
-            "description": "Approval request approved",
+            "description": "",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApprovalResponseDto"
+                  "$ref": "#/components/schemas/HumanInputResponseDto"
                 }
               }
             }
-          },
-          "400": {
-            "description": "Approval already resolved or expired"
-          },
-          "404": {
-            "description": "Approval request not found"
           }
         },
-        "summary": "Approve an approval request",
+        "security": [
+          {
+            "api-key": []
+          }
+        ],
+        "summary": "Resolve a human input request",
         "tags": [
-          "Approvals"
+          "Human Inputs"
         ]
       }
     },
-    "/api/v1/approvals/{id}/reject": {
+    "/api/v1/human-inputs/resolve/{token}": {
       "post": {
-        "operationId": "ApprovalsController_reject",
+        "operationId": "HumanInputsController_resolveByToken",
         "parameters": [
           {
-            "name": "id",
+            "name": "token",
             "required": true,
             "in": "path",
-            "description": "Approval request ID",
             "schema": {
               "type": "string"
             }
@@ -4012,118 +4029,26 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ResolveApprovalDto"
+                "$ref": "#/components/schemas/ResolveByTokenDto"
               }
             }
           }
         },
         "responses": {
           "200": {
-            "description": "Approval request rejected",
+            "description": "",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApprovalResponseDto"
+                  "$ref": "#/components/schemas/PublicResolveResultDto"
                 }
               }
             }
-          },
-          "400": {
-            "description": "Approval already resolved or expired"
-          },
-          "404": {
-            "description": "Approval request not found"
           }
         },
-        "summary": "Reject an approval request",
+        "summary": "Resolve input via public token",
         "tags": [
-          "Approvals"
-        ]
-      }
-    },
-    "/api/v1/approve/{token}": {
-      "get": {
-        "operationId": "PublicApproveController_approveByToken",
-        "parameters": [
-          {
-            "name": "token",
-            "required": true,
-            "in": "path",
-            "description": "Secure approval token",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "note",
-            "required": true,
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Approval confirmed",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PublicApprovalResultDto"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Invalid or expired token"
-          }
-        },
-        "summary": "Approve via secure token (public link)",
-        "tags": [
-          "Approvals - Public"
-        ]
-      }
-    },
-    "/api/v1/reject/{token}": {
-      "get": {
-        "operationId": "PublicRejectController_rejectByToken",
-        "parameters": [
-          {
-            "name": "token",
-            "required": true,
-            "in": "path",
-            "description": "Secure rejection token",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "note",
-            "required": true,
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Rejection confirmed",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PublicApprovalResultDto"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Invalid or expired token"
-          }
-        },
-        "summary": "Reject via secure token (public link)",
-        "tags": [
-          "Approvals - Public"
+          "Human Inputs"
         ]
       }
     },
@@ -6494,7 +6419,7 @@
           }
         }
       },
-      "ApprovalResponseDto": {
+      "HumanInputResponseDto": {
         "type": "object",
         "properties": {
           "id": {
@@ -6517,11 +6442,23 @@
             "type": "string",
             "enum": [
               "pending",
-              "approved",
-              "rejected",
+              "resolved",
               "expired",
               "cancelled"
             ]
+          },
+          "inputType": {
+            "type": "string",
+            "enum": [
+              "approval",
+              "form",
+              "selection",
+              "review",
+              "acknowledge"
+            ]
+          },
+          "inputSchema": {
+            "nullable": true
           },
           "title": {
             "type": "string"
@@ -6533,14 +6470,14 @@
           "context": {
             "nullable": true
           },
-          "approveToken": {
-            "type": "string"
-          },
-          "rejectToken": {
+          "resolveToken": {
             "type": "string"
           },
           "timeoutAt": {
             "type": "string",
+            "nullable": true
+          },
+          "responseData": {
             "nullable": true
           },
           "respondedAt": {
@@ -6548,10 +6485,6 @@
             "nullable": true
           },
           "respondedBy": {
-            "type": "string",
-            "nullable": true
-          },
-          "responseNote": {
             "type": "string",
             "nullable": true
           },
@@ -6572,34 +6505,60 @@
           "workflowId",
           "nodeRef",
           "status",
+          "inputType",
+          "inputSchema",
           "title",
           "description",
           "context",
-          "approveToken",
-          "rejectToken",
+          "resolveToken",
           "timeoutAt",
+          "responseData",
           "respondedAt",
           "respondedBy",
-          "responseNote",
           "organizationId",
           "createdAt",
           "updatedAt"
         ]
       },
-      "ResolveApprovalDto": {
+      "ResolveHumanInputDto": {
         "type": "object",
         "properties": {
-          "respondedBy": {
-            "description": "User ID or identifier of who resolved the approval",
-            "type": "string"
+          "responseData": {
+            "description": "The response data from the human",
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {}
           },
-          "responseNote": {
-            "description": "Optional note explaining the decision",
+          "respondedBy": {
+            "description": "User ID or identifier of who resolved the input",
             "type": "string"
           }
         }
       },
-      "PublicApprovalResultDto": {
+      "ResolveByTokenDto": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "default": "resolve",
+            "type": "string",
+            "enum": [
+              "approve",
+              "reject",
+              "resolve"
+            ]
+          },
+          "data": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {}
+          }
+        }
+      },
+      "PublicResolveResultDto": {
         "type": "object",
         "properties": {
           "success": {
@@ -6608,7 +6567,7 @@
           "message": {
             "type": "string"
           },
-          "approval": {
+          "input": {
             "type": "object",
             "properties": {
               "id": {
@@ -6619,12 +6578,21 @@
               "title": {
                 "type": "string"
               },
+              "inputType": {
+                "type": "string",
+                "enum": [
+                  "approval",
+                  "form",
+                  "selection",
+                  "review",
+                  "acknowledge"
+                ]
+              },
               "status": {
                 "type": "string",
                 "enum": [
                   "pending",
-                  "approved",
-                  "rejected",
+                  "resolved",
                   "expired",
                   "cancelled"
                 ]
@@ -6637,6 +6605,7 @@
             "required": [
               "id",
               "title",
+              "inputType",
               "status",
               "respondedAt"
             ]
@@ -6645,7 +6614,7 @@
         "required": [
           "success",
           "message",
-          "approval"
+          "input"
         ]
       }
     }

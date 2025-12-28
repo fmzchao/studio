@@ -5,6 +5,7 @@ import * as LucideIcons from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { MarkdownView } from '@/components/ui/markdown'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { useComponentStore } from '@/store/componentStore'
 import { useExecutionStore } from '@/store/executionStore'
 import { useExecutionTimelineStore, type NodeVisualState } from '@/store/executionTimelineStore'
@@ -23,10 +24,10 @@ import {
 import { inputSupportsManualValue, runtimeInputTypeToPortDataType } from '@/utils/portUtils'
 import { WebhookDetails } from './WebhookDetails'
 import { useApiKeyStore } from '@/store/apiKeyStore'
-import { API_BASE_URL, api } from '@/services/api'
+import { API_BASE_URL } from '@/services/api'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useEntryPointActions } from './Canvas'
-import { ShieldCheck, ShieldAlert } from 'lucide-react'
+import { ShieldAlert } from 'lucide-react'
 
 const STATUS_ICONS = {
   running: Loader2,
@@ -321,7 +322,7 @@ export const WorkflowNode = ({ data, selected, id }: NodeProps<NodeData>) => {
   const updateNodeInternals = useUpdateNodeInternals()
   const { nodeStates, selectedRunId, selectNode, isPlaying, playbackMode, isLiveFollowing } = useExecutionTimelineStore()
   const { markDirty } = useWorkflowStore()
-  const { mode, focusedTerminalNodeId, bringTerminalToFront } = useWorkflowUiStore()
+  const { mode, focusedTerminalNodeId, bringTerminalToFront, openHumanInputDialog } = useWorkflowUiStore()
   // Note: hover effects use CSS :hover instead of React state to avoid re-renders (which cause image flicker)
   const prefetchTerminal = useExecutionStore((state) => state.prefetchTerminal)
   const terminalSession = useExecutionStore((state) => state.getTerminalSession(id, 'pty'))
@@ -1049,6 +1050,21 @@ export const WorkflowNode = ({ data, selected, id }: NodeProps<NodeData>) => {
         "px-3 py-3 pb-4 space-y-2",
         isTextBlock && "flex flex-col flex-1"
       )}>
+        {effectiveStatus === 'awaiting_input' && visualState.humanInputRequestId && (
+          <div className={cn("mb-2", isEntryPoint && "hidden")}>
+            <Button
+              variant="outline"
+              className="w-full bg-blue-600/10 hover:bg-blue-600/20 text-blue-700 dark:text-blue-300 border-blue-500/50 shadow-sm animate-pulse h-8 text-xs font-semibold"
+              onClick={(e) => {
+                e.stopPropagation()
+                openHumanInputDialog(visualState.humanInputRequestId!)
+              }}
+            >
+              <LucideIcons.ShieldAlert className="w-3.5 h-3.5 mr-2" />
+              Action Required
+            </Button>
+          </div>
+        )}
         {isTextBlock && (
           trimmedTextBlockContent.length > 0 ? (
             <MarkdownView

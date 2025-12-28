@@ -13,6 +13,15 @@ export const DRIZZLE_TOKEN = Symbol('DRIZZLE_CONNECTION');
     {
       provide: Pool,
       useFactory: () => {
+        if (process.env.SKIP_INGEST_SERVICES === 'true') {
+          return {
+            connect: async () => ({
+              query: async () => ({ rows: [] }),
+              release: () => {},
+            }),
+            on: () => {},
+          } as unknown as Pool;
+        }
         const connectionString = process.env.DATABASE_URL;
         if (!connectionString) {
           throw new Error('DATABASE_URL is not set');
@@ -22,7 +31,27 @@ export const DRIZZLE_TOKEN = Symbol('DRIZZLE_CONNECTION');
     },
     {
       provide: DRIZZLE_TOKEN,
-      useFactory: (pool: Pool) => drizzle(pool),
+      useFactory: (pool: Pool) => {
+        if (process.env.SKIP_INGEST_SERVICES === 'true') {
+          // Recursive mock that handles method chaining and awaits
+          const createRecursiveMock = (): any => {
+            return new Proxy(() => {}, {
+              get: (target, prop) => {
+                if (prop === 'then') {
+                  // When awaited, resolve to empty array (safe for most db queries)
+                  return (resolve: any) => resolve([]);
+                }
+                return createRecursiveMock();
+              },
+              apply: () => {
+                return createRecursiveMock();
+              },
+            });
+          };
+          return createRecursiveMock();
+        }
+        return drizzle(pool);
+      },
       inject: [Pool],
     },
     MigrationGuard,

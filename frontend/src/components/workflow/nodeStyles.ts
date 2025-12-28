@@ -44,6 +44,12 @@ export function getNodeStyle(state: NodeStatus): NodeStateStyle {
       icon: 'Clock',
       iconClass: 'text-gray-500 dark:text-gray-400',
     },
+    awaiting_input: {
+      border: 'border-blue-500 border-dashed',
+      bg: 'bg-blue-50 dark:bg-blue-950/30',
+      icon: 'ShieldAlert',
+      iconClass: 'text-blue-600 dark:text-blue-400',
+    },
   }
 
   return styles[state]

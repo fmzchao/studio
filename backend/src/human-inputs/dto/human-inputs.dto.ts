@@ -12,7 +12,7 @@ export type HumanInputStatus = z.infer<typeof HumanInputStatusSchema>;
 // ===== Request DTOs =====
 
 export const ResolveHumanInputSchema = z.object({
-  responseData: z.record(z.unknown()).optional().describe('The response data from the human'),
+  responseData: z.record(z.string(), z.unknown()).optional().describe('The response data from the human'),
   respondedBy: z.string().optional().describe('User ID or identifier of who resolved the input'),
 });
 
@@ -24,6 +24,13 @@ export const ListHumanInputsQuerySchema = z.object({
 });
 
 export class ListHumanInputsQueryDto extends createZodDto(ListHumanInputsQuerySchema) {}
+
+export const ResolveByTokenSchema = z.object({
+  action: z.enum(['approve', 'reject', 'resolve']).optional().default('resolve'),
+  data: z.record(z.string(), z.unknown()).optional(),
+});
+
+export class ResolveByTokenDto extends createZodDto(ResolveByTokenSchema) {}
 
 // ===== Response DTOs =====
 

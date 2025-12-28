@@ -19,10 +19,10 @@ import {
 } from '../activities/run-component.activity';
 import { prepareRunPayloadActivity } from '../activities/run-dispatcher.activity';
 import {
-  createApprovalRequestActivity,
-  cancelApprovalRequestActivity,
-  initializeApprovalActivity,
-} from '../activities/approval.activity';
+  createHumanInputRequestActivity,
+  cancelHumanInputRequestActivity,
+  initializeHumanInputActivity,
+} from '../activities/human-input.activity';
 import { ArtifactAdapter, FileStorageAdapter, SecretsAdapter, RedisTerminalStreamAdapter, KafkaLogAdapter, KafkaTraceAdapter, KafkaAgentTracePublisher } from '../../adapters';
 import * as schema from '../../adapters/schema';
 
@@ -154,9 +154,9 @@ async function main() {
     agentTracePublisher,
   });
 
-  // Initialize approval activity with database and backend URL
+  // Initialize human input activity with database and backend URL
   const backendUrl = process.env.BACKEND_URL ?? 'http://localhost:3211';
-  initializeApprovalActivity({
+  initializeHumanInputActivity({
     database: db,
     baseUrl: backendUrl,
   });
@@ -198,8 +198,8 @@ async function main() {
       setRunMetadataActivity,
       finalizeRunActivity,
       prepareRunPayloadActivity,
-      createApprovalRequestActivity,
-      cancelApprovalRequestActivity,
+      createHumanInputRequestActivity,
+      cancelHumanInputRequestActivity,
     },
     bundlerOptions: {
       ignoreModules: ['child_process'],

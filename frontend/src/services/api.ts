@@ -750,32 +750,36 @@ export const api = {
     },
   },
 
-  approvals: {
-    list: async (status?: 'pending' | 'approved' | 'rejected' | 'expired' | 'cancelled') => {
-      const response = await apiClient.listApprovals({ status }) as any
-      if (response.error) throw new Error('Failed to fetch approvals')
+    humanInputs: {
+    list: async (filters: { status?: 'pending' | 'resolved' | 'expired' | 'cancelled'; type?: 'approval' | 'form' | 'selection' | 'review' | 'acknowledge' }) => {
+      const response = await apiClient.listHumanInputs({
+        status: filters.status,
+        inputType: filters.type,
+      })
+      if (response.error) throw new Error('Failed to fetch human inputs')
       return response.data || []
     },
 
     get: async (id: string) => {
-      const response = await apiClient.getApproval(id) as any
-      if (response.error) throw new Error('Failed to fetch approval')
-      if (!response.data) throw new Error('Approval not found')
+      const response = await apiClient.getHumanInput(id)
+      if (response.error) throw new Error('Failed to fetch human input')
+      if (!response.data) throw new Error('Human input not found')
       return response.data
     },
 
-    approve: async (id: string, responseNote?: string) => {
-      const response = await apiClient.approveRequest(id, { responseNote }) as any
-      if (response.error) throw new Error('Failed to approve request')
-      return response.data
-    },
-
-    reject: async (id: string, responseNote?: string) => {
-      const response = await apiClient.rejectRequest(id, { responseNote }) as any
-      if (response.error) throw new Error('Failed to reject request')
+    resolve: async (id: string, payload: { status: 'resolved' | 'rejected'; responseData?: any; comment?: string }) => {
+      const response = await apiClient.resolveHumanInput(id, {
+        responseData: {
+          ...payload.responseData,
+          resolution: payload.status, // Add explicit resolution field
+          comment: payload.comment,
+        },
+      })
+      if (response.error) throw new Error('Failed to resolve human input')
       return response.data
     },
   },
+
 }
 
 export async function getApiAuthHeaders(): Promise<Record<string, string>> {

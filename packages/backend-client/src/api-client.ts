@@ -546,34 +546,42 @@ export class ShipSecApiClient {
     });
   }
 
-  // ===== Approvals =====
+  // ===== Human Inputs =====
 
-  async listApprovals(options?: { status?: 'pending' | 'approved' | 'rejected' | 'expired' | 'cancelled' }) {
-    return this.client.GET('/api/v1/approvals', {
+  async listHumanInputs(options?: {
+    status?: 'pending' | 'resolved' | 'expired' | 'cancelled';
+    inputType?: 'approval' | 'form' | 'selection' | 'review' | 'acknowledge';
+    workflowId?: string;
+    runId?: string;
+    limit?: number;
+    offset?: number;
+  }) {
+    return this.client.GET('/api/v1/human-inputs', {
       params: {
-        query: {
-          status: options?.status,
-        },
+        query: options,
       },
     });
   }
 
-  async getApproval(id: string) {
-    return this.client.GET('/api/v1/approvals/{id}', {
+  async getHumanInput(id: string) {
+    return this.client.GET('/api/v1/human-inputs/{id}', {
       params: { path: { id } },
     });
   }
 
-  async approveRequest(id: string, payload: { responseNote?: string } = {}) {
-    return this.client.POST('/api/v1/approvals/{id}/approve', {
+  async resolveHumanInput(id: string, payload: components['schemas']['ResolveHumanInputDto']) {
+    return this.client.POST('/api/v1/human-inputs/{id}/resolve', {
       params: { path: { id } },
       body: payload,
     });
   }
 
-  async rejectRequest(id: string, payload: { responseNote?: string } = {}) {
-    return this.client.POST('/api/v1/approvals/{id}/reject', {
-      params: { path: { id } },
+  async resolveHumanInputByToken(
+    token: string, 
+    payload: components['schemas']['ResolveByTokenDto']
+  ) {
+    return this.client.POST('/api/v1/human-inputs/resolve/{token}', {
+      params: { path: { token } },
       body: payload,
     });
   }

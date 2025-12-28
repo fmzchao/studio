@@ -47,24 +47,23 @@ import {
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 
-type ApprovalStatus = 'pending' | 'approved' | 'rejected' | 'expired' | 'cancelled'
 
-interface ApprovalRequest {
+
+interface HumanInputRequest {
     id: string
     runId: string
     workflowId: string
     nodeRef: string
-    status: ApprovalStatus
+    status: 'pending' | 'resolved' | 'expired' | 'cancelled'
+    inputType: string
     title: string
     description: string | null
     context: Record<string, unknown> | null
-    approveToken: string
-    rejectToken: string
+    resolveToken: string
     timeoutAt: string | null
     respondedAt: string | null
     respondedBy: string | null
-    responseNote: string | null
-    organizationId: string | null
+    responseData: Record<string, unknown> | null
     createdAt: string
     updatedAt: string
 }
@@ -72,8 +71,7 @@ interface ApprovalRequest {
 const STATUS_OPTIONS = [
     { value: 'all', label: 'All statuses' },
     { value: 'pending', label: 'Pending' },
-    { value: 'approved', label: 'Approved' },
-    { value: 'rejected', label: 'Rejected' },
+    { value: 'resolved', label: 'Resolved' },
     { value: 'expired', label: 'Expired' },
 ]
 
@@ -128,17 +126,17 @@ const formatRelativeTime = (value?: string | null) => {
 
 export function ApprovalsPage() {
     const { toast } = useToast()
-    const [approvals, setApprovals] = useState<ApprovalRequest[]>([])
+    const [approvals, setApprovals] = useState<HumanInputRequest[]>([])
     const [isLoading, setIsLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
     const [search, setSearch] = useState('')
-    const [statusFilter, setStatusFilter] = useState<'all' | ApprovalStatus>('pending')
+    const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'resolved' | 'expired'>('pending')
     const [actionState, setActionState] = useState<Record<string, 'approve' | 'reject'>>({})
 
     // Resolve dialog state
     const [resolveDialogOpen, setResolveDialogOpen] = useState(false)
     const [resolveAction, setResolveAction] = useState<'approve' | 'reject'>('approve')
-    const [selectedApproval, setSelectedApproval] = useState<ApprovalRequest | null>(null)
+    const [selectedApproval, setSelectedApproval] = useState<HumanInputRequest | null>(null)
     const [responseNote, setResponseNote] = useState('')
 
     const fetchApprovals = async () => {
@@ -146,8 +144,8 @@ export function ApprovalsPage() {
         setError(null)
         try {
             const status = statusFilter === 'all' ? undefined : statusFilter
-            const data = await api.approvals.list(status)
-            setApprovals(data as ApprovalRequest[])
+            const data = await api.humanInputs.list({ status })
+            setApprovals(data as HumanInputRequest[])
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Failed to load approvals')
         } finally {
@@ -186,7 +184,7 @@ export function ApprovalsPage() {
         })
     }
 
-    const openResolveDialog = (approval: ApprovalRequest, action: 'approve' | 'reject') => {
+    const openResolveDialog = (approval: HumanInputRequest, action: 'approve' | 'reject') => {
         setSelectedApproval(approval)
         setResolveAction(action)
         setResponseNote('')
@@ -200,11 +198,14 @@ export function ApprovalsPage() {
         setResolveDialogOpen(false)
 
         try {
-            if (resolveAction === 'approve') {
-                await api.approvals.approve(selectedApproval.id, responseNote || undefined)
-            } else {
-                await api.approvals.reject(selectedApproval.id, responseNote || undefined)
-            }
+            await api.humanInputs.resolve(selectedApproval.id, {
+                status: 'resolved',
+                responseData: {
+                    status: resolveAction === 'approve' ? 'approved' : 'rejected',
+                    comment: responseNote || undefined
+                },
+                comment: responseNote || undefined
+            })
 
             toast({
                 title: resolveAction === 'approve' ? 'Approved' : 'Rejected',
@@ -228,14 +229,19 @@ export function ApprovalsPage() {
     const handleRefresh = async () => {
         await fetchApprovals()
         toast({
-            title: 'Approvals refreshed',
-            description: 'Latest approval statuses have been loaded.',
+            title: 'Requests refreshed',
+            description: 'Latest status have been loaded.',
         })
     }
 
     const isActionBusy = (id: string) => Boolean(actionState[id])
 
-    const renderStatusBadge = (status: string) => {
+    const renderStatusBadge = (approval: HumanInputRequest) => {
+        let status = approval.status as string
+        if (status === 'resolved' && approval.responseData?.status) {
+            status = approval.responseData.status as string
+        }
+
         const variant = STATUS_VARIANTS[status] || 'outline'
         const label = status.charAt(0).toUpperCase() + status.slice(1)
         const Icon = STATUS_ICONS[status] || Clock
@@ -260,9 +266,9 @@ export function ApprovalsPage() {
                                 <ShieldCheck className="h-6 w-6 text-primary" />
                             </div>
                             <div>
-                                <h1 className="text-2xl font-bold">Approvals</h1>
+                                <h1 className="text-2xl font-bold">Requests</h1>
                                 <p className="text-sm text-muted-foreground">
-                                    Review and action pending workflow approvals
+                                    Review and action pending workflow requests
                                 </p>
                             </div>
                         </div>
@@ -278,7 +284,7 @@ export function ApprovalsPage() {
                         <div className="flex-1 space-y-2">
                             <label className="text-xs uppercase text-muted-foreground flex items-center gap-2">
                                 <Search className="h-3.5 w-3.5" />
-                                Search approvals
+                                Search requests
                             </label>
                             <Input
                                 placeholder="Filter by title, node, or run ID"
@@ -394,7 +400,7 @@ export function ApprovalsPage() {
                                                             <span className="text-muted-foreground">No timeout</span>
                                                         )}
                                                     </TableCell>
-                                                    <TableCell>{renderStatusBadge(approval.status)}</TableCell>
+                                                    <TableCell>{renderStatusBadge(approval)}</TableCell>
                                                     <TableCell className="text-right">
                                                         <div className="flex items-center justify-end gap-2">
                                                             {isPending ? (
