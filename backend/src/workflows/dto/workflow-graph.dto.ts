@@ -48,7 +48,26 @@ export const WorkflowGraphSchema = z.object({
   nodes: z.array(WorkflowNodeSchema).min(1),
   edges: z.array(WorkflowEdgeSchema),
   viewport: WorkflowViewportSchema.default({ x: 0, y: 0, zoom: 1 }),
-});
+}).refine(
+  (data) => {
+    const portInputs = new Set<string>();
+    for (const edge of data.edges) {
+      const targetHandle = edge.targetHandle ?? edge.sourceHandle;
+      if (!targetHandle) continue;
+
+      const key = `${edge.target}:${targetHandle}`;
+      if (portInputs.has(key)) {
+        return false;
+      }
+      portInputs.add(key);
+    }
+    return true;
+  },
+  {
+    message: 'Multiple edges connecting to the same input port are not allowed. Each port must have only one source.',
+    path: ['edges'],
+  }
+);
 
 export class WorkflowGraphDto extends createZodDto(WorkflowGraphSchema) {}
 export type WorkflowGraph = WorkflowGraphDto;
