@@ -359,7 +359,7 @@ export function ActionCenterPage() {
                                                                             variant="default"
                                                                             size="sm"
                                                                             className="gap-1 h-8"
-                                                                            onClick={() => openResolveDialog(approval, 'view')}
+                                                                            onClick={() => openResolveDialog(approval, 'approve')}
                                                                             disabled={isActionBusy(approval.id)}
                                                                         >
                                                                             {approval.inputType === 'acknowledge' ? 'Acknowledge' : 'Respond'}

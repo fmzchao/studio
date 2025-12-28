@@ -108,11 +108,11 @@ export function HumanInputResolutionView({
             const isApprovalType = request.inputType === 'approval' || request.inputType === 'review'
             const data: any = {
                 comment: responseNote || undefined,
+                approved: resolveAction === 'approve'
             }
 
             if (isApprovalType) {
                 data.status = resolveAction === 'approve' ? 'approved' : 'rejected'
-                data.approved = resolveAction === 'approve'
             }
 
             if (request.inputType === 'selection') {
@@ -331,7 +331,7 @@ export function HumanInputResolutionView({
                                                 onChange={(e) => setFormValues(prev => ({ ...prev, [key]: e.target.value }))}
                                                 placeholder={prop.description || ""}
                                             />
-                                        ) : prop.type === 'number' ? (
+                                        ) : (prop.type === 'number' || prop.type === 'integer') ? (
                                             <Input
                                                 id={`form-${key}`}
                                                 type="number"
