@@ -433,7 +433,10 @@ export function HumanInputResolutionView({
                             submitting ||
                             (() => {
                                 if (request.inputType === 'selection') return selectedOptions.length === 0;
-                                if (request.inputType === 'form') return parsedInputSchema?.required?.some((k: string) => !formValues[k]);
+                                if (request.inputType === 'form') return parsedInputSchema?.required?.some((k: string) => {
+                                    const val = formValues[k];
+                                    return val === undefined || val === null || val === '';
+                                });
                                 return false;
                             })()
                         }
