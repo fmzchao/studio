@@ -7,6 +7,7 @@ import type {
   ITraceService,
   ExecutionContextMetadata,
   TraceEventLevel,
+  TraceEventData,
 } from './interfaces';
 
 export type { ExecutionContextMetadata } from './interfaces';
@@ -67,7 +68,7 @@ export interface Logger {
 export interface ProgressEventInput {
   message: string;
   level?: TraceEventLevel;
-  data?: unknown;
+  data?: TraceEventData;
 }
 
 export interface LogEventInput {
@@ -93,6 +94,7 @@ export interface AgentTraceEvent {
   sequence: number;
   timestamp: string;
   part: AgentTracePart;
+  [key: string]: unknown;
 }
 
 export interface AgentTracePublisher {
