@@ -8,7 +8,7 @@ import { ArtifactLibrary } from '@/pages/ArtifactLibrary'
 import { IntegrationCallback } from '@/pages/IntegrationCallback'
 import { NotFound } from '@/pages/NotFound'
 import { SchedulesPage } from '@/pages/SchedulesPage'
-import { ApprovalsPage } from '@/pages/ApprovalsPage'
+import { ActionCenterPage } from '@/pages/ActionCenterPage'
 import { ToastProvider } from '@/components/ui/toast-provider'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { AuthProvider } from '@/auth/auth-context'
@@ -75,7 +75,7 @@ function App() {
                     <Route path="/api-keys" element={<ApiKeysManager />} />
                     <Route path="/integrations" element={<IntegrationsManager />} />
                     <Route path="/schedules" element={<SchedulesPage />} />
-                    <Route path="/approvals" element={<ApprovalsPage />} />
+                    <Route path="/action-center" element={<ActionCenterPage />} />
                     <Route path="/artifacts" element={<ArtifactLibrary />} />
                     <Route
                       path="/integrations/callback/:provider"

@@ -30,7 +30,7 @@ import {
     RefreshCw,
     Search,
     Clock,
-    ShieldCheck,
+    Zap,
     ExternalLink,
 } from 'lucide-react'
 import { useToast } from '@/components/ui/use-toast'
@@ -124,7 +124,7 @@ const formatRelativeTime = (value?: string | null) => {
     return `${minutes}m left`
 }
 
-export function ApprovalsPage() {
+export function ActionCenterPage() {
     const { toast } = useToast()
     const [approvals, setApprovals] = useState<HumanInputRequest[]>([])
     const [isLoading, setIsLoading] = useState(true)
@@ -263,12 +263,12 @@ export function ApprovalsPage() {
                     <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                         <div className="flex items-center gap-3">
                             <div className="p-2 rounded-lg bg-primary/10">
-                                <ShieldCheck className="h-6 w-6 text-primary" />
+                                <Zap className="h-6 w-6 text-primary" />
                             </div>
                             <div>
-                                <h1 className="text-2xl font-bold">Requests</h1>
+                                <h1 className="text-2xl font-bold">Action Center</h1>
                                 <p className="text-sm text-muted-foreground">
-                                    Review and action pending workflow requests
+                                    Review and respond to workflow requests
                                 </p>
                             </div>
                         </div>
@@ -441,12 +441,12 @@ export function ApprovalsPage() {
                                         <TableRow>
                                             <TableCell colSpan={7}>
                                                 <div className="flex flex-col items-center justify-center py-10 text-center space-y-2">
-                                                    <ShieldCheck className="h-12 w-12 text-muted-foreground/30" />
-                                                    <p className="font-medium">No approvals found</p>
+                                                    <Zap className="h-12 w-12 text-muted-foreground/30" />
+                                                    <p className="font-medium">No pending actions</p>
                                                     <p className="text-sm text-muted-foreground max-w-lg">
                                                         {statusFilter === 'pending'
-                                                            ? 'All approvals have been processed. Check back later or view all statuses.'
-                                                            : 'No approvals match your filters. Try adjusting the search or status filter.'}
+                                                            ? 'All requests have been handled. Check back later or view all statuses.'
+                                                            : 'No requests match your filters. Try adjusting the search or status filter.'}
                                                     </p>
                                                 </div>
                                             </TableCell>
