@@ -193,6 +193,7 @@ const definition: ComponentDefinition<Input, Output, Params> = {
                     label: `Option: ${label}`,
                     dataType: port.boolean(),
                     description: `Active when '${label}' is selected`,
+                    isBranching: true,
                 });
             }
         }

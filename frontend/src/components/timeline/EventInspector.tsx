@@ -310,7 +310,7 @@ export function EventInspector({ className, layoutVariant = 'stacked-soft' }: Ev
                   )}
                 </>
               )}
-              {playbackMode === 'replay' && autoScrollRef.current && (
+              {playbackMode === 'replay' && isPlaying && autoScrollRef.current && (
                 <>
                   <div className="h-2 w-2 animate-pulse rounded-full bg-blue-500" />
                   <span className="font-medium text-blue-600">FOLLOWING</span>

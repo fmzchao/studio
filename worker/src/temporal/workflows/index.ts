@@ -117,8 +117,7 @@ export async function shipsecWorkflowRun(
           timestamp: new Date().toISOString(),
           level: 'info',
           context: {
-            runId: input.runId,
-            componentRef: actionRef,
+            activityId: 'workflow-orchestration',
           },
         });
       },
@@ -302,10 +301,10 @@ export async function shipsecWorkflowRun(
             nodeRef: action.ref,
             timestamp: new Date().toISOString(),
             outputSummary: results.get(action.ref),
+            data: { activatedPorts: activePorts },
             level: 'info',
             context: {
-                runId: input.runId,
-                componentRef: action.ref,
+                activityId: 'workflow-orchestration',
             }
           });
 

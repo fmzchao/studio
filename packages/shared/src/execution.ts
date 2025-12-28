@@ -117,6 +117,18 @@ export const TraceEventMetadataSchema = z.object({
 
 export type TraceEventMetadata = z.infer<typeof TraceEventMetadataSchema>;
 
+export const TraceEventDataSchema = z.object({
+  activatedPorts: z.array(z.string()).optional(),
+  approved: z.boolean().optional(),
+  requestId: z.string().optional(),
+  inputType: z.string().optional(),
+  title: z.string().optional(),
+  description: z.string().optional(),
+  timeoutAt: z.string().optional(),
+}).passthrough();
+
+export type TraceEventData = z.infer<typeof TraceEventDataSchema>;
+
 export const TraceEventSchema = z.object({
   id: z.string(),
   runId: z.string(),
@@ -127,7 +139,7 @@ export const TraceEventSchema = z.object({
   message: z.string().optional(),
   error: TraceErrorSchema.optional(),
   outputSummary: z.record(z.string(), z.unknown()).optional(),
-  data: z.record(z.string(), z.unknown()).optional(),
+  data: TraceEventDataSchema.optional(),
   metadata: TraceEventMetadataSchema.optional(),
 });
 

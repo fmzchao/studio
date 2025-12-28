@@ -150,6 +150,10 @@ export interface ComponentPortMetadata {
   required?: boolean;
   description?: string;
   valuePriority?: 'manual-first' | 'connection-first';
+  /** True if this port controls conditional execution (branching) */
+  isBranching?: boolean;
+  /** Custom color for branching ports: 'green' | 'red' | 'amber' | 'blue' | 'purple' | 'slate' */
+  branchColor?: 'green' | 'red' | 'amber' | 'blue' | 'purple' | 'slate';
 }
 
 export type ComponentParameterType =
