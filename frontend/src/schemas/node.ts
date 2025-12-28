@@ -31,7 +31,8 @@ export const NodeStatusEnum = z.enum([
   'running',
   'success',
   'error',
-  'waiting'
+  'waiting',
+  'awaiting_input'
 ])
 
 export type NodeStatus = z.infer<typeof NodeStatusEnum>

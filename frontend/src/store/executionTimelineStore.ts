@@ -348,6 +348,9 @@ const calculateNodeStates = (
       case 'PROGRESS':
         status = 'running'
         break
+      case 'AWAITING_INPUT':
+        status = 'awaiting_input'
+        break
       case 'COMPLETED':
         status = 'success'
         break

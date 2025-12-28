@@ -19,6 +19,10 @@ import { IntegrationsModule } from './integrations/integrations.module';
 import { SchedulesModule } from './schedules/schedules.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 
+import { ApiKeysModule } from './api-keys/api-keys.module';
+import { WebhooksModule } from './webhooks/webhooks.module';
+import { HumanInputsModule } from './human-inputs/human-inputs.module';
+
 const coreModules = [
   AgentsModule,
   AnalyticsModule,
@@ -32,14 +36,11 @@ const coreModules = [
   SchedulesModule,
   ApiKeysModule,
   WebhooksModule,
-  ApprovalsModule,
+  HumanInputsModule,
 ];
+
 const testingModules =
   process.env.NODE_ENV === 'production' ? [] : [TestingSupportModule];
-
-import { ApiKeysModule } from './api-keys/api-keys.module';
-import { WebhooksModule } from './webhooks/webhooks.module';
-import { ApprovalsModule } from './approvals/approvals.module';
 
 @Module({
   imports: [

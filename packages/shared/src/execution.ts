@@ -79,7 +79,7 @@ export const WorkflowRunStatusSchema = z.object({
 
 export type WorkflowRunStatusPayload = z.infer<typeof WorkflowRunStatusSchema>;
 
-export const TRACE_EVENT_TYPES = ['STARTED', 'PROGRESS', 'COMPLETED', 'FAILED'] as const;
+export const TRACE_EVENT_TYPES = ['STARTED', 'PROGRESS', 'COMPLETED', 'FAILED', 'AWAITING_INPUT'] as const;
 export type TraceEventType = (typeof TRACE_EVENT_TYPES)[number];
 export const TraceEventTypeSchema = z.enum(TRACE_EVENT_TYPES);
 

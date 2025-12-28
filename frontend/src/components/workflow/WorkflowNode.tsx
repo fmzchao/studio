@@ -23,15 +23,17 @@ import {
 import { inputSupportsManualValue, runtimeInputTypeToPortDataType } from '@/utils/portUtils'
 import { WebhookDetails } from './WebhookDetails'
 import { useApiKeyStore } from '@/store/apiKeyStore'
-import { API_BASE_URL } from '@/services/api'
+import { API_BASE_URL, api } from '@/services/api'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useEntryPointActions } from './Canvas'
+import { ShieldCheck, ShieldAlert } from 'lucide-react'
 
 const STATUS_ICONS = {
   running: Loader2,
   success: CheckCircle,
   error: XCircle,
   waiting: Clock,
+  awaiting_input: ShieldAlert,
   idle: null,
 } as const
 

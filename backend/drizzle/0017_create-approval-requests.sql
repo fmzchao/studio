@@ -1,30 +1,59 @@
--- Create approval_status enum
-CREATE TYPE approval_status AS ENUM ('pending', 'approved', 'rejected', 'expired', 'cancelled');
+-- Drop the old approval_requests table (v1, no legacy data)
+DROP TABLE IF EXISTS approval_requests;
 
--- Create approval_requests table
-CREATE TABLE IF NOT EXISTS approval_requests (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    run_id TEXT NOT NULL,
-    workflow_id UUID NOT NULL,
-    node_ref TEXT NOT NULL,
-    status approval_status NOT NULL DEFAULT 'pending',
-    title TEXT NOT NULL,
-    description TEXT,
-    context JSONB DEFAULT '{}',
-    approve_token TEXT NOT NULL UNIQUE,
-    reject_token TEXT NOT NULL UNIQUE,
-    timeout_at TIMESTAMP WITH TIME ZONE,
-    responded_at TIMESTAMP WITH TIME ZONE,
-    responded_by TEXT,
-    response_note TEXT,
-    organization_id VARCHAR(191),
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
+-- Drop old enum
+DROP TYPE IF EXISTS approval_status;
+
+-- Create new enum for human input status
+CREATE TYPE human_input_status AS ENUM ('pending', 'resolved', 'expired', 'cancelled');
+
+-- Create new enum for input types
+CREATE TYPE human_input_type AS ENUM ('approval', 'form', 'selection', 'review', 'acknowledge');
+
+-- Human Input Requests table - generalized HITL system
+CREATE TABLE human_input_requests (
+  -- Primary key
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  
+  -- Workflow context
+  run_id TEXT NOT NULL,
+  workflow_id UUID NOT NULL,
+  node_ref TEXT NOT NULL,
+  
+  -- Status
+  status human_input_status NOT NULL DEFAULT 'pending',
+  
+  -- Input type and schema
+  input_type human_input_type NOT NULL DEFAULT 'approval',
+  input_schema JSONB NOT NULL DEFAULT '{}',
+  
+  -- Display metadata
+  title TEXT NOT NULL,
+  description TEXT,
+  context JSONB DEFAULT '{}',
+  
+  -- Secure token for public links
+  resolve_token TEXT NOT NULL UNIQUE,
+  
+  -- Timeout handling
+  timeout_at TIMESTAMPTZ,
+  
+  -- Response tracking
+  response_data JSONB,
+  responded_at TIMESTAMPTZ,
+  responded_by TEXT,
+  
+  -- Multi-tenancy
+  organization_id VARCHAR(191),
+  
+  -- Audit timestamps
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- Create indexes for common queries
-CREATE INDEX idx_approval_requests_run_id ON approval_requests(run_id);
-CREATE INDEX idx_approval_requests_status ON approval_requests(status);
-CREATE INDEX idx_approval_requests_org_id ON approval_requests(organization_id);
-CREATE INDEX idx_approval_requests_approve_token ON approval_requests(approve_token);
-CREATE INDEX idx_approval_requests_reject_token ON approval_requests(reject_token);
+-- Indexes for common queries
+CREATE INDEX idx_human_input_requests_status ON human_input_requests(status);
+CREATE INDEX idx_human_input_requests_run_id ON human_input_requests(run_id);
+CREATE INDEX idx_human_input_requests_workflow_id ON human_input_requests(workflow_id);
+CREATE INDEX idx_human_input_requests_organization_id ON human_input_requests(organization_id);
+CREATE INDEX idx_human_input_requests_resolve_token ON human_input_requests(resolve_token);
