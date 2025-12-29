@@ -581,15 +581,21 @@ function validateNucleiTemplate(yamlContent: string): void {
     const template = yaml.load(yamlContent) as any;
 
     if (!template || typeof template !== 'object') {
-      throw new Error('Invalid YAML: not an object');
+      throw new ValidationError('Invalid YAML: not an object', {
+        details: { received: typeof template },
+      });
     }
 
     if (!template.id || typeof template.id !== 'string') {
-      throw new Error('Invalid template: missing or invalid "id" field');
+      throw new ValidationError('Invalid template: missing or invalid "id" field', {
+        fieldErrors: { id: ['Template must have a string id field'] },
+      });
     }
 
     if (!template.info || typeof template.info !== 'object') {
-      throw new Error('Invalid template: missing or invalid "info" section');
+      throw new ValidationError('Invalid template: missing or invalid "info" section', {
+        fieldErrors: { info: ['Template must have an info section'] },
+      });
     }
 
     // Security checks
@@ -607,8 +613,9 @@ function validateNucleiTemplate(yamlContent: string): void {
 
     for (const pattern of dangerousPatterns) {
       if (yamlLower.includes(pattern)) {
-        throw new Error(
+        throw new ValidationError(
           `Security violation: template contains potentially dangerous pattern: ${pattern}`,
+          { details: { pattern, location: 'template_content' } },
         );
       }
     }
@@ -616,16 +623,22 @@ function validateNucleiTemplate(yamlContent: string): void {
     if (template.info.severity) {
       const validSeverities = ['info', 'low', 'medium', 'high', 'critical'];
       if (!validSeverities.includes(template.info.severity.toLowerCase())) {
-        throw new Error(
+        throw new ValidationError(
           `Invalid severity: ${template.info.severity}. Must be one of: ${validSeverities.join(', ')}`,
+          { fieldErrors: { severity: [`Must be one of: ${validSeverities.join(', ')}`] } },
         );
       }
     }
   } catch (error) {
-    if (error instanceof Error) {
-      throw new Error(`YAML validation failed: ${error.message}`);
+    if (error instanceof ValidationError) {
+      throw error; // Re-throw ValidationErrors as-is
     }
-    throw new Error('YAML validation failed: unknown error');
+    if (error instanceof Error) {
+      throw new ValidationError(`YAML validation failed: ${error.message}`, {
+        cause: error,
+      });
+    }
+    throw new ValidationError('YAML validation failed: unknown error');
   }
 }
 
@@ -680,7 +693,9 @@ async function extractAndValidateZip(
     }
 
     if (Object.keys(files).length === 0) {
-      throw new Error('No valid YAML templates found in archive');
+      throw new ValidationError('No valid YAML templates found in archive', {
+        details: { archiveSizeBytes: zipBuffer.length },
+      });
     }
 
     context.logger.info(
@@ -689,10 +704,15 @@ async function extractAndValidateZip(
 
     return files;
   } catch (error) {
-    if (error instanceof Error) {
-      throw new Error(`Failed to extract zip archive: ${error.message}`);
+    if (error instanceof ValidationError) {
+      throw error; // Re-throw ValidationErrors as-is
     }
-    throw new Error('Failed to extract zip archive');
+    if (error instanceof Error) {
+      throw new ServiceError(`Failed to extract zip archive: ${error.message}`, {
+        cause: error,
+      });
+    }
+    throw new ServiceError('Failed to extract zip archive');
   }
 }
 
