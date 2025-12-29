@@ -124,7 +124,11 @@ export async function shipsecWorkflowRun(
       run: async (actionRef, schedulerContext) => {
         const action = actionsByRef.get(actionRef);
         if (!action) {
-          throw new Error(`Action not found: ${actionRef}`);
+          throw ApplicationFailure.nonRetryable(
+            `Action not found: ${actionRef}`,
+            'NotFoundError',
+            [{ resourceType: 'action', resourceId: actionRef }],
+          );
         }
 
         const { params, warnings } = buildActionParams(action, results);
@@ -235,7 +239,11 @@ export async function shipsecWorkflowRun(
               // Timeout occurred
               console.log(`[Workflow] Human input timeout for ${action.ref}`);
               await expireHumanInputRequestActivity(approvalResult.requestId);
-              throw new Error(`Human input request timed out for node ${action.ref}`);
+              throw ApplicationFailure.nonRetryable(
+                `Human input request timed out for node ${action.ref}`,
+                'TimeoutError',
+                [{ nodeRef: action.ref, requestId: approvalResult.requestId, timeoutMs }],
+              );
             }
 
             resolution = humanInputResolutions.get(action.ref)!;
