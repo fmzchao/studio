@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import {
   componentRegistry,
   createExecutionContext,
+  NotFoundError,
   type IFileStorageService,
   type ISecretsService,
   type ITraceService,
@@ -76,14 +77,22 @@ export async function executeWorkflow(
     ): Promise<void> => {
       const action = actionsByRef.get(actionRef);
       if (!action) {
-        throw new Error(`Action not found: ${actionRef}`);
+        throw new NotFoundError(`Action not found: ${actionRef}`, {
+          resourceType: 'action',
+          resourceId: actionRef,
+          details: { runId },
+        });
       }
 
       const { triggeredBy, failure } = schedulerContext;
 
       const component = componentRegistry.get(action.componentId);
       if (!component) {
-        throw new Error(`Component not registered: ${action.componentId}`);
+        throw new NotFoundError(`Component not registered: ${action.componentId}`, {
+          resourceType: 'component',
+          resourceId: action.componentId,
+          details: { actionRef, runId },
+        });
       }
 
       const nodeMetadata = definition.nodes?.[action.ref];

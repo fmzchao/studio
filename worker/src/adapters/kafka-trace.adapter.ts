@@ -1,5 +1,6 @@
 import { Kafka, logLevel as KafkaLogLevel, type Producer } from 'kafkajs';
 import type { ITraceService, TraceEvent } from '@shipsec/component-sdk';
+import { ConfigurationError } from '@shipsec/component-sdk';
 
 interface KafkaTraceAdapterConfig {
   brokers: string[];
@@ -39,7 +40,10 @@ export class KafkaTraceAdapter implements ITraceService {
     private readonly logger: Pick<Console, 'log' | 'error'> = console,
   ) {
     if (!config.brokers.length) {
-      throw new Error('KafkaTraceAdapter requires at least one broker');
+      throw new ConfigurationError('KafkaTraceAdapter requires at least one broker', {
+        configKey: 'brokers',
+        details: { brokers: config.brokers },
+      });
     }
 
     const kafka = new Kafka({

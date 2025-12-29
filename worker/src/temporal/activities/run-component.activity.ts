@@ -5,6 +5,8 @@ import {
   componentRegistry,
   createExecutionContext,
   runComponentWithRunner,
+  NotFoundError,
+  ValidationError,
   type IFileStorageService,
   type ISecretsService,
   type ITraceService,
@@ -90,7 +92,11 @@ export async function runComponentActivity(
   const component = componentRegistry.get(action.componentId);
   if (!component) {
     console.error(`❌ Component not found: ${action.componentId}`);
-    throw new Error(`Component not registered: ${action.componentId}`);
+    throw new NotFoundError(`Component not registered: ${action.componentId}`, {
+      resourceType: 'component',
+      resourceId: action.componentId,
+      details: { actionRef: action.ref },
+    });
   }
 
   console.log(`✅ Component found: ${action.componentId}`);
@@ -179,7 +185,12 @@ export async function runComponentActivity(
 
   if (warnings.length > 0) {
     const missing = warnings.map((warning) => `'${warning.target}'`).join(', ');
-    throw new Error(`Missing required inputs for ${action.ref}: ${missing}`);
+    throw new ValidationError(`Missing required inputs for ${action.ref}: ${missing}`, {
+      fieldErrors: Object.fromEntries(
+        warnings.map((w) => [w.target, [`mapped from ${w.sourceRef}.${w.sourceHandle} was undefined`]])
+      ),
+      details: { actionRef: action.ref, componentId: action.componentId },
+    });
   }
 
   const parsedParams = component.inputSchema.parse(params);
