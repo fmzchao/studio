@@ -331,8 +331,9 @@ function ParametersDisplay({
   position = 'bottom'
 }: ParametersDisplayProps) {
   // Show required parameters and important select parameters (like mode)
+  // Exclude nested parameters (those with visibleWhen) like schemaType
   const selectParams = componentParameters.filter(
-    param => param.type === 'select' && !param.required
+    param => param.type === 'select' && !param.required && !param.visibleWhen
   )
   const paramsToShow = [...requiredParams, ...selectParams]
 
@@ -1412,7 +1413,6 @@ export const WorkflowNode = ({ data, selected, id }: NodeProps<NodeData>) => {
           const branchingOutputs = effectiveOutputs.filter((o: any) => o.isBranching)
           if (branchingOutputs.length === 0) return null
 
-          // Determine which branch is active (for execution mode)
           // Determine which branches are active (for execution mode)
           const data = isTimelineActive ? visualState.lastEvent?.data : undefined
           const activatedPorts = data?.activatedPorts
@@ -1511,57 +1511,64 @@ export const WorkflowNode = ({ data, selected, id }: NodeProps<NodeData>) => {
               </div>
             </div>
           )
-        })()}
+        })()
+        }
 
 
         {/* Enhanced Execution Status Messages */}
-        {isTimelineActive && (
-          <div className="pt-2 border-t border-border/50">
-            {visualState.lastEvent && (
-              <div className="text-xs text-muted-foreground mt-2">
-                <div className="font-medium">
-                  Last: {visualState.lastEvent.type.replace('_', ' ')}
-                </div>
-                {visualState.lastEvent.message && (
-                  <div className="truncate mt-1" title={visualState.lastEvent.message}>
-                    {visualState.lastEvent.message}
+        {
+          isTimelineActive && (
+            <div className="pt-2 border-t border-border/50">
+              {visualState.lastEvent && (
+                <div className="text-xs text-muted-foreground mt-2">
+                  <div className="font-medium">
+                    Last: {visualState.lastEvent.type.replace('_', ' ')}
                   </div>
-                )}
-              </div>
-            )}
+                  {visualState.lastEvent.message && (
+                    <div className="truncate mt-1" title={visualState.lastEvent.message}>
+                      {visualState.lastEvent.message}
+                    </div>
+                  )}
+                </div>
+              )}
 
-            {/* Legacy status messages */}
-            {!isTimelineActive && nodeData.status === 'success' && nodeData.executionTime && (
-              <Badge variant="secondary" className="text-xs bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-300">
-                {nodeData.executionTime}ms
+              {/* Legacy status messages */}
+              {!isTimelineActive && nodeData.status === 'success' && nodeData.executionTime && (
+                <Badge variant="secondary" className="text-xs bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-300">
+                  {nodeData.executionTime}ms
+                </Badge>
+              )}
+
+              {!isTimelineActive && nodeData.status === 'error' && nodeData.error && (
+                <Badge variant="secondary" className="text-xs bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300 truncate max-w-full" title={nodeData.error}>
+                  ✗ {nodeData.error}
+                </Badge>
+              )}
+            </div>
+          )
+        }
+
+        {/* Legacy status messages (when not in timeline mode) */}
+        {
+          !isTimelineActive && nodeData.status === 'success' && nodeData.executionTime && (
+            <div className="pt-2 border-t border-border">
+              <Badge variant="secondary" className="text-xs bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300">
+                ✓ {nodeData.executionTime}ms
               </Badge>
-            )}
+            </div>
+          )
+        }
 
-            {!isTimelineActive && nodeData.status === 'error' && nodeData.error && (
+        {
+          !isTimelineActive && nodeData.status === 'error' && nodeData.error && (
+            <div className="pt-2 border-t border-red-200">
               <Badge variant="secondary" className="text-xs bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300 truncate max-w-full" title={nodeData.error}>
                 ✗ {nodeData.error}
               </Badge>
-            )}
-          </div>
-        )}
-
-        {/* Legacy status messages (when not in timeline mode) */}
-        {!isTimelineActive && nodeData.status === 'success' && nodeData.executionTime && (
-          <div className="pt-2 border-t border-border">
-            <Badge variant="secondary" className="text-xs bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300">
-              ✓ {nodeData.executionTime}ms
-            </Badge>
-          </div>
-        )}
-
-        {!isTimelineActive && nodeData.status === 'error' && nodeData.error && (
-          <div className="pt-2 border-t border-red-200">
-            <Badge variant="secondary" className="text-xs bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300 truncate max-w-full" title={nodeData.error}>
-              ✗ {nodeData.error}
-            </Badge>
-          </div>
-        )}
-      </div>
-    </div>
+            </div>
+          )
+        }
+      </div >
+    </div >
   )
 }

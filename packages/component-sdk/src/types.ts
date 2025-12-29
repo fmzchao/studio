@@ -191,6 +191,8 @@ export interface ComponentParameterMetadata {
   min?: number;
   max?: number;
   rows?: number;
+  /** Conditional visibility: parameter is shown only when all conditions are met */
+  visibleWhen?: Record<string, unknown>;
 }
 
 export type ComponentAuthorType = 'shipsecai' | 'community';
