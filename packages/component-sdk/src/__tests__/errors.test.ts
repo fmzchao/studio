@@ -292,14 +292,14 @@ describe('fromHttpResponse', () => {
   }
 
   it('maps 4xx status codes to appropriate errors', () => {
-    const tests: [number, typeof ValidationError][] = [
-      [400, ValidationError], [401, AuthenticationError], [403, PermissionError],
-      [404, NotFoundError], [422, ValidationError],
+    const tests: [number, string, boolean][] = [
+      [400, 'ValidationError', false], [401, 'AuthenticationError', false], [403, 'PermissionError', false],
+      [404, 'NotFoundError', false], [422, 'ValidationError', false],
     ];
-    for (const [status, ExpectedClass] of tests) {
+    for (const [status, expectedType, retryable] of tests) {
       const error = fromHttpResponse(createMockResponse(status));
-      expect(error).toBeInstanceOf(ExpectedClass);
-      expect(error.retryable).toBe(false);
+      expect(error.type).toBe(expectedType);
+      expect(error.retryable).toBe(retryable);
     }
   });
 
