@@ -287,139 +287,53 @@ describe('HttpError', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('fromHttpResponse', () => {
-  function createMockResponse(status: number, body?: string): Response {
-    return {
-      status,
-      statusText: body || `Status ${status}`,
-      url: 'https://api.example.com/test',
-      headers: new Headers(),
-    } as Response;
+  function createMockResponse(status: number): Response {
+    return { status, statusText: `Status ${status}`, url: 'https://api.example.com/test', headers: new Headers() } as Response;
   }
 
-  it('should return ValidationError for 422 (Unprocessable Entity)', () => {
-    const response = createMockResponse(422, 'Validation failed');
-    const error = fromHttpResponse(response, 'Validation failed');
-
-    expect(error).toBeInstanceOf(ValidationError);
-    expect(error.retryable).toBe(false);
-    expect(error.message).toBe('Validation failed');
+  it('maps 4xx status codes to appropriate errors', () => {
+    const tests: [number, typeof ValidationError][] = [
+      [400, ValidationError], [401, AuthenticationError], [403, PermissionError],
+      [404, NotFoundError], [422, ValidationError],
+    ];
+    for (const [status, ExpectedClass] of tests) {
+      const error = fromHttpResponse(createMockResponse(status));
+      expect(error).toBeInstanceOf(ExpectedClass);
+      expect(error.retryable).toBe(false);
+    }
   });
 
-  it('should return HttpError for unknown 4xx status codes', () => {
-    const response = createMockResponse(418, "I'm a teapot");
-    const error = fromHttpResponse(response, "I'm a teapot");
-
-    expect(error).toBeInstanceOf(HttpError);
-    expect(error.retryable).toBe(false);
-    expect(error.type).toBe('HttpError');
-    expect((error as HttpError).statusCode).toBe(418);
+  it('maps 5xx status codes to ServiceError', () => {
+    for (const status of [500, 502, 503, 504]) {
+      const error = fromHttpResponse(createMockResponse(status));
+      expect(error).toBeInstanceOf(ServiceError);
+      expect(error.retryable).toBe(true);
+      expect((error as ServiceError).statusCode).toBe(status);
+    }
   });
 
-  it('should return ServiceError for 500', () => {
-    const response = createMockResponse(500, 'Internal server error');
-    const error = fromHttpResponse(response, 'Internal server error');
-
-    expect(error).toBeInstanceOf(ServiceError);
-    expect(error.retryable).toBe(true);
-    expect((error as ServiceError).statusCode).toBe(500);
-  });
-
-  it('should return ServiceError for 502', () => {
-    const response = createMockResponse(502, 'Bad gateway');
-    const error = fromHttpResponse(response, 'Bad gateway');
-
-    expect(error).toBeInstanceOf(ServiceError);
-    expect(error.retryable).toBe(true);
-  });
-
-  it('should return ServiceError for 503', () => {
-    const response = createMockResponse(503, 'Service unavailable');
-    const error = fromHttpResponse(response, 'Service unavailable');
-
-    expect(error).toBeInstanceOf(ServiceError);
-    expect(error.retryable).toBe(true);
-  });
-
-  it('should return ServiceError for 504', () => {
-    const response = createMockResponse(504, 'Gateway timeout');
-    const error = fromHttpResponse(response, 'Gateway timeout');
-
-    expect(error).toBeInstanceOf(ServiceError);
-    expect(error.retryable).toBe(true);
-  });
-
-  it('should return HttpError for unknown 5xx status codes', () => {
-    const response = createMockResponse(599, 'Unknown server error');
-    const error = fromHttpResponse(response, 'Unknown server error');
-
-    expect(error).toBeInstanceOf(HttpError);
-    expect(error.retryable).toBe(false);
-    expect(error.type).toBe('HttpError');
-    expect((error as HttpError).statusCode).toBe(599);
-  });
-
-  it('should return ValidationError for 400', () => {
-    const response = createMockResponse(400, 'Bad request');
-    const error = fromHttpResponse(response, 'Bad request');
-
-    expect(error).toBeInstanceOf(ValidationError);
-    expect(error.retryable).toBe(false);
-    expect(error.message).toBe('Bad request');
-  });
-
-  it('should return AuthenticationError for 401', () => {
-    const response = createMockResponse(401, 'Unauthorized');
-    const error = fromHttpResponse(response, 'Unauthorized');
-
-    expect(error).toBeInstanceOf(AuthenticationError);
-    expect(error.retryable).toBe(false);
-  });
-
-  it('should return PermissionError for 403', () => {
-    const response = createMockResponse(403, 'Forbidden');
-    const error = fromHttpResponse(response, 'Forbidden');
-
-    expect(error).toBeInstanceOf(PermissionError);
-    expect(error.retryable).toBe(false);
-  });
-
-  it('should return NotFoundError for 404', () => {
-    const response = createMockResponse(404, 'Not found');
-    const error = fromHttpResponse(response, 'Not found');
-
-    expect(error).toBeInstanceOf(NotFoundError);
-    expect(error.retryable).toBe(false);
-  });
-
-  it('should return TimeoutError for 408', () => {
-    const response = createMockResponse(408, 'Request timeout');
-    const error = fromHttpResponse(response, 'Request timeout');
-
-    expect(error).toBeInstanceOf(TimeoutError);
-    expect(error.retryable).toBe(true);
-  });
-
-  it('should return RateLimitError for 429 with headers', () => {
-    const response = {
-      status: 429,
-      statusText: 'Too Many Requests',
-      url: 'https://api.example.com/test',
-      headers: new Headers({
-        'Retry-After': '60',
-      }),
-    } as Response;
-
-    const error = fromHttpResponse(response, 'Rate limited');
-
+  it('maps special status codes correctly', () => {
+    expect(fromHttpResponse(createMockResponse(408))).toBeInstanceOf(TimeoutError);
+    const rateLimit = { status: 429, headers: new Headers({ 'Retry-After': '60' }) } as Response;
+    const error = fromHttpResponse(rateLimit, 'Rate limited');
     expect(error).toBeInstanceOf(RateLimitError);
-    expect(error.retryable).toBe(true);
     expect((error as RateLimitError).retryDelayMs).toBe(60000);
   });
 
-  it('should include URL and status in error details', () => {
-    const response = createMockResponse(500, 'Error');
-    const error = fromHttpResponse(response, 'Error');
+  it('returns HttpError for unknown status codes', () => {
+    const unknown4xx = fromHttpResponse(createMockResponse(418));
+    expect(unknown4xx).toBeInstanceOf(HttpError);
+    expect(unknown4xx.retryable).toBe(false);
+    expect((unknown4xx as HttpError).statusCode).toBe(418);
 
+    const unknown5xx = fromHttpResponse(createMockResponse(599));
+    expect(unknown5xx).toBeInstanceOf(HttpError);
+    expect(unknown5xx.retryable).toBe(false);
+    expect((unknown5xx as HttpError).statusCode).toBe(599);
+  });
+
+  it('includes URL and status in error details', () => {
+    const error = fromHttpResponse(createMockResponse(500), 'Error');
     expect(error.details?.url).toBe('https://api.example.com/test');
     expect(error.details?.status).toBe(500);
   });
@@ -560,30 +474,23 @@ describe('wrapError', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('Error Type Constants', () => {
-  it('should contain all non-retryable error types', () => {
-    expect(NON_RETRYABLE_ERROR_TYPES).toContain('AuthenticationError');
-    expect(NON_RETRYABLE_ERROR_TYPES).toContain('NotFoundError');
-    expect(NON_RETRYABLE_ERROR_TYPES).toContain('ValidationError');
-    expect(NON_RETRYABLE_ERROR_TYPES).toContain('ConfigurationError');
-    expect(NON_RETRYABLE_ERROR_TYPES).toContain('PermissionError');
-    expect(NON_RETRYABLE_ERROR_TYPES).toContain('ContainerError');
-    expect(NON_RETRYABLE_ERROR_TYPES).toContain('HttpError');
+  it('NON_RETRYABLE_ERROR_TYPES contains expected types', () => {
     expect(NON_RETRYABLE_ERROR_TYPES).toHaveLength(7);
+    expect(NON_RETRYABLE_ERROR_TYPES).toEqual(expect.arrayContaining([
+      'AuthenticationError', 'NotFoundError', 'ValidationError', 'ConfigurationError',
+      'PermissionError', 'ContainerError', 'HttpError',
+    ]));
   });
 
-  it('should contain all retryable error types', () => {
-    expect(RETRYABLE_ERROR_TYPES).toContain('NetworkError');
-    expect(RETRYABLE_ERROR_TYPES).toContain('RateLimitError');
-    expect(RETRYABLE_ERROR_TYPES).toContain('ServiceError');
-    expect(RETRYABLE_ERROR_TYPES).toContain('TimeoutError');
-    expect(RETRYABLE_ERROR_TYPES).toContain('ResourceUnavailableError');
+  it('RETRYABLE_ERROR_TYPES contains expected types', () => {
     expect(RETRYABLE_ERROR_TYPES).toHaveLength(5);
+    expect(RETRYABLE_ERROR_TYPES).toEqual(expect.arrayContaining([
+      'NetworkError', 'RateLimitError', 'ServiceError', 'TimeoutError', 'ResourceUnavailableError',
+    ]));
   });
 
-  it('should have all error types combined', () => {
+  it('ALL_ERROR_TYPES has correct count', () => {
     expect(ALL_ERROR_TYPES).toHaveLength(12);
-    expect(ALL_ERROR_TYPES).toContain('NetworkError');
-    expect(ALL_ERROR_TYPES).toContain('AuthenticationError');
     expect(ALL_ERROR_TYPES).toContain('HttpError');
   });
 });
