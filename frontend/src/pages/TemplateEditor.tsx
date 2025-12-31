@@ -47,6 +47,9 @@ export function TemplateEditor() {
 
     if (!templateCode.trim()) return;
 
+    console.log('--- RENDER PREVIEW CALLED ---')
+    console.log('Code length:', templateCode?.length)
+
     const htmlContent = `
       <!DOCTYPE html>
       <html>
@@ -66,6 +69,7 @@ export function TemplateEditor() {
         <body>
           <div id="root"></div>
           <script type="module">
+            console.log('--- IFRAME SCRIPT START ---');
             import { h, render } from 'https://unpkg.com/preact?module';
             import htm from 'https://unpkg.com/htm?module';
             const html = htm.bind(h);
@@ -121,9 +125,29 @@ export function TemplateEditor() {
       setDescription(selectedTemplate.description || '')
 
       const rawContent = selectedTemplate.content
-      const initialContent = typeof rawContent === 'string'
-        ? rawContent
-        : (rawContent as any)?.html || (rawContent as any)?.template || JSON.stringify(rawContent, null, 2)
+      let initialContent = ''
+
+      if (typeof rawContent === 'string') {
+        // Try to parse if it's a JSON string hiding an object
+        try {
+          const parsed = JSON.parse(rawContent)
+          if (parsed && (parsed.template || parsed.html)) {
+            initialContent = parsed.template || parsed.html
+          } else {
+            initialContent = rawContent
+          }
+        } catch (e) {
+          initialContent = rawContent
+        }
+      } else {
+        initialContent = (rawContent as any)?.template || (rawContent as any)?.html || JSON.stringify(rawContent, null, 2)
+      }
+
+      console.log('--- DEBUG TEMPLATE LOAD ---')
+      console.log('Raw Content:', rawContent)
+      console.log('Content Type:', typeof rawContent)
+      console.log('Resolved Initial Content:', initialContent)
+      console.log('---------------------------')
 
       setContent(initialContent)
       setInputSchema(JSON.stringify(selectedTemplate.inputSchema, null, 2))
@@ -423,7 +447,7 @@ export function TemplateEditor() {
                 srcDoc={srcDoc}
                 className="w-full h-full border-none"
                 title="Template Preview"
-                sandbox="allow-scripts"
+                sandbox="allow-scripts allow-same-origin"
               />
             </div>
           </div>
