@@ -56,6 +56,9 @@ import './security/trufflehog';
 import './security/terminal-demo';
 import './security/virustotal';
 
+// Browser components
+import './browser/automation';
+
 // GitHub components
 import './github/connection-provider';
 import './github/remove-org-membership';
