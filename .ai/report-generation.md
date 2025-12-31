@@ -122,6 +122,8 @@ A first-class report generation feature that allows users to create AI-generated
 | POST | `/api/v1/templates/ai-generate` | **AI template generation (streaming)** |
 | POST | `/api/v1/templates/ai-generate-structured` | **AI template with structured output** |
 
+**Note:** OpenAPI spec generated successfully with `backend/scripts/generate-openapi.ts` and backend-client types regenerated with `packages/backend-client/generate`.
+
 ---
 
 ## Phase 3: Template Editor UI ✅ COMPLETE (with AI SDK)
@@ -484,6 +486,7 @@ Store as artifact
 - [x] Phase 2: CRUD API endpoints for templates
 - [x] Phase 2: Template DTOs and validation
 - [x] Phase 2: AI template generation endpoints (`ai-generate`, `ai-generate-structured`)
+- [x] Phase 2: OpenAPI spec generation ✅
 - [x] Phase 3: Templates list page UI (`TemplatesPage.tsx`)
 - [x] Phase 3: Template editor with AI chat (`TemplateEditor.tsx`)
 - [x] Phase 3: AI Elements integration (`TemplateChat.tsx`)
@@ -493,7 +496,6 @@ Store as artifact
 - [x] Phase 4: Standard templates library (4 templates)
 - [ ] Phase 5: Workflow node configuration UI (workflow builder integration)
 - [ ] Phase 5: Report generator in workflow execution (temporal workflow)
-- [ ] Standard template library (4 templates)
 
 ---
 
@@ -511,18 +513,9 @@ Store as artifact
    - Template selector component
    - Input mappings UI
 
-3. **OpenAPI Spec Fix** (Phase 2)
-   - Fix `z.record(z.unknown())` compatibility issue
-   - Re-enable ReportTemplatesModule in app.module.ts
-   - Regenerate backend-client package
-
 ### Medium Priority
 
-1. **AI Template Generation** (Phase 3)
-   - Integrate with AI service for template generation
-   - Add prompt input and template preview
-
-2. **Report Generation in Workflows** (Phase 5)
+1. **Report Generation in Workflows** (Phase 5)
    - Add report generator to workflow DSL schema
    - Create Temporal activity for report generation
 
