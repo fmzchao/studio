@@ -1,32 +1,113 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import type { components } from '@shipsec/backend-client'
 import { useTemplateStore } from '@/store/templateStore'
 import { TemplateChat } from '@/components/ai/TemplateChat'
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
-import { api } from '@/services/api'
+  ArrowLeftIcon,
+  SaveIcon,
+  EyeIcon,
+  SparklesIcon,
+  RefreshCwIcon,
+  FileJsonIcon,
+  ChevronDownIcon,
+  ChevronRightIcon,
+  ZoomInIcon,
+  ZoomOutIcon,
+} from 'lucide-react'
 
 type Template = components['schemas']['TemplateResponseDto']
 
 export function TemplateEditor() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const { selectedTemplate, loading, error, selectTemplate, updateTemplate } = useTemplateStore()
+  const { selectedTemplate, selectTemplate, updateTemplate, loading, error } = useTemplateStore()
 
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [content, setContent] = useState('')
   const [inputSchema, setInputSchema] = useState('')
   const [sampleData, setSampleData] = useState('')
-  const [activeTab, setActiveTab] = useState<'content' | 'schema' | 'preview' | 'ai'>('content')
   const [saving, setSaving] = useState(false)
-  const [previewHtml, setPreviewHtml] = useState('')
-  const [showAIDrawer, setShowAIDrawer] = useState(false)
+  const [previewScale, setPreviewScale] = useState(100)
+  const [schemaExpanded, setSchemaExpanded] = useState(true)
+  const [sampleDataExpanded, setSampleDataExpanded] = useState(false)
+
+  // State for iframe content - using srcDoc for better React compatibility
+  const [srcDoc, setSrcDoc] = useState('')
+
+  const renderPreview = useCallback((templateCode: string, dataStr: string) => {
+    let data = {}
+    try {
+      data = JSON.parse(dataStr)
+    } catch (e) {
+      // Ignore invalid JSON during streaming
+      return
+    }
+
+    if (!templateCode.trim()) return;
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <style>
+            body { 
+              font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
+              margin: 0; 
+              padding: 20px;
+              color: #333;
+              line-height: 1.5;
+            }
+            .error { color: #ef4444; background: #fef2f2; padding: 12px; border: 1px solid #fee2e2; border-radius: 6px; font-size: 14px; }
+          </style>
+        </head>
+        <body>
+          <div id="root"></div>
+          <script type="module">
+            import { h, render } from 'https://unpkg.com/preact?module';
+            import htm from 'https://unpkg.com/htm?module';
+            const html = htm.bind(h);
+
+            try {
+              const code = ${JSON.stringify(templateCode)};
+              
+              // Clean code: remove imports and exports
+              const cleanCode = code
+                .replace(/import\\s+.*?from\\s+['"].*?['"];?/g, '')
+                .replace(/export\\s+default\\s+/g, '')
+                .replace(/export\\s+/g, '');
+
+              // Wrap: we need to find the Template function and return it
+              const wrappedCode = \`
+                \${cleanCode}
+                if (typeof Template === 'undefined') {
+                  throw new Error('Function "Template" not found in the generated code.');
+                }
+                return Template;
+              \`;
+
+              const TemplateComponent = (new Function('h', 'html', wrappedCode))(h, html);
+
+              const data = ${JSON.stringify(data)};
+              render(h(TemplateComponent, { data }), document.getElementById('root'));
+            } catch (err) {
+              document.getElementById('root').innerHTML = \`
+                <div class="error">
+                  <strong>Render Error:</strong><br/>
+                  \${err.message}
+                </div>
+              \`;
+              console.error('Preview Render Error:', err);
+            }
+          </script>
+        </body>
+      </html>
+    `
+
+    setSrcDoc(htmlContent)
+  }, [])
 
   useEffect(() => {
     if (id) {
@@ -38,23 +119,35 @@ export function TemplateEditor() {
     if (selectedTemplate) {
       setName(selectedTemplate.name)
       setDescription(selectedTemplate.description || '')
-      setContent(JSON.stringify(selectedTemplate.content, null, 2))
-      setInputSchema(JSON.stringify(selectedTemplate.inputSchema, null, 2))
-      setSampleData(selectedTemplate.sampleData ? JSON.stringify(selectedTemplate.sampleData, null, 2) : '{}')
-      generatePreview(selectedTemplate)
-    }
-  }, [selectedTemplate])
 
-  const generatePreview = async (template: Template) => {
-    try {
-      const data = await api.templates.preview(template.id, {
-        data: template.sampleData || {},
-      })
-      setPreviewHtml(data.renderedHtml || '<p>Preview not available</p>')
-    } catch (error) {
-      console.error('Failed to generate preview:', error)
-      setPreviewHtml('<p>Preview generation failed</p>')
+      const rawContent = selectedTemplate.content
+      const initialContent = typeof rawContent === 'string'
+        ? rawContent
+        : (rawContent as any)?.html || (rawContent as any)?.template || JSON.stringify(rawContent, null, 2)
+
+      setContent(initialContent)
+      setInputSchema(JSON.stringify(selectedTemplate.inputSchema, null, 2))
+      setSampleData(
+        selectedTemplate.sampleData ? JSON.stringify(selectedTemplate.sampleData, null, 2) : '{}'
+      )
+
+      renderPreview(initialContent, selectedTemplate.sampleData ? JSON.stringify(selectedTemplate.sampleData) : '{}')
     }
+  }, [selectedTemplate, renderPreview])
+
+  // Debounced preview generation for live edits and AI streaming
+  useEffect(() => {
+    if (!selectedTemplate) return
+
+    const timer = setTimeout(() => {
+      renderPreview(content, sampleData)
+    }, 500) // 500ms debounce for local rendering is plenty
+
+    return () => clearTimeout(timer)
+  }, [content, sampleData, selectedTemplate, renderPreview])
+
+  const handleRefreshPreview = () => {
+    renderPreview(content, sampleData)
   }
 
   const handleSave = async () => {
@@ -62,15 +155,8 @@ export function TemplateEditor() {
 
     setSaving(true)
     try {
-      let parsedContent: Record<string, unknown> = {}
       let parsedSchema: Record<string, unknown> = {}
       let parsedSampleData: Record<string, unknown> = {}
-
-      try {
-        parsedContent = JSON.parse(content)
-      } catch (e) {
-        console.error('Invalid JSON in content')
-      }
 
       try {
         parsedSchema = JSON.parse(inputSchema)
@@ -87,14 +173,10 @@ export function TemplateEditor() {
       await updateTemplate(id, {
         name,
         description,
-        content: parsedContent,
+        content: { template: content, type: 'preact-htm' },
         inputSchema: parsedSchema,
         sampleData: parsedSampleData,
       })
-
-      if (activeTab === 'preview') {
-        generatePreview({ ...selectedTemplate, name, description, content: parsedContent, inputSchema: parsedSchema, sampleData: parsedSampleData })
-      }
     } catch (error) {
       console.error('Failed to save template:', error)
     } finally {
@@ -102,199 +184,251 @@ export function TemplateEditor() {
     }
   }
 
-  const handleInsertTemplate = (templateContent: string) => {
-    setContent(templateContent)
-    setShowAIDrawer(false)
-    setActiveTab('content')
+  const handleUpdateTemplate = (update: {
+    template: string;
+    inputSchema: Record<string, unknown>;
+    sampleData: Record<string, unknown>;
+    description: string;
+  }) => {
+    if (update.template) {
+      setContent(update.template)
+    }
+
+    if (update.inputSchema && Object.keys(update.inputSchema).length > 0) {
+      setInputSchema(JSON.stringify(update.inputSchema, null, 2))
+    }
+
+    if (update.sampleData && Object.keys(update.sampleData).length > 0) {
+      setSampleData(JSON.stringify(update.sampleData, null, 2))
+    }
+
+    if (update.description && !description) {
+      setDescription(update.description)
+    }
   }
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      <div className="flex items-center justify-center h-full bg-gray-50">
+        <div className="flex flex-col items-center gap-3">
+          <div className="animate-spin rounded-full h-10 w-10 border-2 border-blue-500 border-t-transparent"></div>
+          <p className="text-gray-500 text-sm">Loading template...</p>
+        </div>
       </div>
     )
   }
 
   if (error) {
     return (
-      <div className="p-6">
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700">{error}</div>
+      <div className="flex items-center justify-center h-full bg-gray-50">
+        <div className="bg-red-50 border border-red-200 rounded-xl p-6 max-w-md">
+          <p className="text-red-600 text-center">{error}</p>
+          <button
+            onClick={() => navigate('/templates')}
+            className="mt-4 w-full px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+          >
+            Back to Templates
+          </button>
+        </div>
       </div>
     )
   }
 
   if (!selectedTemplate) {
     return (
-      <div className="p-6">
-        <div className="text-center text-gray-500">Template not found</div>
+      <div className="flex items-center justify-center h-full bg-gray-50">
+        <div className="text-center">
+          <p className="text-gray-500">Template not found</p>
+          <button
+            onClick={() => navigate('/templates')}
+            className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            Back to Templates
+          </button>
+        </div>
       </div>
     )
   }
 
   return (
-    <div className="h-full flex flex-col">
-      <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+    <div className="h-full flex flex-col bg-gray-50 text-gray-900 overflow-hidden">
+      {/* Header */}
+      <header className="flex items-center justify-between px-4 py-3 bg-white border-b border-gray-200 shadow-sm">
         <div className="flex items-center gap-4">
           <button
             onClick={() => navigate('/templates')}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            className="p-2 hover:bg-gray-100 rounded-lg transition-colors group"
           >
-            <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
+            <ArrowLeftIcon className="w-5 h-5 text-gray-500 group-hover:text-gray-700" />
           </button>
-          <div>
+          <div className="flex items-center gap-3">
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="text-xl font-bold text-gray-900 bg-transparent border-none focus:ring-0 p-0"
+              className="text-lg font-semibold text-gray-900 bg-transparent border-none focus:outline-none focus:ring-2 focus:ring-blue-500 rounded px-2 py-1 -ml-2"
               disabled={selectedTemplate.isSystem}
             />
-            <p className="text-sm text-gray-500">
-              Version {selectedTemplate.version} {selectedTemplate.isSystem && '• System Template'}
-            </p>
+            <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs font-medium rounded-full">
+              v{selectedTemplate.version}
+            </span>
+            {selectedTemplate.isSystem && (
+              <span className="px-2 py-0.5 bg-gray-100 text-gray-600 text-xs font-medium rounded-full">
+                System
+              </span>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={() => setShowAIDrawer(true)}
-            className="px-4 py-2 text-purple-600 bg-purple-50 hover:bg-purple-100 rounded-lg transition-colors flex items-center gap-2"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-            </svg>
-            AI Assist
-          </button>
-          <button
             onClick={handleSave}
-            disabled={saving}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+            disabled={saving || selectedTemplate.isSystem}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all font-medium text-sm shadow-sm"
           >
+            <SaveIcon className="w-4 h-4" />
             {saving ? 'Saving...' : 'Save Changes'}
           </button>
         </div>
-      </div>
+      </header>
 
+      {/* Main Content */}
       <div className="flex-1 flex overflow-hidden">
-        <div className="w-80 border-r border-gray-200 p-4 overflow-y-auto">
-          <h3 className="font-medium text-gray-900 mb-4">Template Details</h3>
-
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-              <textarea
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                rows={3}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
-                disabled={selectedTemplate.isSystem}
-              />
+        {/* Left Panel - Schema (top) + Chat (bottom) */}
+        <div className="w-[400px] flex flex-col border-r border-gray-200 bg-white">
+          {/* Top Left: Schema Section */}
+          <div className="flex-shrink-0 border-b border-gray-200 max-h-[45%] overflow-hidden flex flex-col">
+            <div className="px-4 py-3 border-b border-gray-100 bg-gray-50/50">
+              <div className="flex items-center gap-2">
+                <FileJsonIcon className="w-4 h-4 text-blue-600" />
+                <h3 className="font-medium text-gray-800 text-sm">Template Schema</h3>
+              </div>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Sample Data (JSON)</label>
-              <textarea
-                value={sampleData}
-                onChange={(e) => setSampleData(e.target.value)}
-                rows={10}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 font-mono text-sm"
-                disabled={selectedTemplate.isSystem}
+            <div className="flex-1 overflow-y-auto p-3 space-y-3">
+              {/* Input Schema */}
+              <div className="rounded-lg border border-gray-200 overflow-hidden">
+                <button
+                  onClick={() => setSchemaExpanded(!schemaExpanded)}
+                  className="w-full flex items-center justify-between px-3 py-2 bg-gray-50 hover:bg-gray-100 transition-colors"
+                >
+                  <span className="text-xs font-medium text-gray-700">Input Schema</span>
+                  {schemaExpanded ? (
+                    <ChevronDownIcon className="w-4 h-4 text-gray-400" />
+                  ) : (
+                    <ChevronRightIcon className="w-4 h-4 text-gray-400" />
+                  )}
+                </button>
+                {schemaExpanded && (
+                  <textarea
+                    value={inputSchema}
+                    onChange={(e) => setInputSchema(e.target.value)}
+                    className="w-full p-3 bg-gray-50/50 text-gray-700 font-mono text-xs border-none focus:ring-0 resize-none"
+                    rows={6}
+                    disabled={selectedTemplate.isSystem}
+                    spellCheck={false}
+                  />
+                )}
+              </div>
+
+              {/* Sample Data */}
+              <div className="rounded-lg border border-gray-200 overflow-hidden">
+                <button
+                  onClick={() => setSampleDataExpanded(!sampleDataExpanded)}
+                  className="w-full flex items-center justify-between px-3 py-2 bg-gray-50 hover:bg-gray-100 transition-colors"
+                >
+                  <span className="text-xs font-medium text-gray-700">Sample Data</span>
+                  {sampleDataExpanded ? (
+                    <ChevronDownIcon className="w-4 h-4 text-gray-400" />
+                  ) : (
+                    <ChevronRightIcon className="w-4 h-4 text-gray-400" />
+                  )}
+                </button>
+                {sampleDataExpanded && (
+                  <textarea
+                    value={sampleData}
+                    onChange={(e) => setSampleData(e.target.value)}
+                    className="w-full p-3 bg-gray-50/50 text-gray-700 font-mono text-xs border-none focus:ring-0 resize-none"
+                    rows={6}
+                    disabled={selectedTemplate.isSystem}
+                    spellCheck={false}
+                  />
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Bottom Left: AI Chat */}
+          <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+            <div className="px-4 py-3 border-b border-gray-100 bg-gray-50/50 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <SparklesIcon className="w-4 h-4 text-purple-600" />
+                <h3 className="font-medium text-gray-800 text-sm">AI Chat</h3>
+              </div>
+            </div>
+            <div className="flex-1 min-h-0 overflow-hidden">
+              <TemplateChat
+                onUpdateTemplate={handleUpdateTemplate}
               />
             </div>
-
-            <button
-              onClick={() => generatePreview({ ...selectedTemplate, sampleData: JSON.parse(sampleData) })}
-              className="w-full px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
-            >
-              Refresh Preview
-            </button>
           </div>
         </div>
 
-        <div className="flex-1 flex flex-col overflow-hidden">
-          <div className="flex border-b border-gray-200">
-            {(['content', 'schema', 'preview', 'ai'] as const).map((tab) => (
+        {/* Right Panel - Preview */}
+        <div className="flex-1 flex flex-col min-w-0 bg-gray-100">
+          {/* Preview Header */}
+          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 bg-white">
+            <div className="flex items-center gap-2">
+              <EyeIcon className="w-4 h-4 text-green-600" />
+              <h3 className="font-medium text-gray-800 text-sm">Live Preview</h3>
+            </div>
+            <div className="flex items-center gap-2">
               <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                className={`px-4 py-2 text-sm font-medium transition-colors ${
-                  activeTab === tab
-                    ? 'text-blue-600 border-b-2 border-blue-600'
-                    : 'text-gray-600 hover:text-gray-900'
-                }`}
+                onClick={() => setPreviewScale(Math.max(50, previewScale - 10))}
+                className="p-1.5 hover:bg-gray-100 rounded transition-colors"
+                title="Zoom out"
               >
-                {tab === 'ai' ? (
-                  <span className="flex items-center gap-1">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                    </svg>
-                    AI Chat
-                  </span>
-                ) : (
-                  tab.charAt(0).toUpperCase() + tab.slice(1)
-                )}
+                <ZoomOutIcon className="w-4 h-4 text-gray-500" />
               </button>
-            ))}
+              <span className="text-xs text-gray-500 min-w-[3rem] text-center">{previewScale}%</span>
+              <button
+                onClick={() => setPreviewScale(Math.min(150, previewScale + 10))}
+                className="p-1.5 hover:bg-gray-100 rounded transition-colors"
+                title="Zoom in"
+              >
+                <ZoomInIcon className="w-4 h-4 text-gray-500" />
+              </button>
+              <div className="w-px h-4 bg-gray-200 mx-2"></div>
+              <button
+                onClick={handleRefreshPreview}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <RefreshCwIcon className="w-3.5 h-3.5" />
+                Refresh
+              </button>
+            </div>
           </div>
 
-          <div className="flex-1 overflow-auto">
-            {activeTab === 'content' && (
-              <textarea
-                value={content}
-                onChange={(e) => setContent(e.target.value)}
-                className="w-full h-full p-4 font-mono text-sm bg-gray-50 border-none focus:ring-0"
-                disabled={selectedTemplate.isSystem}
+          {/* Preview Content */}
+          <div className="flex-1 overflow-auto p-6 bg-gray-100">
+            <div
+              className="mx-auto bg-white rounded-lg shadow-lg overflow-hidden border border-gray-200"
+              style={{
+                width: '816px',
+                height: '1056px',
+                transform: `scale(${previewScale / 100})`,
+                transformOrigin: 'top center',
+              }}
+            >
+              <iframe
+                srcDoc={srcDoc}
+                className="w-full h-full border-none"
+                title="Template Preview"
+                sandbox="allow-scripts"
               />
-            )}
-
-            {activeTab === 'schema' && (
-              <textarea
-                value={inputSchema}
-                onChange={(e) => setInputSchema(e.target.value)}
-                className="w-full h-full p-4 font-mono text-sm bg-gray-50 border-none focus:ring-0"
-                disabled={selectedTemplate.isSystem}
-              />
-            )}
-
-            {activeTab === 'preview' && (
-              <div
-                className="p-4 h-full overflow-auto bg-white"
-                dangerouslySetInnerHTML={{ __html: previewHtml }}
-              />
-            )}
-
-            {activeTab === 'ai' && (
-              <div className="h-full">
-                <TemplateChat
-                  onInsertTemplate={handleInsertTemplate}
-                  systemPrompt="You are a report template generation expert for security assessments. Help users create and modify report templates using the custom template syntax with {{variable}}, {{#each}}, and {{#if}} directives. Generate professional HTML templates with inline styles."
-                />
-              </div>
-            )}
+            </div>
           </div>
         </div>
       </div>
-
-      <Dialog open={showAIDrawer} onOpenChange={setShowAIDrawer}>
-        <DialogContent className="max-w-4xl h-[80vh]">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-              </svg>
-              AI Template Generator
-            </DialogTitle>
-          </DialogHeader>
-          <div className="flex-1 overflow-hidden">
-            <TemplateChat
-              onInsertTemplate={handleInsertTemplate}
-              systemPrompt="You are a report template generation expert for security assessments. Help users create and modify report templates using the custom template syntax with {{variable}}, {{#each}}, and {{#if}} directives. Generate professional HTML templates with inline styles."
-            />
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   )
 }

@@ -48,7 +48,7 @@ export const TemplateResponseSchema = z.object({
 export class TemplateResponseDto extends createZodDto(TemplateResponseSchema) {}
 
 export const PreviewTemplateSchema = z.object({
-  data: RecordUnknownSchema,
+  data: RecordUnknownSchema.optional(),
 });
 
 export class PreviewTemplateDto extends createZodDto(PreviewTemplateSchema) {}

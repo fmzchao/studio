@@ -1,86 +1,94 @@
 import {
   BadRequestException,
-  Body,
   Controller,
   Post,
+  Req,
   Res,
   UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
 import { ApiOkResponse, ApiTags } from '@nestjs/swagger';
-import { ZodValidationPipe } from 'nestjs-zod';
-import type { Response } from 'express';
+import type { Request, Response } from 'express';
+import { UIMessage } from 'ai';
 
 import { AiService } from './ai.service';
-import { GenerateAiDto, GenerateAiSchema } from './dto/ai.dto';
 import { AuthGuard } from '../auth/auth.guard';
 import { CurrentAuth } from '../auth/auth-context.decorator';
 import type { AuthContext } from '../auth/types';
 
-type AiMessagePart = {
-  type?: string;
-  text?: string;
-};
-
-type AiChatMessage = {
-  role?: string;
-  content?: unknown;
-  parts?: AiMessagePart[];
-};
-
+/**
+ * AI Controller - AI SDK v6 compatible
+ * 
+ * Receives UIMessage[] from useChat's DefaultChatTransport.
+ * Returns toUIMessageStreamResponse() for streaming.
+ */
 @ApiTags('AI')
 @Controller('ai')
 @UseGuards(AuthGuard)
 export class AiController {
   constructor(private readonly aiService: AiService) {}
 
+  /**
+   * Main chat endpoint
+   * 
+   * Receives: { messages: UIMessage[], id?, systemPrompt?, context?, model? }
+   * Returns: UI Message Stream Response
+   */
   @Post()
-  @ApiOkResponse({ description: 'AI SDK-compatible SSE stream' })
-  async generate(
+  @ApiOkResponse({ description: 'AI SDK v6 UI message stream' })
+  async chat(
     @CurrentAuth() auth: AuthContext | null,
+    @Req() req: Request,
     @Res() res: Response,
-    @Body(new ZodValidationPipe(GenerateAiSchema)) dto: GenerateAiDto,
   ) {
     this.requireAuth(auth);
-    const prompt = this.extractPrompt(dto);
-    if (!prompt) {
-      throw new BadRequestException('Prompt is required');
+
+    const body = req.body as { 
+      messages: UIMessage[]; 
+      systemPrompt?: string;
+      context?: string;
+      model?: string;
+    };
+
+    const { messages, systemPrompt, context, model } = body;
+
+    if (!messages || !Array.isArray(messages) || messages.length === 0) {
+      throw new BadRequestException('Messages are required');
     }
 
-    const result = await this.aiService.generate({
-      prompt,
-      systemPrompt: dto.systemPrompt,
-      mode: 'streaming',
-      model: dto.model,
-      context: dto.context ? { type: dto.context } : undefined,
-    });
+    const system = systemPrompt || this.aiService.buildSystemPrompt(context);
 
-    if (result.stream) {
-      result.stream.pipeUIMessageStreamToResponse(res, {
-        originalMessages: dto.messages as AiChatMessage[] | undefined,
+    const result = await this.aiService.streamChat(messages, { system, model, context });
+
+    // toUIMessageStreamResponse returns a Response object
+    // We need to pipe it to Express response
+    const streamResponse = result.toUIMessageStreamResponse();
+    
+    // Set headers from the stream response
+    res.setHeader('Content-Type', streamResponse.headers.get('Content-Type') || 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+
+    // Pipe the body to the response
+    if (streamResponse.body) {
+      const reader = streamResponse.body.getReader();
+      const pump = async () => {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) {
+            res.end();
+            break;
+          }
+          res.write(value);
+        }
+      };
+      pump().catch((err) => {
+        console.error('Stream error:', err);
+        res.end();
       });
-      return;
+    } else {
+      res.end();
     }
-
-    throw new Error('Streaming not available');
-  }
-
-  @Post('generate-structured')
-  @ApiOkResponse({ description: 'Structured template generation response' })
-  async generateStructured(
-    @CurrentAuth() auth: AuthContext | null,
-    @Body(new ZodValidationPipe(GenerateAiSchema)) dto: GenerateAiDto,
-  ) {
-    this.requireAuth(auth);
-    const prompt = this.extractPrompt(dto);
-    if (!prompt) {
-      throw new BadRequestException('Prompt is required');
-    }
-
-    return this.aiService.generateTemplate(prompt, {
-      systemPrompt: dto.systemPrompt,
-      model: dto.model,
-    });
   }
 
   private requireAuth(auth: AuthContext | null): AuthContext {
@@ -91,39 +99,5 @@ export class AiController {
       throw new BadRequestException('Organization context is required');
     }
     return auth;
-  }
-
-  private extractPrompt(dto: GenerateAiDto): string {
-    if (dto.prompt?.trim()) {
-      return dto.prompt.trim();
-    }
-
-    if (!dto.messages || !Array.isArray(dto.messages)) {
-      return '';
-    }
-
-    for (let index = dto.messages.length - 1; index >= 0; index -= 1) {
-      const message = dto.messages[index] as AiChatMessage;
-      if (message?.role && message.role !== 'user') {
-        continue;
-      }
-
-      if (typeof message?.content === 'string' && message.content.trim()) {
-        return message.content.trim();
-      }
-
-      if (Array.isArray(message?.parts)) {
-        const text = message.parts
-          .filter((part) => part?.type === 'text')
-          .map((part) => part?.text ?? '')
-          .join('')
-          .trim();
-        if (text) {
-          return text;
-        }
-      }
-    }
-
-    return '';
   }
 }

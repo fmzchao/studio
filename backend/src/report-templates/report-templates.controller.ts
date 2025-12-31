@@ -129,8 +129,8 @@ export class ReportTemplatesController {
     return PreviewTemplateResponseDto.create({
       templateId: template.id,
       templateVersion: template.version,
-      sampleData: body.data,
-      renderedHtml: '',
+      sampleData: body.data || {},
+      renderedHtml: '', // Frontend handles local rendering now
     });
   }
 
