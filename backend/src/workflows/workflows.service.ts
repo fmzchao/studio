@@ -73,6 +73,8 @@ export interface WorkflowRunSummary {
   triggerSource?: string | null;
   triggerLabel?: string | null;
   inputPreview: ExecutionInputPreview;
+  parentRunId?: string | null;
+  parentNodeRef?: string | null;
 }
 
 const SHIPSEC_WORKFLOW_TYPE = 'shipsecWorkflowRun';
@@ -494,6 +496,8 @@ export class WorkflowsService {
       triggerSource,
       triggerLabel,
       inputPreview,
+      parentRunId: run.parentRunId ?? null,
+      parentNodeRef: run.parentNodeRef ?? null,
     };
   }
 

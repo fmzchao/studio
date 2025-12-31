@@ -114,10 +114,7 @@ export function ParameterField({
         const graph = workflow.graph
         const entrypoint = graph.nodes.find((node) => node.type === 'core.workflow.entrypoint')
 
-        const runtimeInputsCandidate =
-          entrypoint && typeof entrypoint === 'object'
-            ? ((entrypoint as any).data?.config as any)?.runtimeInputs
-            : undefined
+        const runtimeInputsCandidate = entrypoint?.data?.config?.runtimeInputs
 
         const runtimeInputs = Array.isArray(runtimeInputsCandidate)
           ? runtimeInputsCandidate

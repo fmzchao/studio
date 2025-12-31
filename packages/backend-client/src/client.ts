@@ -2176,14 +2176,14 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        runs: {
-                            runId: string;
-                            workflowId: string;
-                            workflowName: string;
-                            parentNodeRef: string | null;
-                            status: string;
+                        runs?: {
+                            runId?: string;
+                            workflowId?: string;
+                            workflowName?: string;
+                            parentNodeRef?: string | null;
+                            status?: string;
                             /** Format: date-time */
-                            startedAt: string;
+                            startedAt?: string;
                             /** Format: date-time */
                             completedAt?: string | null;
                         }[];
@@ -2425,6 +2425,13 @@ export interface operations {
                                 message?: string;
                                 stack?: string;
                                 code?: string;
+                                type?: string;
+                                details?: {
+                                    [key: string]: unknown;
+                                };
+                                fieldErrors?: {
+                                    [key: string]: string[];
+                                };
                             } | null;
                             outputSummary?: {
                                 [key: string]: unknown;
@@ -2497,6 +2504,13 @@ export interface operations {
                                 message?: string;
                                 stack?: string;
                                 code?: string;
+                                type?: string;
+                                details?: {
+                                    [key: string]: unknown;
+                                };
+                                fieldErrors?: {
+                                    [key: string]: string[];
+                                };
                             } | null;
                             outputSummary?: {
                                 [key: string]: unknown;

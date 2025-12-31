@@ -53,12 +53,12 @@ const definition: ComponentDefinition<Input, Output> = {
       {
         id: 'result',
         label: 'Result',
-        dataType: port.json().dataType,
+        dataType: port.json(),
       },
       {
         id: 'childRunId',
         label: 'Child Run ID',
-        dataType: port.text().dataType,
+        dataType: port.text(),
       },
     ],
     parameters: [
@@ -130,7 +130,7 @@ const definition: ComponentDefinition<Input, Output> = {
           label,
           required: runtimeInput.required ?? true,
           description: runtimeInput.description,
-          dataType: portType.dataType,
+          dataType: portType,
         }
       })
       .filter((value): value is NonNullable<typeof value> => value !== null)
