@@ -10,10 +10,9 @@ import {
   Put,
   Query,
   UseGuards,
-  StreamablePipe,
-  Res,
 } from '@nestjs/common';
 import { ReportTemplatesService } from './report-templates.service';
+import { AiService } from '../ai/ai.service';
 import {
   CreateReportTemplateDto,
   ListTemplatesQueryDto,
@@ -26,9 +25,6 @@ import {
 import { AuthGuard } from '../auth/auth.guard';
 import { ZodValidationPipe } from 'nestjs-zod';
 import type { ZodSchema } from 'nestjs-zod';
-import { streamText, generateObject } from 'ai';
-import { createOpenAI } from '@ai-sdk/openai';
-import { z } from 'zod';
 
 const CreateReportTemplateSchema: ZodSchema = CreateReportTemplateDto.schema;
 const UpdateReportTemplateSchema: ZodSchema = UpdateReportTemplateDto.schema;
@@ -36,16 +32,12 @@ const ListTemplatesQuerySchema: ZodSchema = ListTemplatesQueryDto.schema;
 const GenerateReportSchema: ZodSchema = GenerateReportDto.schema;
 const GenerateTemplateSchema: ZodSchema = GenerateTemplateDto.schema;
 
-const openai = createOpenAI({
-  baseUrl: process.env.OPENAI_BASE_URL,
-  apiKey: process.env.OPENAI_API_KEY,
-});
-
-@Controller('templates')
+@Controller('api/v1/templates')
 @UseGuards(AuthGuard)
 export class ReportTemplatesController {
   constructor(
     private readonly templatesService: ReportTemplatesService,
+    private readonly aiService: AiService,
   ) {}
 
   @Get()
@@ -129,67 +121,37 @@ export class ReportTemplatesController {
   @Post('ai-generate')
   async aiGenerate(
     @Body(new ZodValidationPipe(GenerateTemplateSchema)) dto: GenerateTemplateDto,
-    @Res() res: Res,
   ) {
-    const systemPrompt = dto.systemPrompt || `You are a report template generation expert. 
-Generate a custom HTML template for security reports using our template syntax.
+    const systemPrompt = dto.systemPrompt || `You are a report template generation expert.
+Generate custom HTML templates using our template syntax.
 
 Template Syntax:
 - \`{{variable}}\` - Interpolate variables
 - \`{{#each items as item}}\` ... \`{{/each}}\` - Loop through arrays
 - \`{{#if condition}}\` ... \`{{/if}}\` - Conditional rendering
 
-Available data fields:
-- findings: Array of security findings with severity, title, description, cve, cvss, proof, remediation
-- metadata: Object with clientName, date, reportTitle, preparedBy
-- scope: Array of targets tested
-
-The template should include:
-1. Executive summary with severity counts
-2. Detailed findings section
-3. Scope section
-4. Professional styling with ShipSec branding
-
 Return ONLY the template HTML, no explanations.`;
 
-    const result = streamText({
-      model: openai(dto.model || 'gpt-4o-mini'),
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: dto.prompt },
-      ],
-      temperature: 0.7,
+    const result = await this.aiService.generate({
+      prompt: dto.prompt,
+      systemPrompt,
+      mode: 'streaming',
+      model: dto.model,
+      context: { type: 'template' },
     });
 
-    result.pipeToResponse(res);
+    return result.stream?.toDataStreamResponse();
   }
 
   @Post('ai-generate-structured')
   async aiGenerateStructured(
     @Body(new ZodValidationPipe(GenerateTemplateSchema)) dto: GenerateTemplateDto,
   ) {
-    const systemPrompt = `You are a report template generation expert.
-Generate a custom HTML template for security reports.
-
-Return a JSON object with:
-- template: The HTML template string
-- description: Brief description of the template
-- inputSchema: JSON Schema for the template inputs`;
-
-    const result = await generateObject({
-      model: openai(dto.model || 'gpt-4o-mini'),
-      schema: z.object({
-        template: z.string().describe('The HTML template string'),
-        description: z.string().describe('Brief description of the template'),
-        inputSchema: z.record(z.unknown()).describe('JSON Schema for template inputs'),
-      }),
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: dto.prompt },
-      ],
-      temperature: 0.7,
+    const result = await this.aiService.generateTemplate(dto.prompt, {
+      systemPrompt: dto.systemPrompt,
+      model: dto.model,
     });
 
-    return result.object;
+    return result;
   }
 }

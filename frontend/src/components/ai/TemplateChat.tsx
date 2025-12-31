@@ -2,28 +2,8 @@
 
 import { useState } from 'react';
 import { useChat } from '@ai-sdk/react';
-import { generateId } from 'ai';
-import {
-  Conversation,
-  ConversationContent,
-} from '@/components/ai-elements/conversation';
-import {
-  Message,
-  MessageContent,
-  MessageUser,
-  MessageAssistant,
-  MessageResponse,
-  MessageLoading,
-} from '@/components/ai-elements/message';
-import { Reasoning } from '@/components/ai-elements/reasoning';
-import { Shimmer } from '@/components/ai-elements/shimmer';
-import {
-  PromptInput,
-  PromptInputTextarea,
-  PromptInputSubmit,
-  PromptInputActions,
-  PromptInputAction,
-} from '@/components/ai-elements/prompt-input';
+import { Conversation, ConversationContent } from '@/components/ai-elements/conversation';
+import { Message, MessageContent } from '@/components/ai-elements/message';
 import { Loader } from '@/components/ai-elements/loader';
 
 interface TemplateChatProps {
@@ -33,31 +13,32 @@ interface TemplateChatProps {
 
 export function TemplateChat({ onInsertTemplate, systemPrompt }: TemplateChatProps) {
   const [isGenerating, setIsGenerating] = useState(false);
+  const [inputValue, setInputValue] = useState('');
   const {
     messages,
-    input,
-    handleInputChange,
-    handleSubmit,
+    append,
     status,
     stop,
-    reload,
   } = useChat({
-    api: '/api/templates/generate',
+    api: '/api/v1/templates/ai-generate',
     body: { systemPrompt },
     onFinish: (message) => {
       setIsGenerating(false);
-      if (message.role === 'assistant' && onInsertTemplate) {
-        const textContent = message.content;
-        onInsertTemplate(textContent);
+      if (message.role === 'assistant' && onInsertTemplate && message.content) {
+        onInsertTemplate(message.content);
       }
     },
   });
 
-  const handleFormSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim()) return;
+    if (!inputValue.trim()) return;
     setIsGenerating(true);
-    await handleSubmit(e);
+    await append({
+      role: 'user',
+      content: inputValue,
+    });
+    setInputValue('');
   };
 
   return (
@@ -91,64 +72,20 @@ export function TemplateChat({ onInsertTemplate, systemPrompt }: TemplateChatPro
           )}
 
           {messages.map((message, index) => (
-            <Message key={message.id} from={message.role}>
+            <Message key={index} from={message.role}>
               <MessageContent>
-                {message.role === 'user' ? (
-                  <MessageUser>
-                    <div className="prose prose-sm max-w-none">
-                      {message.content}
-                    </div>
-                  </MessageUser>
-                ) : (
-                  <MessageAssistant>
-                    {message.parts.map((part, partIndex) => {
-                      switch (part.type) {
-                        case 'text':
-                          return (
-                            <MessageResponse key={partIndex}>
-                              <div className="prose prose-sm max-w-none whitespace-pre-wrap">
-                                {part.text}
-                              </div>
-                            </MessageResponse>
-                          );
-                        case 'reasoning':
-                          return (
-                            <Reasoning
-                              key={partIndex}
-                              variant="compact"
-                            >
-                              {part.text}
-                            </Reasoning>
-                          );
-                        default:
-                          return null;
-                      }
-                    })}
-
-                    {message.role === 'assistant' && onInsertTemplate && (
-                      <div className="mt-3 flex gap-2">
-                        <PromptInputAction
-                          onClick={() => onInsertTemplate(message.content)}
-                          disabled={!message.content}
-                        >
-                          <svg
-                            className="w-4 h-4"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
-                            />
-                          </svg>
-                          Insert Template
-                        </PromptInputAction>
-                      </div>
-                    )}
-                  </MessageAssistant>
+                <div className="whitespace-pre-wrap">
+                  {message.content}
+                </div>
+                {message.role === 'assistant' && onInsertTemplate && message.content && (
+                  <div className="mt-3 flex gap-2">
+                    <button
+                      onClick={() => onInsertTemplate(message.content)}
+                      className="px-3 py-1.5 text-sm text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                    >
+                      Insert Template
+                    </button>
+                  </div>
                 )}
               </MessageContent>
             </Message>
@@ -157,12 +94,10 @@ export function TemplateChat({ onInsertTemplate, systemPrompt }: TemplateChatPro
           {isGenerating && (
             <Message from="assistant">
               <MessageContent>
-                <MessageLoading>
-                  <div className="flex items-center gap-2">
-                    <Loader />
-                    <span className="text-sm text-gray-500">Generating template...</span>
-                  </div>
-                </MessageLoading>
+                <div className="flex items-center gap-2">
+                  <Loader />
+                  <span className="text-sm text-gray-500">Generating template...</span>
+                </div>
               </MessageContent>
             </Message>
           )}
@@ -170,45 +105,32 @@ export function TemplateChat({ onInsertTemplate, systemPrompt }: TemplateChatPro
       </Conversation>
 
       <div className="border-t border-gray-200 p-4 bg-white">
-        <form onSubmit={handleFormSubmit}>
-          <PromptInput
-            value={input}
-            onChange={handleInputChange}
+        <form onSubmit={handleSubmit} className="flex gap-2">
+          <input
+            type="text"
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
             placeholder="Describe your report template..."
             disabled={status === 'streaming' || status === 'submitted'}
-          >
-            <PromptInputTextarea />
-            <PromptInputActions>
-              {status === 'streaming' || status === 'submitted' ? (
-                <PromptInputAction onClick={stop}>
-                  <svg
-                    className="w-4 h-4"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                    />
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z"
-                    />
-                  </svg>
-                  Stop
-                </PromptInputAction>
-              ) : (
-                <PromptInputSubmit
-                  disabled={!input.trim() || status === 'loading'}
-                />
-              )}
-            </PromptInputActions>
-          </PromptInput>
+            className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          />
+          {status === 'streaming' || status === 'submitted' ? (
+            <button
+              type="button"
+              onClick={stop}
+              className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+            >
+              Stop
+            </button>
+          ) : (
+            <button
+              type="submit"
+              disabled={!inputValue.trim()}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+            >
+              Generate
+            </button>
+          )}
         </form>
       </div>
     </div>
