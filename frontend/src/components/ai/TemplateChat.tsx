@@ -42,12 +42,25 @@ interface TemplateChatProps {
   onSavePreviousValues?: () => TemplateUpdate;
   onUndoTemplate?: (previousValues: TemplateUpdate) => void;
   systemPrompt?: string;
+  currentTemplate?: string;
+  currentSchema?: Record<string, unknown>;
+  currentSampleData?: Record<string, unknown>;
+  originalValues?: TemplateUpdate | null;
 }
 
 /**
  * Template Chat Component - AI SDK v6 compatible with Tools
  */
-export function TemplateChat({ onUpdateTemplate, onSavePreviousValues, onUndoTemplate, systemPrompt }: TemplateChatProps) {
+export function TemplateChat({
+  onUpdateTemplate,
+  onSavePreviousValues,
+  onUndoTemplate,
+  systemPrompt,
+  currentTemplate,
+  currentSchema,
+  currentSampleData,
+  originalValues,
+}: TemplateChatProps) {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [inputValue, setInputValue] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -59,6 +72,40 @@ export function TemplateChat({ onUpdateTemplate, onSavePreviousValues, onUndoTem
   const [previousValues, setPreviousValues] = useState<TemplateUpdate | null>(null);
   const [showUndoConfirm, setShowUndoConfirm] = useState(false);
 
+  // Build system prompt with current template context
+  const fullSystemPrompt = (() => {
+    let prompt = systemPrompt || '';
+    
+    // Add current template context if available
+    if (currentTemplate || currentSchema || currentSampleData) {
+      const templateContext = `
+## Current Template Context
+
+The user is editing an existing template. Here is the current state:
+
+### Current Template Code:
+\`\`\`javascript
+${currentTemplate || '(no template code)'}
+\`\`\`
+
+### Current Input Schema:
+\`\`\`json
+${JSON.stringify(currentSchema || {}, null, 2)}
+\`\`\`
+
+### Current Sample Data:
+\`\`\`json
+${JSON.stringify(currentSampleData || {}, null, 2)}
+\`\`\`
+
+When making changes, consider the existing template structure and build upon it rather than starting from scratch.
+`;
+      prompt = templateContext + '\n' + prompt;
+    }
+    
+    return prompt || undefined;
+  })();
+
   const { messages, sendMessage, status, stop, addToolResult } = useChat({
     transport: new DefaultChatTransport({
       api: buildApiUrl('/api/v1/ai'),
@@ -67,7 +114,7 @@ export function TemplateChat({ onUpdateTemplate, onSavePreviousValues, onUndoTem
         return { ...auth } as Record<string, string>;
       },
       body: {
-        systemPrompt,
+        systemPrompt: fullSystemPrompt,
         context: 'template',
       },
     }),
@@ -76,8 +123,11 @@ export function TemplateChat({ onUpdateTemplate, onSavePreviousValues, onUndoTem
   const isLoading = status === 'streaming' || status === 'submitted';
 
   const handleConfirmUndo = () => {
-    if (previousValues && onUndoTemplate) {
-      onUndoTemplate(previousValues);
+    // Prefer originalValues (base state) over previousValues (last AI change)
+    const valuesToRestore = originalValues || previousValues;
+    if (valuesToRestore && onUndoTemplate) {
+      onUndoTemplate(valuesToRestore);
+      // Clear previousValues since we've restored, but keep originalValues intact
       setPreviousValues(null);
     }
     setShowUndoConfirm(false);
@@ -252,7 +302,7 @@ export function TemplateChat({ onUpdateTemplate, onSavePreviousValues, onUndoTem
               <span className="font-medium">
                 Updated {updates.join(', ')}
               </span>
-              {previousValues && onUndoTemplate && (
+              {(originalValues || previousValues) && onUndoTemplate && (
                 <button
                   onClick={() => setShowUndoConfirm(true)}
                   className="ml-2 px-2 py-0.5 bg-muted hover:bg-muted/80 rounded text-[10px] font-medium text-muted-foreground transition-colors"

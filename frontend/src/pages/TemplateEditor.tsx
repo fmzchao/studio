@@ -549,6 +549,15 @@ export function TemplateEditor() {
               onUpdateTemplate={handleUpdateTemplate}
               onSavePreviousValues={handleSavePreviousValues}
               onUndoTemplate={handleUndoTemplate}
+              currentTemplate={content}
+              currentSchema={(() => { try { return JSON.parse(inputSchema); } catch (e) { return {}; } })()}
+              currentSampleData={(() => { try { return JSON.parse(sampleData); } catch (e) { return {}; } })()}
+              originalValues={originalValues ? {
+                template: originalValues.content,
+                inputSchema: originalValues.inputSchema ? JSON.parse(originalValues.inputSchema) : {},
+                sampleData: originalValues.sampleData ? JSON.parse(originalValues.sampleData) : {},
+                description: originalValues.description,
+              } : null}
             />
           </div>
         </aside>
