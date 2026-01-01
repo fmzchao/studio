@@ -28,6 +28,15 @@ export function TemplateEditor() {
   const { selectedTemplate, selectTemplate, updateTemplate, loading, error, isDirty, setDirty } = useTemplateStore()
   const { theme } = useThemeStore()
 
+  console.log('[TemplateEditor] Render:', { 
+    hasId: !!id, 
+    hasSelectedTemplate: !!selectedTemplate, 
+    loading, 
+    error,
+    isDirty,
+    canEdit: !selectedTemplate?.isSystem 
+  })
+
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [content, setContent] = useState('')
