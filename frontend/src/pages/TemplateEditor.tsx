@@ -189,7 +189,7 @@ export function TemplateEditor() {
     }
   }, [selectedTemplate, renderPreview])
 
-  // Track dirty state
+  // Track dirty state - only runs when content changes, not when isDirty from store changes
   useEffect(() => {
     if (!originalValues) return
 
@@ -200,13 +200,9 @@ export function TemplateEditor() {
       inputSchema !== originalValues.inputSchema ||
       sampleData !== originalValues.sampleData
 
-    console.log('[TemplateEditor] Dirty check:', { hasChanges, isDirty, nameChanged: name !== originalValues.name })
-    // Only update if there's a mismatch between computed state and store state
-    // This prevents race conditions during save
-    if (hasChanges !== isDirty) {
-      setDirty(hasChanges)
-    }
-  }, [name, description, content, inputSchema, sampleData, originalValues, setDirty, isDirty])
+    console.log('[TemplateEditor] Dirty check:', { hasChanges, nameChanged: name !== originalValues.name })
+    setDirty(hasChanges)
+  }, [name, description, content, inputSchema, sampleData, originalValues, setDirty])
   useEffect(() => {
     if (!selectedTemplate) return
     const timer = setTimeout(() => {
@@ -239,7 +235,17 @@ export function TemplateEditor() {
         console.error('Invalid JSON in sample data')
       }
 
-      const updatedTemplate = await updateTemplate(id, {
+      // Update originalValues BEFORE API call to prevent race condition
+      // This ensures the dirty check effect sees hasChanges: false when isDirty is set to false
+      setOriginalValues({
+        name,
+        description,
+        content,
+        inputSchema,
+        sampleData,
+      })
+
+      await updateTemplate(id, {
         name,
         description,
         content: { template: content, type: 'preact-htm' },
@@ -247,14 +253,7 @@ export function TemplateEditor() {
         sampleData: parsedSampleData,
       })
 
-      console.log('[TemplateEditor] Save completed, updating originalValues')
-      setOriginalValues({
-        name: updatedTemplate.name,
-        description: updatedTemplate.description || '',
-        content: content,
-        inputSchema: inputSchema,
-        sampleData: sampleData,
-      })
+      console.log('[TemplateEditor] Save completed')
     } catch (error) {
       console.error('Failed to save template:', error)
     } finally {
