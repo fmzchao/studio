@@ -6,7 +6,6 @@ import {
   ArrowLeftIcon,
   SaveIcon,
   EyeIcon,
-  SparklesIcon,
   RefreshCwIcon,
   ZoomInIcon,
   ZoomOutIcon,
@@ -209,14 +208,6 @@ export function TemplateEditor() {
     if (update.description && !description) setDescription(update.description)
   }
 
-  const formatJson = (setter: (val: string) => void, current: string) => {
-    try {
-      setter(JSON.stringify(JSON.parse(current), null, 2))
-    } catch (e) {
-      console.error('Failed to format JSON:', e)
-    }
-  }
-
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full bg-background">
@@ -299,38 +290,27 @@ export function TemplateEditor() {
                   <TabsTrigger value="data" className="text-xs px-3 h-6 data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-foreground">Sample Data</TabsTrigger>
                   <TabsTrigger value="schema" className="text-xs px-3 h-6 data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-foreground">Input Schema</TabsTrigger>
                 </TabsList>
+
+                {/* Form/Code toggle - only visible when Sample Data tab is active */}
+                <div className="flex gap-1 bg-muted/30 p-0.5 rounded-md">
+                  <button
+                    onClick={() => setSampleDataViewMode('form')}
+                    className={`p-1.5 rounded-sm transition-all ${sampleDataViewMode === 'form' ? 'bg-background shadow-sm text-primary' : 'text-muted-foreground hover:text-foreground'}`}
+                    title="Form View"
+                  >
+                    <LayoutListIcon className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={() => setSampleDataViewMode('code')}
+                    className={`p-1.5 rounded-sm transition-all ${sampleDataViewMode === 'code' ? 'bg-background shadow-sm text-primary' : 'text-muted-foreground hover:text-foreground'}`}
+                    title="Code View"
+                  >
+                    <Code2Icon className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
 
               <TabsContent value="data" className="flex-1 min-h-0 flex flex-col m-0 p-0 outline-none data-[state=inactive]:hidden" style={{ width: '100%' }}>
-                {/* Data Toolbar */}
-                <div className="flex items-center justify-between px-4 py-2 border-b border-border/50 bg-background/50 shrink-0">
-                  <div className="flex gap-1 bg-muted/30 p-0.5 rounded-md">
-                    <button
-                      onClick={() => setSampleDataViewMode('form')}
-                      className={`p-1.5 rounded-sm transition-all ${sampleDataViewMode === 'form' ? 'bg-background shadow-sm text-primary' : 'text-muted-foreground hover:text-foreground'}`}
-                      title="Form View (RJSF)"
-                    >
-                      <LayoutListIcon className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      onClick={() => setSampleDataViewMode('code')}
-                      className={`p-1.5 rounded-sm transition-all ${sampleDataViewMode === 'code' ? 'bg-background shadow-sm text-primary' : 'text-muted-foreground hover:text-foreground'}`}
-                      title="Code View"
-                    >
-                      <Code2Icon className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      formatJson(setSampleData, sampleData)
-                    }}
-                    className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground hover:text-primary transition-colors hover:bg-muted/50 px-2 py-1 rounded"
-                    title="Format JSON"
-                  >
-                    Format
-                  </button>
-                </div>
 
                 {/* Data Editor Area */}
                 <div className="flex-1 overflow-auto bg-background w-full">
@@ -393,12 +373,7 @@ export function TemplateEditor() {
 
           {/* Bottom Section: AI Assistant - Takes remaining height (50%) */}
           <div className="flex-1 flex flex-col min-h-0 bg-muted/5 border-t border-border shadow-[0_-1px_10px_rgba(0,0,0,0.02)]">
-            <div className="flex items-center justify-between px-4 py-3 bg-gradient-to-r from-purple-500/5 to-transparent border-b border-purple-500/10 shrink-0">
-              <div className="flex items-center gap-2">
-                <SparklesIcon className="w-4 h-4 text-purple-600" />
-                <span className="text-sm font-semibold text-foreground">AI Designer</span>
-              </div>
-            </div>
+
             <div className="flex-1 overflow-hidden relative w-full">
               <TemplateChat onUpdateTemplate={handleUpdateTemplate} />
             </div>
