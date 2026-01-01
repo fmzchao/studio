@@ -29,21 +29,22 @@ export const ArrayFieldItemTemplate = (props: ArrayFieldItemTemplateProps) => {
   const onRemoveRaw = anyProps.onDropIndexClick || buttonsProps.onRemoveItem;
   
   // Wrap handlers safely
-  // Note: onMoveUpItem/onRemoveItem in buttonsProps usually bind the index already! 
-  // But onReorderClick usually expects (index, newIndex).
-  // We handle both cases.
-  const onMoveUp = () => {
-      if (buttonsProps.onMoveUpItem) return buttonsProps.onMoveUpItem(index)(/* event */);
+  // Based on "Item 0 works, Item 1 crashes" behavior, the handler in buttonsProps 
+  // expects an EVENT, meaning it is ALREADY bound to the index.
+  // Passing 'index' makes it treat '1' as a truthy event object => crash.
+  
+  const onMoveUp = (event: any) => {
+      if (buttonsProps.onMoveUpItem) return buttonsProps.onMoveUpItem(event);
       if (onMoveUpRaw) return onMoveUpRaw(index, index - 1);
   };
   
-  const onMoveDown = () => {
-      if (buttonsProps.onMoveDownItem) return buttonsProps.onMoveDownItem(index)(/* event */);
+  const onMoveDown = (event: any) => {
+      if (buttonsProps.onMoveDownItem) return buttonsProps.onMoveDownItem(event);
       if (onMoveDownRaw) return onMoveDownRaw(index, index + 1);
   };
 
-  const onRemove = () => {
-      if (buttonsProps.onRemoveItem) return buttonsProps.onRemoveItem(index)(/* event */);
+  const onRemove = (event: any) => {
+      if (buttonsProps.onRemoveItem) return buttonsProps.onRemoveItem(event);
       if (onRemoveRaw) return onRemoveRaw(index);
   };
 
