@@ -140,18 +140,28 @@ export function WebhookEditorDrawer({
     api.workflows.get(form.workflowId)
       .then((workflow) => {
         const graph = workflow.graph
-        const entryPointNode = graph?.nodes?.find((node: any) => node.type === 'entrypoint')
+        // In the raw API response, the component ID is in node.type
+        // (e.g., "core.workflow.entrypoint" or "entry-point")
+        const entryPointNode = graph?.nodes?.find((node: any) => {
+          const componentType = node.type
+          return componentType === 'core.workflow.entrypoint' || componentType === 'entry-point'
+        })
 
         if (entryPointNode) {
-          const runtimeInputs = (entryPointNode.data?.config?.runtimeInputs as WorkflowRuntimeInput[]) || []
+          // Runtime inputs are stored in node.data.config.runtimeInputs in the backend response
+          const nodeData = entryPointNode.data as any
+          const runtimeInputs = (nodeData?.config?.runtimeInputs) as WorkflowRuntimeInput[] || []
+          console.log('[WebhookEditor] Found entry point runtime inputs:', runtimeInputs)
           setWorkflowRuntimeInputs(runtimeInputs)
         } else {
+          console.log('[WebhookEditor] No entry point found in workflow')
           setWorkflowRuntimeInputs([])
         }
 
         setIsLoadingWorkflow(false)
       })
-      .catch(() => {
+      .catch((err) => {
+        console.error('[WebhookEditor] Failed to load workflow:', err)
         setWorkflowRuntimeInputs([])
         setIsLoadingWorkflow(false)
       })
@@ -182,19 +192,28 @@ export function WebhookEditorDrawer({
 
   // Auto-populate expected inputs when workflow runtime inputs are loaded
   useEffect(() => {
-    if (mode === 'create' && workflowRuntimeInputs.length > 0 && form.expectedInputs.length === 0) {
+    console.log('[WebhookEditor] Auto-populate check:', {
+      mode,
+      workflowRuntimeInputsCount: workflowRuntimeInputs.length,
+      expectedInputsCount: form.expectedInputs.length,
+      workflowRuntimeInputs,
+    })
+
+    // In create mode, always sync expected inputs with workflow runtime inputs when they change
+    if (mode === 'create' && workflowRuntimeInputs.length > 0) {
       // Auto-populate expected inputs from workflow runtime inputs
       const newExpectedInputs: ExpectedInputDef[] = workflowRuntimeInputs.map((input) => ({
         id: input.id,
-        label: input.label,
+        label: input.label || input.id,
         type: (input.type === 'string' ? 'text' : input.type) as ExpectedInputDef['type'],
         required: input.required ?? true,
         description: input.description,
       }))
 
+      console.log('[WebhookEditor] Setting expected inputs:', newExpectedInputs)
       setForm((prev) => ({ ...prev, expectedInputs: newExpectedInputs }))
     }
-  }, [mode, workflowRuntimeInputs, form.expectedInputs.length])
+  }, [mode, workflowRuntimeInputs])
 
   const updateForm = (updates: Partial<WebhookFormState>) => {
     setForm((prev) => ({ ...prev, ...updates }))

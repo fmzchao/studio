@@ -50,10 +50,12 @@ import {
   ChevronDown,
   ChevronRight,
   ExternalLink,
+  PlayCircle,
 } from 'lucide-react'
 import { useWebhookStore } from '@/store/webhookStore'
 import { api } from '@/services/api'
 import { WebhookEditorDrawer, type WorkflowOption } from '@/components/webhooks/WebhookEditorDrawer'
+import { env } from '@/config/env'
 import type { WebhookConfiguration } from '@shipsec/shared'
 
 const STATUS_OPTIONS = [
@@ -93,7 +95,7 @@ const getWorkflowName = (
   return match?.name ?? 'Unknown workflow'
 }
 
-const WEBHOOK_BASE_URL = process.env.VITE_API_URL || 'https://api.shipsec.ai'
+const WEBHOOK_BASE_URL = env.VITE_API_URL || 'https://api.shipsec.ai'
 
 export function WebhooksPage() {
   const { toast } = useToast()
@@ -146,33 +148,33 @@ export function WebhooksPage() {
   }, [])
 
   useEffect(() => {
-    fetchWebhooks({ force: true }).catch(() => {})
+    fetchWebhooks({ force: true }).catch(() => { })
   }, [fetchWebhooks])
 
   useEffect(() => {
     let cancelled = false
-    ;(async () => {
-      try {
-        const workflowList = await api.workflows.list()
-        if (cancelled) return
-        const normalized = workflowList.map((workflow) => ({
-          id: workflow.id,
-          name: workflow.name ?? 'Untitled workflow',
-        }))
-        setWorkflowOptions(normalized)
-      } catch (err) {
-        console.error('Failed to load workflows', err)
-        toast({
-          title: 'Unable to load workflows',
-          description: err instanceof Error ? err.message : 'Please try refreshing the page.',
-          variant: 'destructive',
-        })
-      } finally {
-        if (!cancelled) {
-          setWorkflowsLoading(false)
+      ; (async () => {
+        try {
+          const workflowList = await api.workflows.list()
+          if (cancelled) return
+          const normalized = workflowList.map((workflow) => ({
+            id: workflow.id,
+            name: workflow.name ?? 'Untitled workflow',
+          }))
+          setWorkflowOptions(normalized)
+        } catch (err) {
+          console.error('Failed to load workflows', err)
+          toast({
+            title: 'Unable to load workflows',
+            description: err instanceof Error ? err.message : 'Please try refreshing the page.',
+            variant: 'destructive',
+          })
+        } finally {
+          if (!cancelled) {
+            setWorkflowsLoading(false)
+          }
         }
-      }
-    })()
+      })()
     return () => {
       cancelled = true
     }
@@ -528,20 +530,20 @@ export function WebhooksPage() {
 
           <div className="rounded-lg border bg-card shadow-sm overflow-hidden">
             <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="min-w-[140px]">Name</TableHead>
-                  <TableHead className="min-w-[120px] hidden md:table-cell">Workflow</TableHead>
-                  <TableHead className="min-w-[200px]">Webhook URL</TableHead>
-                  <TableHead className="min-w-[100px] hidden lg:table-cell">Created</TableHead>
-                  <TableHead className="min-w-[80px]">Status</TableHead>
-                  <TableHead className="text-right min-w-[200px]">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {isLoading && !hasData
-                  ? Array.from({ length: 4 }).map((_, index) => (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="min-w-[140px]">Name</TableHead>
+                    <TableHead className="min-w-[120px] hidden md:table-cell">Workflow</TableHead>
+                    <TableHead className="min-w-[200px]">Webhook URL</TableHead>
+                    <TableHead className="min-w-[100px] hidden lg:table-cell">Created</TableHead>
+                    <TableHead className="min-w-[80px]">Status</TableHead>
+                    <TableHead className="text-right min-w-[200px]">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {isLoading && !hasData
+                    ? Array.from({ length: 4 }).map((_, index) => (
                       <TableRow key={`skeleton-${index}`}>
                         {Array.from({ length: 6 }).map((_, cell) => (
                           <TableCell key={`cell-${cell}`}>
@@ -550,9 +552,9 @@ export function WebhooksPage() {
                         ))}
                       </TableRow>
                     ))
-                  : null}
-                {!isLoading && hasData
-                  ? filteredWebhooks.map((webhook) => {
+                    : null}
+                  {!isLoading && hasData
+                    ? filteredWebhooks.map((webhook) => {
                       const workflowName = getWorkflowName(webhook.workflowId, workflowOptions)
 
                       return (
@@ -688,22 +690,22 @@ export function WebhooksPage() {
                         </TableRow>
                       )
                     })
-                  : null}
-                {!isLoading && !hasData && (
-                  <TableRow>
-                    <TableCell colSpan={6}>
-                      <div className="flex flex-col items-center justify-center py-10 text-center space-y-2">
-                        <Link2 className="h-10 w-10 text-muted-foreground" />
-                        <p className="font-medium">No webhooks found</p>
-                        <p className="text-sm text-muted-foreground max-w-lg">
-                          Create your first webhook with the "New webhook" button or tweak the filters above.
-                        </p>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
+                    : null}
+                  {!isLoading && !hasData && (
+                    <TableRow>
+                      <TableCell colSpan={6}>
+                        <div className="flex flex-col items-center justify-center py-10 text-center space-y-2">
+                          <Link2 className="h-10 w-10 text-muted-foreground" />
+                          <p className="font-medium">No webhooks found</p>
+                          <p className="text-sm text-muted-foreground max-w-lg">
+                            Create your first webhook with the "New webhook" button or tweak the filters above.
+                          </p>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
             </div>
           </div>
         </div>
@@ -917,5 +919,4 @@ export function WebhooksPage() {
   )
 }
 
-// Import PlayCircle icon for the test button
-import { PlayCircle } from 'lucide-react'
+
