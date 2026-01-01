@@ -27,7 +27,7 @@ export const FieldTemplate = (props: FieldTemplateProps) => {
   if (isComplex) {
     return (
       <div className="mb-2 w-full">
-        {displayLabel && label && (
+        {displayLabel && label ? (
           <div className="mb-1 border-b pb-0.5">
              <label htmlFor={id} className="text-sm font-semibold text-foreground block">
               {label}
@@ -39,7 +39,7 @@ export const FieldTemplate = (props: FieldTemplateProps) => {
                 </div>
             )}
           </div>
-        )}
+        ) : null}
         <div className="w-full">
             {children}
         </div>
