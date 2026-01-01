@@ -6,10 +6,8 @@ import { Trash2Icon, FileTextIcon } from 'lucide-react'
 export function TemplatesPage() {
   const navigate = useNavigate()
   const { templates, loading, error, fetchTemplates, createTemplate, deleteTemplate } = useTemplateStore()
-  const [showCreateModal, setShowCreateModal] = useState(false)
-  const [newTemplateName, setNewTemplateName] = useState('')
-  const [newTemplateDescription, setNewTemplateDescription] = useState('')
   const [filter, setFilter] = useState<'all' | 'user' | 'system'>('all')
+  const [isCreating, setIsCreating] = useState(false)
 
   useEffect(() => {
     fetchTemplates()
@@ -22,24 +20,23 @@ export function TemplatesPage() {
   })
 
   const handleCreate = async () => {
-    if (!newTemplateName.trim()) return
+    if (isCreating) return
 
     try {
+      setIsCreating(true)
       const template = await createTemplate({
-        name: newTemplateName,
-        description: newTemplateDescription || undefined,
+        name: 'Untitled Template',
+        description: undefined,
         content: { 
           template: DEFAULT_TEMPLATE_CODE,
           type: 'preact-htm'
         },
         inputSchema: DEFAULT_SCHEMA,
       })
-      setShowCreateModal(false)
-      setNewTemplateName('')
-      setNewTemplateDescription('')
       navigate(`/templates/${template.id}/edit`)
     } catch (error) {
       console.error('Failed to create template:', error)
+      setIsCreating(false)
     }
   }
 
@@ -51,10 +48,11 @@ export function TemplatesPage() {
           <p className="text-muted-foreground mt-1">Create and manage report templates for your security assessments</p>
         </div>
         <button
-          onClick={() => setShowCreateModal(true)}
-          className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors shadow-sm"
+          onClick={handleCreate}
+          disabled={isCreating}
+          className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors shadow-sm disabled:opacity-50"
         >
-          New Template
+          {isCreating ? 'Creating...' : 'New Template'}
         </button>
       </div>
 
@@ -89,10 +87,11 @@ export function TemplatesPage() {
         <div className="text-center py-12 bg-muted/50 rounded-lg border border-dashed border-border text-foreground">
           <p className="text-muted-foreground mb-4">No templates found</p>
           <button
-            onClick={() => setShowCreateModal(true)}
-            className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
+            onClick={handleCreate}
+            disabled={isCreating}
+            className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
           >
-            Create Your First Template
+            {isCreating ? 'Creating...' : 'Create Your First Template'}
           </button>
         </div>
       )}
@@ -156,58 +155,6 @@ export function TemplatesPage() {
               </div>
             </div>
           ))}
-        </div>
-      )}
-
-      {showCreateModal && (
-        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="bg-card border border-border rounded-xl p-6 w-full max-w-md shadow-2xl animate-in zoom-in-95 duration-200">
-            <h2 className="text-xl font-bold text-foreground mb-4">Create New Template</h2>
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-muted-foreground mb-1">
-                  Template Name
-                </label>
-                <input
-                  type="text"
-                  value={newTemplateName}
-                  onChange={(e) => setNewTemplateName(e.target.value)}
-                  placeholder="e.g., Penetration Test Report"
-                  className="w-full px-3 py-2 bg-background border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-foreground placeholder:text-muted-foreground/50"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-muted-foreground mb-1">
-                  Description (optional)
-                </label>
-                <textarea
-                  value={newTemplateDescription}
-                  onChange={(e) => setNewTemplateDescription(e.target.value)}
-                  placeholder="Brief description of this template..."
-                  rows={3}
-                  className="w-full px-3 py-2 bg-background border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-foreground placeholder:text-muted-foreground/50 resize-none"
-                />
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-3 mt-6">
-              <button
-                onClick={() => setShowCreateModal(false)}
-                className="px-4 py-2 text-muted-foreground hover:bg-accent hover:text-foreground rounded-lg transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleCreate}
-                disabled={!newTemplateName.trim()}
-                className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
-              >
-                Create Template
-              </button>
-            </div>
-          </div>
         </div>
       )}
     </div>
