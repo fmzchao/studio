@@ -846,6 +846,22 @@ export const api = {
       const response = await apiClient.deleteWebhookConfiguration(id)
       if (response.error) throw new Error('Failed to delete webhook configuration')
     },
+
+    testScript: async (payload: { script: string; payload: any; headers: Record<string, string> }) => {
+      const response = await apiClient.testWebhookScript({
+        parsingScript: payload.script,
+        testPayload: payload.payload,
+        testHeaders: payload.headers,
+      })
+      if (response.error) throw new Error('Failed to test webhook script')
+      return response.data
+    },
+
+    listDeliveries: async (id: string) => {
+      const response = await apiClient.listDeliveries(id)
+      if (response.error) throw new Error('Failed to fetch webhook deliveries')
+      return response.data
+    },
   },
 
 }

@@ -85,6 +85,7 @@ export class WebhooksAdminController {
 
   @Post('test-script')
   @ApiOperation({ summary: 'Test a parsing script with sample data' })
+  @ApiOkResponse({ type: TestWebhookScriptResponseDto })
   async testScript(
     @CurrentAuth() auth: AuthContext,
     @Body(new ZodValidationPipe(TestWebhookScriptRequestDto.schema)) dto: TestWebhookScriptRequestDto,

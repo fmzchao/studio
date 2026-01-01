@@ -4223,8 +4223,15 @@
           }
         },
         "responses": {
-          "201": {
-            "description": ""
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TestWebhookScriptResponseDto"
+                }
+              }
+            }
           }
         },
         "summary": "Test a parsing script with sample data",
@@ -7059,6 +7066,49 @@
         "required": [
           "parsingScript",
           "testPayload"
+        ]
+      },
+      "TestWebhookScriptResponseDto": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "parsedData": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {},
+            "nullable": true
+          },
+          "errorMessage": {
+            "type": "string",
+            "nullable": true
+          },
+          "validationErrors": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "inputId": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "inputId",
+                "message"
+              ]
+            }
+          }
+        },
+        "required": [
+          "success",
+          "parsedData",
+          "errorMessage"
         ]
       },
       "HumanInputResponseDto": {

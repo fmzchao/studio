@@ -8,6 +8,7 @@ import { ArtifactLibrary } from '@/pages/ArtifactLibrary'
 import { IntegrationCallback } from '@/pages/IntegrationCallback'
 import { NotFound } from '@/pages/NotFound'
 import { WebhooksPage } from '@/pages/WebhooksPage'
+import { WebhookEditorPage } from '@/pages/WebhookEditorPage'
 import { SchedulesPage } from '@/pages/SchedulesPage'
 import { ActionCenterPage } from '@/pages/ActionCenterPage'
 import { RunRedirect } from '@/pages/RunRedirect'
@@ -77,6 +78,8 @@ function App() {
                     <Route path="/api-keys" element={<ApiKeysManager />} />
                     <Route path="/integrations" element={<IntegrationsManager />} />
                     <Route path="/webhooks" element={<WebhooksPage />} />
+                    <Route path="/webhooks/new" element={<WebhookEditorPage />} />
+                    <Route path="/webhooks/:id" element={<WebhookEditorPage />} />
                     <Route path="/schedules" element={<SchedulesPage />} />
                     <Route path="/action-center" element={<ActionCenterPage />} />
                     <Route path="/artifacts" element={<ArtifactLibrary />} />

@@ -623,8 +623,20 @@ export class ShipSecApiClient {
     });
   }
 
+  async testWebhookScript(payload: components['schemas']['TestWebhookScriptRequestDto']) {
+    return this.client.POST('/api/v1/webhooks/configurations/test-script', {
+      body: payload,
+    });
+  }
+
   async deleteWebhookConfiguration(id: string) {
     return this.client.DELETE('/api/v1/webhooks/configurations/{id}', {
+      params: { path: { id } },
+      });
+  }
+
+  async listDeliveries(id: string) {
+    return this.client.GET('/api/v1/webhooks/configurations/{id}/deliveries', {
       params: { path: { id } },
     });
   }

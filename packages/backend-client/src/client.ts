@@ -2015,6 +2015,17 @@ export interface components {
                 [key: string]: string;
             };
         };
+        TestWebhookScriptResponseDto: {
+            success: boolean;
+            parsedData: {
+                [key: string]: unknown;
+            } | null;
+            errorMessage: string | null;
+            validationErrors?: {
+                inputId: string;
+                message: string;
+            }[];
+        };
         HumanInputResponseDto: {
             /** Format: uuid */
             id: string;
@@ -4453,11 +4464,13 @@ export interface operations {
             };
         };
         responses: {
-            201: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["TestWebhookScriptResponseDto"];
+                };
             };
         };
     };
