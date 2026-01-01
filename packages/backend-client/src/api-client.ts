@@ -96,6 +96,12 @@ export class ShipSecApiClient {
     });
   }
 
+  async getWorkflowRuntimeInputs(workflowId: string) {
+    return this.client.GET('/api/v1/workflows/{id}/runtime-inputs', {
+      params: { path: { id: workflowId } },
+    });
+  }
+
   async createWorkflow(workflow: CreateWorkflowPayload) {
     return this.client.POST('/api/v1/workflows', {
       body: workflow,

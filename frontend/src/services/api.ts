@@ -192,6 +192,14 @@ export const api = {
       return response.data
     },
 
+    getRuntimeInputs: async (workflowId: string) => {
+      const response = await apiClient.getWorkflowRuntimeInputs(workflowId)
+      if (response.error || !response.data) {
+        throw new Error('Failed to fetch workflow runtime inputs')
+      }
+      return response.data
+    },
+
     create: async (workflow: CreateWorkflowRequestDto): Promise<WorkflowResponseDto> => {
       const response = await apiClient.createWorkflow(workflow)
       if (response.error) throw new Error('Failed to create workflow')

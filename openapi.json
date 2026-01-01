@@ -567,6 +567,36 @@
         ]
       }
     },
+    "/api/v1/workflows/{id}/runtime-inputs": {
+      "get": {
+        "operationId": "WorkflowsController_getRuntimeInputs",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Get the runtime inputs defined in the workflow Entry Point",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowRuntimeInputsResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "workflows"
+        ]
+      }
+    },
     "/api/v1/workflows/{workflowId}/versions/{versionId}": {
       "get": {
         "operationId": "WorkflowsController_findVersion",
@@ -5085,6 +5115,57 @@
         },
         "required": [
           "name"
+        ]
+      },
+      "WorkflowRuntimeInputsResponseDto": {
+        "type": "object",
+        "properties": {
+          "workflowId": {
+            "type": "string"
+          },
+          "inputs": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "label": {
+                  "type": "string"
+                },
+                "type": {
+                  "type": "string",
+                  "enum": [
+                    "text",
+                    "string",
+                    "number",
+                    "json",
+                    "array",
+                    "file",
+                    "boolean"
+                  ]
+                },
+                "required": {
+                  "default": true,
+                  "type": "boolean"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "defaultValue": {}
+              },
+              "required": [
+                "id",
+                "label",
+                "type"
+              ]
+            }
+          }
+        },
+        "required": [
+          "workflowId",
+          "inputs"
         ]
       },
       "WorkflowVersionResponseDto": {

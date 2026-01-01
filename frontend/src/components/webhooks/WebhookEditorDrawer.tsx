@@ -127,7 +127,7 @@ export function WebhookEditorDrawer({
   const [isSaving, setIsSaving] = useState(false)
   const [errors, setErrors] = useState<Partial<Record<keyof WebhookFormState, string>>>({})
 
-  // Fetch workflow details when workflowId changes
+  // Fetch workflow runtime inputs when workflowId changes
   useEffect(() => {
     if (!form.workflowId) {
       setWorkflowRuntimeInputs([])
@@ -136,32 +136,21 @@ export function WebhookEditorDrawer({
 
     setIsLoadingWorkflow(true)
 
-    // Use the graph from workflow to get entry point runtime inputs
-    api.workflows.get(form.workflowId)
-      .then((workflow) => {
-        const graph = workflow.graph
-        // In the raw API response, the component ID is in node.type
-        // (e.g., "core.workflow.entrypoint" or "entry-point")
-        const entryPointNode = graph?.nodes?.find((node: any) => {
-          const componentType = node.type
-          return componentType === 'core.workflow.entrypoint' || componentType === 'entry-point'
-        })
-
-        if (entryPointNode) {
-          // Runtime inputs are stored in node.data.config.runtimeInputs in the backend response
-          const nodeData = entryPointNode.data as any
-          const runtimeInputs = (nodeData?.config?.runtimeInputs) as WorkflowRuntimeInput[] || []
-          console.log('[WebhookEditor] Found entry point runtime inputs:', runtimeInputs)
-          setWorkflowRuntimeInputs(runtimeInputs)
-        } else {
-          console.log('[WebhookEditor] No entry point found in workflow')
-          setWorkflowRuntimeInputs([])
-        }
-
+    // Use the dedicated runtime-inputs endpoint instead of parsing the graph
+    api.workflows.getRuntimeInputs(form.workflowId)
+      .then((response) => {
+        const inputs = response.inputs.map((input) => ({
+          id: input.id,
+          label: input.label,
+          type: input.type,
+          required: input.required ?? true,
+          description: input.description,
+        }))
+        setWorkflowRuntimeInputs(inputs)
         setIsLoadingWorkflow(false)
       })
       .catch((err) => {
-        console.error('[WebhookEditor] Failed to load workflow:', err)
+        console.error('[WebhookEditor] Failed to load workflow runtime inputs:', err)
         setWorkflowRuntimeInputs([])
         setIsLoadingWorkflow(false)
       })

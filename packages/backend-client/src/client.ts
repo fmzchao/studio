@@ -148,6 +148,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workflows/{id}/runtime-inputs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["WorkflowsController_getRuntimeInputs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workflows/{workflowId}/versions/{versionId}": {
         parameters: {
             query?: never;
@@ -1416,6 +1432,19 @@ export interface components {
             name: string;
             description?: string | null;
         };
+        WorkflowRuntimeInputsResponseDto: {
+            workflowId: string;
+            inputs: {
+                id: string;
+                label: string;
+                /** @enum {string} */
+                type: "text" | "string" | "number" | "json" | "array" | "file" | "boolean";
+                /** @default true */
+                required: boolean;
+                description?: string;
+                defaultValue?: unknown;
+            }[];
+        };
         WorkflowVersionResponseDto: {
             id: string;
             workflowId: string;
@@ -2378,6 +2407,28 @@ export interface operations {
                             completedAt?: string | null;
                         }[];
                     };
+                };
+            };
+        };
+    };
+    WorkflowsController_getRuntimeInputs: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Get the runtime inputs defined in the workflow Entry Point */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowRuntimeInputsResponseDto"];
                 };
             };
         };
