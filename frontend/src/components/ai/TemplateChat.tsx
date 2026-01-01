@@ -320,18 +320,24 @@ export function TemplateChat({ onUpdateTemplate, systemPrompt }: TemplateChatPro
             );
           })
         )}
-        {isLoading && (messages[messages.length - 1]?.role === 'user' || (messages[messages.length - 1]?.role === 'assistant' && !renderMessageContent(messages[messages.length - 1]))) && (
-          <div className="flex flex-col gap-3 pl-9 animate-in fade-in duration-500">
-             <div className="flex items-center gap-1.5 p-2 w-fit rounded-lg bg-muted/30">
-                <span className="flex gap-1">
-                  <span className="w-1.5 h-1.5 bg-foreground/40 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
-                  <span className="w-1.5 h-1.5 bg-foreground/40 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
-                  <span className="w-1.5 h-1.5 bg-foreground/40 rounded-full animate-bounce"></span>
-                </span>
-                <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider ml-1">Thinking</span>
-             </div>
-          </div>
-        )}
+        {isLoading && (() => {
+          const lastMsg = messages[messages.length - 1];
+          const hasContent = lastMsg?.role === 'assistant' && renderMessageContent(lastMsg);
+          const label = hasContent ? 'Working' : 'Thinking';
+          
+          return (
+            <div className="flex flex-col gap-3 pl-9 animate-in fade-in duration-500">
+               <div className="flex items-center gap-1.5 p-2 w-fit rounded-lg bg-muted/30">
+                  <span className="flex gap-1">
+                    <span className="w-1.5 h-1.5 bg-foreground/40 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
+                    <span className="w-1.5 h-1.5 bg-foreground/40 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
+                    <span className="w-1.5 h-1.5 bg-foreground/40 rounded-full animate-bounce"></span>
+                  </span>
+                  <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider ml-1">{label}</span>
+               </div>
+            </div>
+          );
+        })()}
         <div ref={messagesEndRef} />
       </div>
 
