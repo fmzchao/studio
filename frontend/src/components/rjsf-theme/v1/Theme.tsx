@@ -4,6 +4,7 @@ import { ArrayFieldTemplate } from './ArrayFieldTemplate';
 import { ArrayFieldItemTemplate } from './ArrayFieldItemTemplate';
 import { BaseInputTemplate } from './BaseInputTemplate';
 import { ObjectFieldTemplate } from './ObjectFieldTemplate';
+import { SelectWidget } from './SelectWidget';
 
 export const Theme: ThemeProps = {
   templates: {
@@ -14,7 +15,6 @@ export const Theme: ThemeProps = {
     ObjectFieldTemplate,
   },
   widgets: {
-      // We might want to add custom widgets later for Select, Checkbox, etc. 
-      // to ensure they match the compact style.
+    SelectWidget,
   }
 };
