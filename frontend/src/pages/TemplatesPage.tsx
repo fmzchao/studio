@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTemplateStore } from '@/store/templateStore'
-import { LayoutListIcon, Trash2Icon } from 'lucide-react'
+import { LayoutListIcon, Trash2Icon, FileTextIcon } from 'lucide-react'
 
 export function TemplatesPage() {
   const navigate = useNavigate()
@@ -98,59 +98,64 @@ export function TemplatesPage() {
       )}
 
       {!loading && !error && filteredTemplates.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {filteredTemplates.map((template) => (
             <div
               key={template.id}
-              className="bg-card border border-border rounded-xl p-5 hover:border-primary/50 hover:shadow-lg transition-all group flex flex-col h-full"
+              onClick={() => navigate(`/templates/${template.id}/edit`)}
+              className="bg-card border border-border rounded-xl p-4 hover:border-primary/50 hover:shadow-sm transition-all group cursor-pointer flex flex-col h-full relative"
             >
-              <div className="flex-1">
-                <div className="flex items-start justify-between mb-3">
-                   <div className="p-2 bg-primary/10 rounded-lg text-primary">
-                      <LayoutListIcon className="w-5 h-5" />
+              {/* Header */}
+              <div className="flex items-start justify-between gap-3 mb-2">
+                <div className="flex items-center gap-2 min-w-0">
+                   <div className="p-1.5 bg-primary/10 rounded-md text-primary shrink-0">
+                      <LayoutListIcon className="w-4 h-4" />
                    </div>
-                   <div className="flex gap-2">
-                    {template.isSystem && (
-                      <span className="px-2 py-0.5 bg-muted text-muted-foreground text-[10px] uppercase font-bold rounded-full border border-border">
-                        System
-                      </span>
-                    )}
-                    <span className="px-2 py-0.5 bg-primary/5 text-primary text-[10px] uppercase font-bold rounded-full border border-primary/10">
-                      v{template.version}
-                    </span>
+                   <div className="min-w-0">
+                      <h3 className="font-semibold text-sm text-foreground truncate">{template.name}</h3>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        {template.isSystem && (
+                          <span className="px-1.5 py-px bg-muted text-muted-foreground text-[9px] uppercase font-bold rounded border border-border">
+                            System
+                          </span>
+                        )}
+                        <span className="text-[10px] text-muted-foreground">v{template.version}</span>
+                      </div>
                    </div>
                 </div>
                 
-                <h3 className="font-bold text-lg text-foreground group-hover:text-primary transition-colors mb-2 line-clamp-1">{template.name}</h3>
-                
-                {template.description ? (
-                  <p className="text-muted-foreground text-sm line-clamp-2 mb-4 h-10">{template.description}</p>
-                ) : (
-                  <p className="text-muted-foreground/50 text-sm italic mb-4 h-10">No description provided.</p>
-                )}
-                
-                <p className="text-muted-foreground text-xs flex items-center gap-1.5 mt-auto pt-4 border-t border-border">
-                  <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span>
-                  Updated {new Date(template.updatedAt).toLocaleDateString()}
-                </p>
+                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  {!template.isSystem && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        deleteTemplate(template.id);
+                      }}
+                      className="p-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-md transition-colors"
+                      title="Delete"
+                    >
+                      <Trash2Icon className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
               </div>
               
-              <div className="flex items-center gap-3 mt-4 pt-0">
-                <button
-                  onClick={() => navigate(`/templates/${template.id}/edit`)}
-                  className="flex-1 px-3 py-2 text-sm bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg transition-colors font-medium shadow-sm text-center"
-                >
-                  Edit
-                </button>
-                {!template.isSystem && (
-                  <button
-                    onClick={() => deleteTemplate(template.id)}
-                    className="px-3 py-2 text-sm text-destructive bg-destructive/10 hover:bg-destructive/20 rounded-lg transition-colors font-medium border border-destructive/20"
-                    aria-label="Delete template"
-                  >
-                    <Trash2Icon className="w-4 h-4" />
-                  </button>
-                )}
+              {/* Description */}
+              {template.description ? (
+                <p className="text-muted-foreground text-xs line-clamp-2 mb-4 min-h-[2.5em] leading-relaxed">{template.description}</p>
+              ) : (
+                <p className="text-muted-foreground/40 text-xs italic mb-4 min-h-[2.5em]">No description provided.</p>
+              )}
+              
+              {/* Footer */}
+              <div className="mt-auto pt-3 border-t border-border flex items-center justify-between text-[10px] text-muted-foreground">
+                <div className="flex items-center gap-1.5" title="Mock Usage Data">
+                  <FileTextIcon className="w-3 h-3" />
+                  <span>0 workflows</span>
+                </div>
+                <div>
+                  Updated {new Date(template.updatedAt).toLocaleDateString()}
+                </div>
               </div>
             </div>
           ))}
