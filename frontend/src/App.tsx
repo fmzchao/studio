@@ -80,6 +80,8 @@ function App() {
                     <Route path="/webhooks" element={<WebhooksPage />} />
                     <Route path="/webhooks/new" element={<WebhookEditorPage />} />
                     <Route path="/webhooks/:id" element={<WebhookEditorPage />} />
+                    <Route path="/webhooks/:id/deliveries" element={<WebhookEditorPage />} />
+                    <Route path="/webhooks/:id/settings" element={<WebhookEditorPage />} />
                     <Route path="/schedules" element={<SchedulesPage />} />
                     <Route path="/action-center" element={<ActionCenterPage />} />
                     <Route path="/artifacts" element={<ArtifactLibrary />} />

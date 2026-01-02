@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import {
     ArrowLeft,
     Play,
@@ -58,8 +58,26 @@ export async function script(input: {
 export function WebhookEditorPage() {
     const { id } = useParams<{ id: string }>()
     const navigate = useNavigate()
+    const location = useLocation()
     const { toast } = useToast()
     const isNew = !id || id === 'new'
+
+    // Derive active tab from URL
+    const activeTab = useMemo(() => {
+        if (location.pathname.endsWith('/deliveries')) return 'deliveries'
+        if (location.pathname.endsWith('/settings')) return 'settings'
+        return 'editor'
+    }, [location.pathname])
+
+    const navigateToTab = (tab: string) => {
+        if (isNew) return // Don't navigate for new webhooks
+        const basePath = `/webhooks/${id}`
+        if (tab === 'editor') {
+            navigate(basePath)
+        } else {
+            navigate(`${basePath}/${tab}`)
+        }
+    }
 
     const [isLoading, setIsLoading] = useState(!isNew)
     const [isSaving, setIsSaving] = useState(false)
@@ -318,12 +336,12 @@ export function WebhookEditorPage() {
 
             {/* Main Content */}
             <div className="flex-1 overflow-hidden">
-                <Tabs defaultValue="editor" className="h-full flex flex-col">
+                <Tabs value={activeTab} onValueChange={navigateToTab} className="h-full flex flex-col">
                     <div className="px-6 py-2 border-b bg-muted/40 shrink-0">
                         <TabsList>
                             <TabsTrigger value="editor" className="gap-2"><Code className="h-4 w-4" /> Editor & Test</TabsTrigger>
-                            <TabsTrigger value="deliveries" className="gap-2"><LucideHistory className="h-4 w-4" /> Deliveries</TabsTrigger>
-                            <TabsTrigger value="settings" className="gap-2"><Settings className="h-4 w-4" /> Settings</TabsTrigger>
+                            <TabsTrigger value="deliveries" className="gap-2" disabled={isNew}><LucideHistory className="h-4 w-4" /> Deliveries</TabsTrigger>
+                            <TabsTrigger value="settings" className="gap-2" disabled={isNew}><Settings className="h-4 w-4" /> Settings</TabsTrigger>
                         </TabsList>
                     </div>
 

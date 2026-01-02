@@ -466,7 +466,7 @@ export function WebhooksPage() {
                                     variant="outline"
                                     size="sm"
                                     className="gap-1 h-8 px-2 md:px-3"
-                                    onClick={() => navigate(`/webhooks/${webhook.id}`)}
+                                    onClick={() => navigate(`/webhooks/${webhook.id}/deliveries`)}
                                   >
                                     <ExternalLink className="h-4 w-4" />
                                     <span className="hidden md:inline">History</span>
