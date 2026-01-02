@@ -30,13 +30,10 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/use-toast'
 import {
   RefreshCw,
-  Search,
   Plus,
   Trash2,
   ExternalLink,
   Link2,
-  Code,
-  Edit3,
   Copy,
   RotateCw
 } from 'lucide-react'
@@ -278,36 +275,74 @@ export function WebhooksPage() {
     <TooltipProvider>
       <div className="flex-1 bg-background">
         <div className="container mx-auto px-3 md:px-4 py-4 md:py-8 space-y-4 md:space-y-6">
-          <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-            <div className="flex-1 space-y-2">
-              <label className="text-xs uppercase text-muted-foreground flex items-center gap-2">
-                <Search className="h-3.5 w-3.5" />
-                Search webhooks or workflows
-              </label>
-              <Input
-                placeholder="Filter by webhook name, workflow, or URL"
-                value={filters.search}
-                onChange={(event) => setFilters({ search: event.target.value })}
-              />
+          {/* Filters Row */}
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-end">
+            <div className="flex-1 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="space-y-2">
+                <label className="text-xs uppercase text-muted-foreground">Search</label>
+                <Input
+                  placeholder="Filter by name, workflow, or URL"
+                  value={filters.search}
+                  onChange={(e) => setFilters({ search: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs uppercase text-muted-foreground">Status</label>
+                <Select value={filters.status} onValueChange={handleStatusFilterChange}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="All statuses" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {STATUS_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs uppercase text-muted-foreground">Workflow</label>
+                <Select
+                  value={filters.workflowId ?? 'all'}
+                  onValueChange={handleWorkflowFilterChange}
+                  disabled={workflowsLoading}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="All workflows" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All workflows</SelectItem>
+                    {workflowOptions.map((workflow) => (
+                      <SelectItem key={workflow.id} value={workflow.id}>
+                        {workflow.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
-            <div className="flex flex-wrap gap-2">
-              <Button
-                variant="outline"
-                className="gap-2"
-                onClick={handleRefresh}
-                disabled={isLoading}
-              >
-                <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
-                <span className="hidden sm:inline">Refresh</span>
-              </Button>
-              <Button
-                variant="default"
-                className="gap-2"
-                onClick={() => navigate('/webhooks/new')}
-              >
-                <Plus className="h-4 w-4" />
-                <span className="hidden sm:inline">New webhook</span>
-              </Button>
+            <div className="flex flex-col shrink-0">
+              <label className="text-xs uppercase text-muted-foreground invisible hidden lg:block">&nbsp;</label>
+              <div className="flex gap-2 mt-2 lg:mt-0">
+                <Button
+                  variant="outline"
+                  className="gap-2"
+                  onClick={handleRefresh}
+                  disabled={isLoading}
+                >
+                  <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+                  <span className="hidden sm:inline">Refresh</span>
+                </Button>
+                <Button
+                  variant="default"
+                  className="gap-2"
+                  onClick={() => navigate('/webhooks/new')}
+                >
+                  <Plus className="h-4 w-4" />
+                  <span className="hidden sm:inline">New webhook</span>
+                </Button>
+              </div>
             </div>
           </div>
 
@@ -319,55 +354,6 @@ export function WebhooksPage() {
               </Button>
             </div>
           )}
-
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            <div className="space-y-2">
-              <label className="text-xs uppercase text-muted-foreground flex items-center gap-2">
-                <Search className="h-3.5 w-3.5" />
-                Search
-              </label>
-              <Input
-                placeholder="Filter by name, workflow, or URL"
-                value={filters.search}
-                onChange={(e) => setFilters({ search: e.target.value })}
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-xs uppercase text-muted-foreground">Status</label>
-              <Select value={filters.status} onValueChange={handleStatusFilterChange}>
-                <SelectTrigger>
-                  <SelectValue placeholder="All statuses" />
-                </SelectTrigger>
-                <SelectContent>
-                  {STATUS_OPTIONS.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <label className="text-xs uppercase text-muted-foreground">Workflow</label>
-              <Select
-                value={filters.workflowId ?? 'all'}
-                onValueChange={handleWorkflowFilterChange}
-                disabled={workflowsLoading}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="All workflows" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All workflows</SelectItem>
-                  {workflowOptions.map((workflow) => (
-                    <SelectItem key={workflow.id} value={workflow.id}>
-                      {workflow.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
 
           <div className="rounded-lg border bg-card shadow-sm overflow-hidden">
             <div className="overflow-x-auto">
@@ -399,7 +385,11 @@ export function WebhooksPage() {
                       const workflowName = getWorkflowName(webhook.workflowId, workflowOptions)
 
                       return (
-                        <TableRow key={webhook.id}>
+                        <TableRow
+                          key={webhook.id}
+                          className="cursor-pointer hover:bg-muted/50 transition-colors"
+                          onClick={() => navigate(`/webhooks/${webhook.id}`)}
+                        >
                           <TableCell className="font-medium">
                             <div className="flex flex-col">
                               <span className="truncate max-w-[140px]">{webhook.name}</span>
@@ -429,7 +419,7 @@ export function WebhooksPage() {
                                     variant="ghost"
                                     size="icon"
                                     className="h-6 w-6 shrink-0"
-                                    onClick={() => handleCopyUrl(webhook)}
+                                    onClick={(e) => { e.stopPropagation(); handleCopyUrl(webhook) }}
                                   >
                                     <Copy className="h-3 w-3" />
                                   </Button>
@@ -450,23 +440,7 @@ export function WebhooksPage() {
                                     variant="outline"
                                     size="sm"
                                     className="gap-1 h-8 px-2 md:px-3"
-                                    onClick={() => navigate(`/webhooks/${webhook.id}`)}
-                                  >
-                                    <Code className="h-4 w-4" />
-                                    <span className="hidden md:inline">Test</span>
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                  Test parsing script
-                                </TooltipContent>
-                              </Tooltip>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="gap-1 h-8 px-2 md:px-3"
-                                    onClick={() => navigate(`/webhooks/${webhook.id}/deliveries`)}
+                                    onClick={(e) => { e.stopPropagation(); navigate(`/webhooks/${webhook.id}/deliveries`) }}
                                   >
                                     <ExternalLink className="h-4 w-4" />
                                     <span className="hidden md:inline">History</span>
@@ -479,26 +453,10 @@ export function WebhooksPage() {
                               <Tooltip>
                                 <TooltipTrigger asChild>
                                   <Button
-                                    variant="secondary"
-                                    size="sm"
-                                    className="gap-1 h-8 px-2 md:px-3"
-                                    onClick={() => navigate(`/webhooks/${webhook.id}`)}
-                                  >
-                                    <Edit3 className="h-4 w-4" />
-                                    <span className="hidden md:inline">Edit</span>
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                  Edit webhook configuration
-                                </TooltipContent>
-                              </Tooltip>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
                                     variant="outline"
                                     size="icon"
                                     aria-label="Regenerate URL"
-                                    onClick={() => handleRegeneratePath(webhook)}
+                                    onClick={(e) => { e.stopPropagation(); handleRegeneratePath(webhook) }}
                                     disabled={isActionBusy(webhook.id)}
                                     className="h-8 w-8"
                                   >
@@ -515,7 +473,7 @@ export function WebhooksPage() {
                                     variant="ghost"
                                     size="icon"
                                     aria-label="Delete webhook"
-                                    onClick={() => handleDelete(webhook)}
+                                    onClick={(e) => { e.stopPropagation(); handleDelete(webhook) }}
                                     disabled={isActionBusy(webhook.id)}
                                     className="h-8 w-8"
                                   >
