@@ -3,11 +3,12 @@ import {
   componentRegistry,
   ComponentDefinition,
   port,
+  type ComponentRetryPolicy,
+  runComponentWithRunner,
+  type DockerRunnerConfig,
   ValidationError,
-  TimeoutError,
-  NetworkError,
-  ComponentRetryPolicy,
 } from '@shipsec/component-sdk';
+import { IsolatedContainerVolume } from '../../utils/isolated-volume';
 
 // ============================================================================
 // Action Schemas
@@ -255,7 +256,18 @@ const inputSchema = z.object({
 
     // Security options
     blockTracking: z.boolean().default(true).describe('Block common tracking scripts'),
-  }).default({}).describe('Browser execution options'),
+  }).default({
+    headless: true,
+    viewport: { width: 1280, height: 720 },
+    timeout: 30000,
+    screenshotOnStart: false,
+    screenshotOnEnd: true,
+    screenshotOnError: true,
+    fullPageScreenshots: false,
+    captureConsole: true,
+    captureNetwork: false,
+    blockTracking: true,
+  }).describe('Browser execution options'),
 });
 
 type Input = z.infer<typeof inputSchema>;
@@ -268,6 +280,7 @@ const outputSchema = z.object({
     artifactId: z.string().optional(),
     fileId: z.string().optional(),
     timestamp: z.string(),
+    path: z.string().optional(),
   })).describe('Screenshot artifacts captured'),
   consoleLogs: z.array(z.object({
     level: z.enum(['log', 'warn', 'error', 'debug', 'info']),
@@ -282,7 +295,216 @@ const outputSchema = z.object({
 type Output = z.infer<typeof outputSchema>;
 
 // ============================================================================
-// Retry Policy
+// Harness Code (Injected into Docker)
+// ============================================================================
+
+const harnessCode = `
+import { chromium } from 'playwright';
+import fs from 'fs';
+import path from 'path';
+
+const INPUT = JSON.parse(process.env.SHIPSEC_INPUT || '{}');
+const OUTPUT_DIR = '/outputs';
+
+async function run() {
+  const results = [];
+  const screenshots = [];
+  const consoleLogs = [];
+  let success = true;
+
+  const streamLog = (level, text) => {
+    const timestamp = new Date().toISOString();
+    consoleLogs.push({ level, text, timestamp });
+    console.log(\`[\${level.toUpperCase()}] \${text}\`);
+  };
+
+  const takeScreenshot = async (page, name, fullPage = false) => {
+    try {
+      const timestamp = new Date().toISOString();
+      const filename = \`\${name}-\${Date.now()}.png\`;
+      const filepath = path.join(OUTPUT_DIR, filename);
+      
+      await page.screenshot({
+        path: filepath,
+        fullPage,
+        type: 'png',
+      });
+
+      screenshots.push({
+        name,
+        path: filename,
+        timestamp,
+      });
+    } catch (err) {
+      streamLog('warn', \`Failed to capture screenshot \${name}: \${err.message}\`);
+    }
+  };
+
+  let browser;
+  try {
+    browser = await chromium.launch({
+      headless: INPUT.options?.headless ?? true,
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-blink-features=AutomationControlled',
+      ],
+    });
+
+    const context = await browser.newContext({
+      viewport: INPUT.options?.viewport ?? { width: 1280, height: 720 },
+      userAgent: INPUT.options?.userAgent,
+    });
+
+    const page = await context.newPage();
+
+    if (INPUT.options?.captureConsole) {
+      page.on('console', msg => {
+        streamLog(msg.type(), msg.text());
+      });
+    }
+
+    if (INPUT.options?.blockTracking) {
+      await page.route('**/*', route => {
+        const url = route.request().url();
+        const blockedDomains = ['doubleclick.net', 'google-analytics.com', 'googletagmanager.com'];
+        if (blockedDomains.some(d => url.includes(d))) route.abort();
+        else route.continue();
+      });
+    }
+
+    if (INPUT.options?.screenshotOnStart) {
+      await takeScreenshot(page, '00-start', INPUT.options?.fullPageScreenshots);
+    }
+
+    // Execute first navigation
+    const startTime = Date.now();
+    try {
+      await page.goto(INPUT.url, { waitUntil: 'load', timeout: INPUT.options?.timeout ?? 30000 });
+      results.push({
+        action: 'goto',
+        success: true,
+        timestamp: new Date().toISOString(),
+        duration: Date.now() - startTime,
+        url: page.url(),
+        title: await page.title().catch(() => ''),
+      });
+    } catch (err) {
+       results.push({
+        action: 'goto',
+        success: false,
+        timestamp: new Date().toISOString(),
+        duration: Date.now() - startTime,
+        error: err.message,
+        url: INPUT.url,
+      });
+      throw err;
+    }
+
+    // Execute actions
+    for (const action of (INPUT.actions || [])) {
+      const aStart = Date.now();
+      try {
+        switch (action.type) {
+          case 'goto':
+            await page.goto(action.url, { waitUntil: action.waitUntil, timeout: action.timeout ?? INPUT.options?.timeout });
+            results.push({ action: 'goto', success: true, timestamp: new Date().toISOString(), duration: Date.now() - aStart, url: page.url() });
+            break;
+          case 'click':
+            if (action.waitForSelector) await page.waitForSelector(action.selector, { timeout: action.timeout ?? INPUT.options?.timeout });
+            await page.click(action.selector, { timeout: action.timeout ?? INPUT.options?.timeout });
+            results.push({ action: 'click', success: true, timestamp: new Date().toISOString(), duration: Date.now() - aStart, selector: action.selector });
+            break;
+          case 'fill':
+            await page.fill(action.selector, action.value, { timeout: action.timeout ?? INPUT.options?.timeout });
+            results.push({ action: 'fill', success: true, timestamp: new Date().toISOString(), duration: Date.now() - aStart, selector: action.selector });
+            break;
+          case 'screenshot':
+            await takeScreenshot(page, action.name, action.fullPage);
+            results.push({ action: 'screenshot', success: true, timestamp: new Date().toISOString(), duration: Date.now() - aStart, name: action.name });
+            break;
+          case 'getText':
+            const text = await page.textContent(action.selector);
+            results.push({ action: 'getText', success: true, timestamp: new Date().toISOString(), duration: Date.now() - aStart, selector: action.selector, text });
+            break;
+          case 'getHTML':
+            const html = action.selector ? await page.innerHTML(action.selector) : await page.content();
+            results.push({ action: 'getHTML', success: true, timestamp: new Date().toISOString(), duration: Date.now() - aStart, selector: action.selector, html });
+            break;
+          case 'waitFor':
+            await page.waitForSelector(action.selector, { state: action.state, timeout: action.timeout ?? INPUT.options?.timeout });
+            results.push({ action: 'waitFor', success: true, timestamp: new Date().toISOString(), duration: Date.now() - aStart, selector: action.selector });
+            break;
+          case 'evaluate':
+            const res = await page.evaluate(action.script);
+            results.push({ action: 'evaluate', success: true, timestamp: new Date().toISOString(), duration: Date.now() - aStart, result: res });
+            break;
+          case 'select':
+            await page.selectOption(action.selector, action.value);
+            results.push({ action: 'select', success: true, timestamp: new Date().toISOString(), duration: Date.now() - aStart, selector: action.selector });
+            break;
+          case 'hover':
+            await page.hover(action.selector, { timeout: action.timeout ?? INPUT.options?.timeout });
+            results.push({ action: 'hover', success: true, timestamp: new Date().toISOString(), duration: Date.now() - aStart, selector: action.selector });
+            break;
+          case 'scroll':
+            if (action.position === 'top') await page.evaluate(() => window.scrollTo(0, 0));
+            else if (action.position === 'bottom') await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+            else if (action.selector) await page.locator(action.selector).scrollIntoViewIfNeeded();
+            results.push({ action: 'scroll', success: true, timestamp: new Date().toISOString(), duration: Date.now() - aStart });
+            break;
+        }
+      } catch (err) {
+        results.push({
+          action: action.type,
+          success: false,
+          timestamp: new Date().toISOString(),
+          duration: Date.now() - aStart,
+          error: err.message,
+        });
+        throw err;
+      }
+    }
+
+    if (INPUT.options?.screenshotOnEnd) {
+      await takeScreenshot(page, '99-end', INPUT.options?.fullPageScreenshots);
+    }
+
+    const finalUrl = page.url();
+    const pageTitle = await page.title().catch(() => '');
+
+    const output = {
+      success: true,
+      results,
+      screenshots,
+      consoleLogs,
+      finalUrl,
+      pageTitle,
+    };
+
+    process.stdout.write('---RESULT_START---' + JSON.stringify(output) + '---RESULT_END---');
+
+  } catch (err) {
+    const output = {
+       success: false,
+       results,
+       screenshots,
+       consoleLogs,
+       error: err.message,
+    };
+    process.stdout.write('---RESULT_START---' + JSON.stringify(output) + '---RESULT_END---');
+    process.exit(0);
+  } finally {
+    if (browser) await browser.close();
+  }
+}
+
+run();
+`;
+
+// ============================================================================
+// Component Definition
 // ============================================================================
 
 const browserAutomationRetryPolicy: ComponentRetryPolicy = {
@@ -296,16 +518,20 @@ const browserAutomationRetryPolicy: ComponentRetryPolicy = {
   ],
 };
 
-// ============================================================================
-// Component Definition
-// ============================================================================
 
 const definition: ComponentDefinition<Input, Output> = {
   id: 'browser.automation',
   label: 'Browser Automation',
   category: 'security',
   retryPolicy: browserAutomationRetryPolicy,
-  runner: { kind: 'inline' },
+  runner: {
+    kind: 'docker',
+    image: 'mcr.microsoft.com/playwright:v1.49.1-focal',
+    entrypoint: 'sh',
+    command: ['-c', 'node /harness.mjs'],
+    network: 'bridge',
+    timeoutSeconds: 300,
+  },
   inputSchema,
   outputSchema,
   docs: 'Automate browser interactions using Playwright. Supports navigation, clicking, form filling, screenshots, HTML extraction, and JavaScript evaluation. Ideal for web scraping, UI testing, and phishing link investigation.',
@@ -378,13 +604,6 @@ const definition: ComponentDefinition<Input, Output> = {
         description: 'True if all actions completed successfully.',
       },
     ],
-    examples: [
-      'Visit a URL and take a screenshot for visual verification.',
-      'Fill and submit a login form to test credentials.',
-      'Scrape product prices from an e-commerce page.',
-      'Investigate a suspicious phishing link by capturing screenshots and HTML.',
-      'Navigate through a multi-step form flow and capture each step.',
-    ],
     parameters: [
       {
         id: 'options.headless',
@@ -400,528 +619,90 @@ const definition: ComponentDefinition<Input, Output> = {
         default: { width: 1280, height: 720 },
         description: 'Browser window dimensions.',
       },
-      {
-        id: 'options.screenshotOnStart',
-        label: 'Screenshot on Start',
-        type: 'boolean',
-        default: false,
-        description: 'Capture screenshot before any actions.',
-      },
-      {
-        id: 'options.screenshotOnEnd',
-        label: 'Screenshot on End',
-        type: 'boolean',
-        default: true,
-        description: 'Capture screenshot after all actions complete.',
-      },
-      {
-        id: 'options.screenshotOnError',
-        label: 'Screenshot on Error',
-        type: 'boolean',
-        default: true,
-        description: 'Capture screenshot when an action fails.',
-      },
-      {
-        id: 'options.captureConsole',
-        label: 'Capture Console',
-        type: 'boolean',
-        default: true,
-        description: 'Capture browser console logs (useful for debugging).',
-      },
-      {
-        id: 'options.blockTracking',
-        label: 'Block Tracking',
-        type: 'boolean',
-        default: true,
-        description: 'Block common tracking scripts for faster loading.',
-      },
-      {
-        id: 'options.timeout',
-        label: 'Timeout (ms)',
-        type: 'number',
-        default: 30000,
-        min: 1000,
-        max: 120000,
-        description: 'Default timeout for actions.',
-      },
     ],
   },
 
   async execute(input, context) {
-    // Lazy load Playwright to avoid unnecessary imports
-    let playwright: typeof import('playwright');
-    try {
-      playwright = await import('playwright');
-    } catch (error) {
-      context.logger.error('[Browser] Playwright not installed. Please run: bun add playwright');
-      throw new ValidationError('Playwright is not installed. Add it to worker dependencies.', {
-        details: { error: error instanceof Error ? error.message : String(error) },
-      });
-    }
-
-    const results: ActionResult[] = [];
-    const screenshots: Array<{ name: string; artifactId?: string; fileId?: string; timestamp: string }> = [];
-    const consoleLogs: Array<{ level: 'log' | 'warn' | 'error' | 'debug' | 'info'; text: string; timestamp: string }> = [];
-    let success = true;
-    let error: string | undefined;
-
-    // Helper to take screenshot and save as artifact
-    const takeScreenshot = async (page: import('playwright').Page, name: string, fullPage = false): Promise<void> => {
-      try {
-        const timestamp = new Date().toISOString();
-        const buffer = await page.screenshot({
-          fullPage,
-          type: 'png',
-        });
-
-        // Save to artifacts if available
-        if (context.artifacts) {
-          const result = await context.artifacts.upload({
-            name: `${name}.png`,
-            content: buffer,
-            mimeType: 'image/png',
-            destinations: ['run'],
-            metadata: {
-              componentRef: context.componentRef,
-              timestamp,
-            },
-          });
-
-          screenshots.push({
-            name,
-            artifactId: result.artifactId,
-            fileId: result.fileId,
-            timestamp,
-          });
-
-          context.emitProgress(`Screenshot saved: ${name}.png`);
-        } else {
-          // Fallback: store in memory without artifact service
-          screenshots.push({
-            name,
-            timestamp,
-          });
-        }
-      } catch (screenshotError) {
-        context.logger.warn(`[Browser] Failed to capture screenshot: ${screenshotError}`);
-      }
-    };
-
-    // Helper to stream console logs to terminal
-    const streamConsoleLog = (level: string, ...args: unknown[]) => {
-      const timestamp = new Date().toISOString();
-      const text = args.map(arg => typeof arg === 'string' ? arg : JSON.stringify(arg)).join(' ');
-
-      consoleLogs.push({ level: level as any, text, timestamp });
-
-      // Stream to terminal collector if available
-      if (context.terminalCollector) {
-        const prefix = level === 'error' ? '[Browser Error]' : level === 'warn' ? '[Browser Warn]' : '[Browser]';
-        const message = `${prefix} ${text}\n`;
-
-        // Emit as console stream
-        context.terminalCollector({
-          runId: context.runId,
-          nodeRef: context.componentRef,
-          stream: 'console',
-          chunkIndex: consoleLogs.length,
-          payload: Buffer.from(message).toString('base64'),
-          recordedAt: timestamp,
-          deltaMs: 0,
-          origin: 'browser',
-          runnerKind: 'inline',
-        });
-      }
-
-      context.logger.info(`[Browser Console] [${level}] ${text}`);
-    };
-
-    // Helper to execute an action and record result
-    const executeAction = async (
-      page: import('playwright').Page,
-      action: BrowserAction,
-    ): Promise<ActionResult> => {
-      const startTime = Date.now();
-      const timestamp = new Date().toISOString();
-      let result: ActionResult;
-      let actionSuccess = true;
-      let actionError: string | undefined;
-
-      try {
-        context.emitProgress(`Executing: ${action.type}`);
-
-        switch (action.type) {
-          case 'goto': {
-            const response = await page.goto(action.url, {
-              waitUntil: action.waitUntil,
-              timeout: action.timeout ?? input.options.timeout,
-            });
-
-            result = {
-              action: 'goto',
-              success: true,
-              timestamp,
-              duration: Date.now() - startTime,
-              url: page.url(),
-              title: await page.title().catch(() => undefined),
-            };
-
-            context.logger.info(`[Browser] Navigated to ${page.url()}`);
-            break;
-          }
-
-          case 'click': {
-            if (action.waitForSelector) {
-              await page.waitForSelector(action.selector, { timeout: action.timeout ?? input.options.timeout });
-            }
-            await page.click(action.selector, { timeout: action.timeout ?? input.options.timeout });
-
-            result = {
-              action: 'click',
-              success: true,
-              timestamp,
-              duration: Date.now() - startTime,
-              selector: action.selector,
-            };
-
-            context.logger.info(`[Browser] Clicked: ${action.selector}`);
-            break;
-          }
-
-          case 'fill': {
-            await page.fill(action.selector, action.value, { timeout: action.timeout ?? input.options.timeout });
-
-            result = {
-              action: 'fill',
-              success: true,
-              timestamp,
-              duration: Date.now() - startTime,
-              selector: action.selector,
-            };
-
-            context.logger.info(`[Browser] Filled ${action.selector} with ${action.value.slice(0, 20)}...`);
-            break;
-          }
-
-          case 'screenshot': {
-            await takeScreenshot(page, action.name, action.fullPage);
-
-            result = {
-              action: 'screenshot',
-              success: true,
-              timestamp,
-              duration: Date.now() - startTime,
-              name: action.name,
-              artifactId: screenshots.find(s => s.name === action.name)?.artifactId,
-              fileId: screenshots.find(s => s.name === action.name)?.fileId,
-            };
-            break;
-          }
-
-          case 'getHTML': {
-            let html: string | undefined;
-
-            if (action.selector) {
-              const element = await page.$(action.selector);
-              if (element) {
-                html = await element.innerHTML();
-              }
-            } else {
-              html = await page.content();
-            }
-
-            result = {
-              action: 'getHTML',
-              success: true,
-              timestamp,
-              duration: Date.now() - startTime,
-              html,
-              selector: action.selector,
-            };
-
-            context.logger.info(`[Browser] Got HTML (${html?.length ?? 0} chars)`);
-            break;
-          }
-
-          case 'getText': {
-            const text = await page.textContent(action.selector);
-
-            result = {
-              action: 'getText',
-              success: true,
-              timestamp,
-              duration: Date.now() - startTime,
-              selector: action.selector,
-              text: text ?? '',
-            };
-
-            context.logger.info(`[Browser] Got text: ${text?.slice(0, 50)}...`);
-            break;
-          }
-
-          case 'waitFor': {
-            await page.waitForSelector(action.selector, {
-              state: action.state,
-              timeout: action.timeout ?? input.options.timeout,
-            });
-
-            result = {
-              action: 'waitFor',
-              success: true,
-              timestamp,
-              duration: Date.now() - startTime,
-              selector: action.selector,
-            };
-
-            context.logger.info(`[Browser] Waited for ${action.selector} (${action.state})`);
-            break;
-          }
-
-          case 'evaluate': {
-            const evalResult = await page.evaluate(action.script);
-
-            result = {
-              action: 'evaluate',
-              success: true,
-              timestamp,
-              duration: Date.now() - startTime,
-              result: evalResult,
-            };
-
-            context.logger.info(`[Browser] Evaluated script`);
-            break;
-          }
-
-          case 'select': {
-            await page.selectOption(action.selector, action.value);
-
-            result = {
-              action: 'select',
-              success: true,
-              timestamp,
-              duration: Date.now() - startTime,
-              selector: action.selector,
-              value: action.value,
-            };
-
-            context.logger.info(`[Browser] Selected ${action.value} from ${action.selector}`);
-            break;
-          }
-
-          case 'hover': {
-            await page.hover(action.selector, { timeout: action.timeout ?? input.options.timeout });
-
-            result = {
-              action: 'hover',
-              success: true,
-              timestamp,
-              duration: Date.now() - startTime,
-              selector: action.selector,
-            };
-
-            context.logger.info(`[Browser] Hovered over ${action.selector}`);
-            break;
-          }
-
-          case 'scroll': {
-            if (action.position === 'top') {
-              await page.evaluate(() => window.scrollTo(0, 0));
-            } else if (action.position === 'bottom') {
-              await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-            } else if (action.selector) {
-              await page.locator(action.selector).scrollIntoViewIfNeeded();
-            }
-
-            result = {
-              action: 'scroll',
-              success: true,
-              timestamp,
-              duration: Date.now() - startTime,
-              selector: action.selector,
-              position: action.position,
-            };
-
-            context.logger.info(`[Browser] Scrolled`);
-            break;
-          }
-
-          default: {
-            const _exhaustive: never = action;
-            throw new ValidationError(`Unknown action type: ${(action as any).type}`);
-          }
-        }
-      } catch (err) {
-        actionSuccess = false;
-        actionError = err instanceof Error ? err.message : String(err);
-
-        result = {
-          action: action.type as any,
-          success: false,
-          timestamp,
-          duration: Date.now() - startTime,
-          error: actionError,
-          ...(action.type === 'goto' ? { url: action.url } : {}),
-          ...(action.type === 'click' || action.type === 'fill' || action.type === 'hover' || action.type === 'waitFor'
-            ? { selector: action.selector }
-            : {}),
-          ...(action.type === 'screenshot' ? { name: action.name } : {}),
-          ...(action.type === 'select' ? { selector: action.selector, value: action.value } : {}),
-        } as ActionResult;
-
-        context.logger.error(`[Browser] Action failed: ${action.type} - ${actionError}`);
-
-        // Take screenshot on error if enabled
-        if (input.options.screenshotOnError) {
-          await takeScreenshot(page, `error-${action.type}-${Date.now()}`, input.options.fullPageScreenshots);
-        }
-      }
-
-      return result;
-    };
-
-    // Main execution
-    let browser: import('playwright').Browser | null = null;
-    let page: import('playwright').Page | null = null;
+    const tenantId = (context as any).tenantId ?? 'default-tenant';
+    const volume = new IsolatedContainerVolume(tenantId, context.runId);
 
     try {
-      context.emitProgress('Launching browser...');
+      context.emitProgress('Preparing browser environment...');
+      
+      const harnessB64 = Buffer.from(harnessCode).toString('base64');
+      const shellCommand = `echo "${harnessB64}" | base64 -d > /harness.mjs && node /harness.mjs`;
 
-      // Launch browser
-      browser = await playwright.chromium.launch({
-        headless: input.options.headless,
-        args: [
-          '--no-sandbox',
-          '--disable-setuid-sandbox',
-          '--disable-dev-shm-usage',
-          '--disable-blink-features=AutomationControlled',
+      const runnerConfig: DockerRunnerConfig = {
+        kind: 'docker',
+        image: 'mcr.microsoft.com/playwright:v1.49.1-focal',
+        entrypoint: 'sh',
+        command: ['-c', shellCommand],
+        network: 'bridge',
+        env: {
+          SHIPSEC_INPUT: JSON.stringify(input),
+        },
+        volumes: [
+          volume.getVolumeConfig('/outputs', false),
         ],
-      });
-
-      context.emitProgress('Creating page...');
-
-      page = await browser.newPage({
-        viewport: input.options.viewport,
-        userAgent: input.options.userAgent,
-      });
-
-      // Setup console log capture
-      if (input.options.captureConsole) {
-        page.on('console', msg => {
-          streamConsoleLog(msg.type(), msg.text(), msg.args());
-        });
-      }
-
-      // Block tracking scripts if enabled
-      if (input.options.blockTracking) {
-        await page.route('**/*', route => {
-          const url = route.request().url();
-          // Block common tracking domains
-          const blockedDomains = [
-            'doubleclick.net',
-            'google-analytics.com',
-            'googletagmanager.com',
-            'facebook.com/tr',
-            'connect.facebook.net',
-            'analytics.twitter.com',
-          ];
-
-          const isBlocked = blockedDomains.some(domain => url.includes(domain));
-
-          if (isBlocked) {
-            route.abort();
-          } else {
-            route.continue();
-          }
-        });
-      }
-
-      // Take screenshot on start if enabled
-      if (input.options.screenshotOnStart) {
-        await takeScreenshot(page, '00-start', input.options.fullPageScreenshots);
-      }
-
-      // Navigate to initial URL
-      context.emitProgress(`Navigating to ${input.url}...`);
-      const gotoResult = await executeAction(page, {
-        type: 'goto',
-        url: input.url,
-        waitUntil: 'load',
-      });
-      results.push(gotoResult);
-
-      if (!gotoResult.success) {
-        throw new Error(`Failed to navigate to ${input.url}: ${gotoResult.error}`);
-      }
-
-      // Execute user actions
-      for (const action of input.actions) {
-        const result = await executeAction(page, action);
-        results.push(result);
-
-        if (!result.success) {
-          success = false;
-          error = `Action ${result.action} failed: ${result.error}`;
-          break;
-        }
-      }
-
-      // Take screenshot on end if enabled
-      if (input.options.screenshotOnEnd && success) {
-        await takeScreenshot(page, '99-end', input.options.fullPageScreenshots);
-      }
-
-      // Get final page info
-      const finalUrl = page?.url();
-      const pageTitle = await page?.title().catch(() => undefined);
-
-      context.emitProgress('Browser automation completed');
-
-      return {
-        success,
-        results,
-        screenshots,
-        consoleLogs,
-        finalUrl,
-        pageTitle,
-        error,
       };
 
-    } catch (err) {
-      success = false;
-      error = err instanceof Error ? err.message : String(err);
+      const raw = await runComponentWithRunner<Input, any>(
+        runnerConfig,
+        async () => { throw new Error('Docker runner failed'); },
+        input,
+        context,
+      );
 
-      context.logger.error(`[Browser] Execution failed: ${error}`);
-      context.emitProgress({
-        message: `Browser automation failed: ${error}`,
-        level: 'error',
-      });
-
-      // Take screenshot on error if not already taken
-      if (input.options.screenshotOnError && page) {
-        await takeScreenshot(page, `error-fatal-${Date.now()}`, input.options.fullPageScreenshots);
+      let result: any = {};
+      if (typeof raw === 'string') {
+        const match = raw.match(/---RESULT_START---([\s\S]*)---RESULT_END---/);
+        if (match) {
+          result = JSON.parse(match[1].trim());
+        }
       }
 
-      // Return partial results
+      const finalScreenshots: any[] = [];
+      if (result.screenshots && Array.isArray(result.screenshots) && context.artifacts) {
+        context.emitProgress(`Uploading \${result.screenshots.length} screenshots...`);
+        
+        for (const s of result.screenshots) {
+          try {
+             const buffer = await volume.readFileFromVolumeAsBuffer(s.path);
+             const uploadResult = await context.artifacts.upload({
+               name: s.path,
+               content: buffer,
+               mimeType: 'image/png',
+               destinations: ['run'],
+               metadata: {
+                 componentRef: context.componentRef,
+                 timestamp: s.timestamp,
+               }
+             });
+
+             finalScreenshots.push({
+               ...s,
+               artifactId: uploadResult.artifactId,
+               fileId: uploadResult.fileId,
+             });
+          } catch (err) {
+            context.logger.warn(`Failed to process screenshot \${s.name}: \${err.message}`);
+            finalScreenshots.push(s);
+          }
+        }
+      }
+
       return {
-        success,
-        results,
-        screenshots,
-        consoleLogs,
-        finalUrl: page?.url(),
-        pageTitle: await page?.title().catch(() => undefined),
-        error,
+        success: result.success ?? false,
+        results: result.results ?? [],
+        screenshots: finalScreenshots,
+        consoleLogs: result.consoleLogs ?? [],
+        finalUrl: result.finalUrl,
+        pageTitle: result.pageTitle,
+        error: result.error,
       };
 
     } finally {
-      // Cleanup
-      try {
-        if (page) await page.close().catch(() => {});
-        if (browser) await browser.close().catch(() => {});
-      } catch (cleanupError) {
-        context.logger.warn(`[Browser] Cleanup error: ${cleanupError}`);
-      }
-
-      context.emitProgress('Browser closed');
+      await volume.cleanup();
     }
   },
 };
@@ -929,4 +710,3 @@ const definition: ComponentDefinition<Input, Output> = {
 componentRegistry.register(definition);
 
 export { definition };
-export type { Input as BrowserAutomationInput, Output as BrowserAutomationOutput, BrowserAction, ActionResult };
