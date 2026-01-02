@@ -65,7 +65,18 @@ export function WebhookDetails({
 
     // Replace placeholders in snippet templates
     const replacePlaceholders = (template: string, lang: string): string => {
+        let comment = '';
+        if (hideAuth) {
+            const commentText = "Any external payload can be sent here; it will be transformed by your webhook script.\n";
+            if (lang === 'curl') {
+                comment = `# ${commentText}`;
+            } else if (lang === 'go' || lang === 'typescript' || lang === 'python') {
+                comment = `// ${commentText}`;
+            }
+        }
+
         let snippet = template
+            .replace(/{{COMMENT}}/g, comment)
             .replace(/{{URL}}/g, url)
             .replace(/{{API_KEY}}/g, apiKeyForSnippets)
             .replace(/{{PAYLOAD}}/g, safePayload)
