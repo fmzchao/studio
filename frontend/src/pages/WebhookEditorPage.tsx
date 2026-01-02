@@ -548,10 +548,10 @@ export function WebhookEditorPage() {
                                                 <Badge variant="destructive">Failed</Badge>
                                             }
                                         </div>
-                                        <div className="font-mono text-xs">{delivery.runId || '-'}</div>
+                                        <div className="font-mono text-xs">{delivery.workflowRunId || '-'}</div>
                                         <div className="text-muted-foreground">{new Date(delivery.createdAt).toLocaleString()}</div>
                                         <div className="text-right">
-                                            <Button size="sm" variant="ghost" onClick={() => navigate(`/runs/${delivery.runId}`)} disabled={!delivery.runId}>
+                                            <Button size="sm" variant="ghost" onClick={() => navigate(`/runs/${delivery.workflowRunId}`)} disabled={!delivery.workflowRunId}>
                                                 View Run
                                             </Button>
                                         </div>
