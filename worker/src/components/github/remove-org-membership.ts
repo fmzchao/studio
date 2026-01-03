@@ -12,6 +12,7 @@ import {
   TimeoutError,
   NotFoundError,
   fromHttpResponse,
+  DEFAULT_SENSITIVE_HEADERS,
 } from '@shipsec/component-sdk';
 
 const inputSchema = z
@@ -199,7 +200,7 @@ const definition: ComponentDefinition<
       context.emitProgress(`Removing ${login} from team ${teamSlug}...`);
       let teamResponse: Response;
       try {
-        teamResponse = await fetch(
+        teamResponse = await context.http.fetch(
           `https://api.github.com/orgs/${encodeURIComponent(organization)}/teams/${encodeURIComponent(teamSlug)}/memberships/${encodeURIComponent(login)}`,
           {
             method: 'DELETE',
@@ -229,7 +230,7 @@ const definition: ComponentDefinition<
     context.emitProgress(`Removing ${login} from organization ${organization}...`);
     let orgResponse: Response;
     try {
-      orgResponse = await fetch(
+      orgResponse = await context.http.fetch(
         `https://api.github.com/orgs/${encodeURIComponent(organization)}/members/${encodeURIComponent(login)}`,
         {
           method: 'DELETE',
@@ -304,7 +305,11 @@ async function fetchConnectionAccessToken(
     });
   }
 
-  const response = await fetch(
+  const sensitiveHeaders = internalToken
+    ? Array.from(new Set([...DEFAULT_SENSITIVE_HEADERS, 'x-internal-token']))
+    : DEFAULT_SENSITIVE_HEADERS;
+
+  const response = await context.http.fetch(
     `${normalizedBase}/integrations/connections/${encodeURIComponent(connectionId)}/token`,
     {
       method: 'POST',
@@ -317,6 +322,7 @@ async function fetchConnectionAccessToken(
             'Content-Type': 'application/json',
           },
     },
+    { sensitiveHeaders },
   );
 
   if (!response.ok) {
@@ -387,7 +393,7 @@ async function requestDeviceCode(
     scope: 'admin:org read:org',
   });
 
-  const response = await fetch('https://github.com/login/device/code', {
+  const response = await context.http.fetch('https://github.com/login/device/code', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
@@ -454,7 +460,7 @@ async function pollForAccessToken(
   while (Date.now() < timeoutAt) {
     await delay(pollIntervalMs);
 
-    const response = await fetch('https://github.com/login/oauth/access_token', {
+    const response = await context.http.fetch('https://github.com/login/oauth/access_token', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
@@ -516,7 +522,7 @@ async function resolveLogin(
   if (trimmed.includes('@')) {
     context.emitProgress('Resolving GitHub username from email...');
     const query = encodeURIComponent(`${trimmed} in:email`);
-    const searchResponse = await fetch(`https://api.github.com/search/users?q=${query}&per_page=1`, {
+    const searchResponse = await context.http.fetch(`https://api.github.com/search/users?q=${query}&per_page=1`, {
       headers,
     });
 

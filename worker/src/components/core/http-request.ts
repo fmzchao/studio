@@ -7,6 +7,7 @@ import {
   TimeoutError,
   NetworkError,
   ComponentRetryPolicy,
+  DEFAULT_SENSITIVE_HEADERS,
 } from '@shipsec/component-sdk';
 
 const inputSchema = z.object({
@@ -239,12 +240,16 @@ const definition: ComponentDefinition<Input, Output, Params> = {
     try {
       context.emitProgress(`Requesting ${method} ${url}...`);
 
-      const response = await fetch(url, {
+      const sensitiveHeaders = authHeaderName
+        ? Array.from(new Set([...DEFAULT_SENSITIVE_HEADERS, authHeaderName]))
+        : DEFAULT_SENSITIVE_HEADERS;
+
+      const response = await context.http.fetch(url, {
         method: method,
         headers: finalHeaders,
         body: method !== 'GET' && method !== 'HEAD' ? body : undefined,
         signal: controller.signal,
-      });
+      }, { sensitiveHeaders });
 
       clearTimeout(timeoutId);
 

@@ -139,7 +139,7 @@ const definition: ComponentDefinition<Input, Output> = {
     // but typically "lookup" implies retrieving existing info. 
     // The GET endpoint retrieves the last analysis.
 
-    const response = await fetch(endpoint, {
+    const response = await context.http.fetch(endpoint, {
       method: 'GET',
       headers: {
         'x-apikey': apiKey,
