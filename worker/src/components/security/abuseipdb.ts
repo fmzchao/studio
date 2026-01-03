@@ -49,6 +49,23 @@ const abuseIPDBRetryPolicy: ComponentRetryPolicy = {
   ],
 };
 
+// Port definitions shared between metadata and resolvePorts
+const inputPorts = [
+  { id: 'ipAddress', label: 'IP Address', dataType: port.text(), required: true },
+  { id: 'apiKey', label: 'API Key', dataType: port.secret(), required: true },
+  { id: 'maxAgeInDays', label: 'Max Age (Days)', dataType: port.number(), required: false },
+  { id: 'verbose', label: 'Verbose', dataType: port.boolean(), required: false },
+];
+
+const outputPorts = [
+  { id: 'abuseConfidenceScore', label: 'Confidence Score', dataType: port.number() },
+  { id: 'isWhitelisted', label: 'Whitelisted', dataType: port.boolean() },
+  { id: 'countryCode', label: 'Country', dataType: port.text() },
+  { id: 'isp', label: 'ISP', dataType: port.text() },
+  { id: 'totalReports', label: 'Total Reports', dataType: port.number() },
+  { id: 'full_report', label: 'Full Report', dataType: port.json() },
+];
+
 const definition: ComponentDefinition<Input, Output> = {
   id: 'security.abuseipdb.check',
   label: 'AbuseIPDB Check',
@@ -68,38 +85,15 @@ const definition: ComponentDefinition<Input, Output> = {
     author: { name: 'ShipSecAI', type: 'shipsecai' },
     isLatest: true,
     deprecated: false,
-    inputs: [
-      { id: 'ipAddress', label: 'IP Address', dataType: port.text(), required: true },
-      { id: 'apiKey', label: 'API Key', dataType: port.secret(), required: true },
-      { id: 'maxAgeInDays', label: 'Max Age (Days)', dataType: port.number(), required: false },
-      { id: 'verbose', label: 'Verbose', dataType: port.boolean(), required: false },
-    ],
-    outputs: [
-      { id: 'abuseConfidenceScore', label: 'Confidence Score', dataType: port.number() },
-      { id: 'isWhitelisted', label: 'Whitelisted', dataType: port.boolean() },
-      { id: 'countryCode', label: 'Country', dataType: port.text() },
-      { id: 'isp', label: 'ISP', dataType: port.text() },
-      { id: 'totalReports', label: 'Total Reports', dataType: port.number() },
-      { id: 'full_report', label: 'Full Report', dataType: port.json() },
+    inputs: inputPorts,
+    outputs: outputPorts,
+    parameters: [
+      { id: 'maxAgeInDays', label: 'Max Age (Days)', type: 'number', default: 90 },
+      { id: 'verbose', label: 'Verbose Output', type: 'boolean', default: false },
     ],
   },
-  resolvePorts(params) {
-      return {
-          inputs: [
-              { id: 'ipAddress', label: 'IP Address', dataType: port.text(), required: true },
-              { id: 'apiKey', label: 'API Key', dataType: port.secret(), required: true },
-              { id: 'maxAgeInDays', label: 'Max Age (Days)', dataType: port.number(), required: false },
-              { id: 'verbose', label: 'Verbose', dataType: port.boolean(), required: false },
-          ],
-          outputs: [
-              { id: 'abuseConfidenceScore', label: 'Confidence Score', dataType: port.number() },
-              { id: 'isWhitelisted', label: 'Whitelisted', dataType: port.boolean() },
-              { id: 'countryCode', label: 'Country', dataType: port.text() },
-              { id: 'isp', label: 'ISP', dataType: port.text() },
-              { id: 'totalReports', label: 'Total Reports', dataType: port.number() },
-              { id: 'full_report', label: 'Full Report', dataType: port.json() },
-          ]
-      };
+  resolvePorts() {
+    return { inputs: inputPorts, outputs: outputPorts };
   },
   async execute(params, context) {
     const { ipAddress, apiKey, maxAgeInDays, verbose } = params;
@@ -150,26 +144,26 @@ const definition: ComponentDefinition<Input, Output> = {
        throw fromHttpResponse(response, text);
     }
 
-    const data = await response.json() as any;
-    const info = data.data || {};
+    const data = await response.json() as Record<string, unknown>;
+    const info = (data.data || {}) as Record<string, unknown>;
 
     context.logger.info(`[AbuseIPDB] Score for ${ipAddress}: ${info.abuseConfidenceScore}`);
 
     return {
-      ipAddress: info.ipAddress,
-      isPublic: info.isPublic,
-      ipVersion: info.ipVersion,
-      isWhitelisted: info.isWhitelisted,
-      abuseConfidenceScore: info.abuseConfidenceScore,
-      countryCode: info.countryCode,
-      usageType: info.usageType,
-      isp: info.isp,
-      domain: info.domain,
-      hostnames: info.hostnames,
-      totalReports: info.totalReports,
-      numDistinctUsers: info.numDistinctUsers,
-      lastReportedAt: info.lastReportedAt,
-      reports: info.reports, // Only present if verbose is true
+      ipAddress: info.ipAddress as string,
+      isPublic: info.isPublic as boolean | undefined,
+      ipVersion: info.ipVersion as number | undefined,
+      isWhitelisted: info.isWhitelisted as boolean | undefined,
+      abuseConfidenceScore: info.abuseConfidenceScore as number,
+      countryCode: info.countryCode as string | undefined,
+      usageType: info.usageType as string | undefined,
+      isp: info.isp as string | undefined,
+      domain: info.domain as string | undefined,
+      hostnames: info.hostnames as string[] | undefined,
+      totalReports: info.totalReports as number | undefined,
+      numDistinctUsers: info.numDistinctUsers as number | undefined,
+      lastReportedAt: info.lastReportedAt as string | undefined,
+      reports: info.reports as Record<string, unknown>[] | undefined,
       full_report: data,
     };
   },
