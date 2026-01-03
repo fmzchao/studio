@@ -14,6 +14,10 @@ const mockContext: ExecutionContext = {
     error: () => {},
   },
   emitProgress: () => {},
+  http: {
+    fetch: async (input, init) => fetch(input as RequestInfo, init),
+    toCurl: () => "",
+  },
 };
 
 describe("HTTP Request Component", () => {

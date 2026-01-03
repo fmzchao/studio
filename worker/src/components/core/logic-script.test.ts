@@ -17,6 +17,10 @@ const mockContext: ExecutionContext = {
     runId: 'test-run',
     componentRef: 'test-node',
   },
+  http: {
+    fetch: async () => new Response(),
+    toCurl: () => '',
+  },
 };
 
 describe('Logic/Script Component', () => {

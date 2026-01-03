@@ -10,6 +10,7 @@ import type {
   TraceEventLevel,
   TraceEventData,
 } from './interfaces';
+import type { HttpInstrumentationOptions, HttpRequestInput } from './http/types';
 
 export type { ExecutionContextMetadata } from './interfaces';
 
@@ -260,6 +261,15 @@ export interface ExecutionContext {
   secrets?: ISecretsService;
   artifacts?: IArtifactService;
   trace?: IScopedTraceService;
+
+  http: {
+    fetch: (
+      input: HttpRequestInput,
+      init?: RequestInit,
+      options?: HttpInstrumentationOptions,
+    ) => Promise<Response>;
+    toCurl: (input: HttpRequestInput, init?: RequestInit) => string;
+  };
 }
 
 export type TraceEventInput = Omit<

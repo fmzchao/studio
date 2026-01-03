@@ -63,6 +63,10 @@ const workflowContext: ExecutionContext = {
     runId: 'test-run',
     componentRef: 'core.ai.agent',
   },
+  http: {
+    fetch: async () => new Response(),
+    toCurl: () => '',
+  },
   secrets: {
     async get(id) {
       if (id === OPENAI_SECRET_ID) {
