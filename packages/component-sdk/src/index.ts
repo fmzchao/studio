@@ -18,4 +18,8 @@ export * from './runner';
 export * from './ports';
 export * from './contracts';
 export * from './errors';
-
+export * from './http/types';
+export * from './http/har-builder';
+export * from './http/instrumented-fetch';
+export * from './http/adapters/interface';
+export * from './http/adapters';
