@@ -12,57 +12,53 @@ ShipSec Studio is an open-source, no-code security workflow orchestration platfo
 ## System Overview
 
 ```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                              FRONTEND                                    │
+┌────────────────────────────────────────────────────────────────────────┐
+│                              FRONTEND                                  │
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐    │
 │  │   Visual    │  │  Terminal   │  │  Timeline   │  │   Config    │    │
 │  │   Builder   │  │   Viewer    │  │   Replay    │  │    Panel    │    │
 │  │ (ReactFlow) │  │  (xterm.js) │  │  (Zustand)  │  │  (Forms)    │    │
 │  └─────────────┘  └─────────────┘  └─────────────┘  └─────────────┘    │
-└───────────────────────────────────┬─────────────────────────────────────┘
-                                    │ REST API + SSE + WebSocket
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    │ REST API + Unified SSE
 ┌───────────────────────────────────▼─────────────────────────────────────┐
-│                               BACKEND                                    │
-│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐      │
-│  │Workflows │ │ Secrets  │ │ Storage  │ │  Trace   │ │  Auth    │      │
-│  │  + DSL   │ │(AES-256) │ │ (MinIO)  │ │ Events   │ │ (Clerk)  │      │
-│  └──────────┘ └──────────┘ └──────────┘ └──────────┘ └──────────┘      │
-│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐      │
-│  │ Webhooks │ │Schedules │ │ Agents   │ │Human     │ │Integr-   │      │
-│  │          │ │ (CRON)   │ │          │ │Inputs    │ │ations    │      │
-│  └──────────┘ └──────────┘ └──────────┘ └──────────┘ └──────────┘      │
+│                               BACKEND                                   │
+│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐       │
+│  │Workflows │ │ Secrets  │ │ Storage  │ │  Trace   │ │  Auth    │       │
+│  │  + DSL   │ │(AES-256) │ │ (MinIO)  │ │ Events   │ │ (Clerk)  │       │
+│  └──────────┘ └──────────┘ └──────────┘ └──────────┘ └──────────┘       │
+│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐       │
+│  │ Webhooks │ │Schedules │ │ Agents   │ │Human     │ │Integr-   │       │
+│  │          │ │ (CRON)   │ │          │ │Inputs    │ │ations    │       │
+│  └──────────┘ └──────────┘ └──────────┘ └──────────┘ └──────────┘       │
 └───────────────────────────────────┬─────────────────────────────────────┘
                                     │ Temporal Client
 ┌───────────────────────────────────▼─────────────────────────────────────┐
-│                              TEMPORAL                                    │
+│                              TEMPORAL                                   │
 │            Workflow Orchestration • Retry Logic • Durability            │
 └───────────────────────────────────┬─────────────────────────────────────┘
                                     │ Activity Execution
 ┌───────────────────────────────────▼─────────────────────────────────────┐
-│                               WORKER                                     │
-│  ┌─────────────────────────────────────────────────────────────────┐   │
-│  │                    COMPONENT REGISTRY                            │   │
-│  │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐           │   │
-│  │  │  Tools   │ │    AI    │ │  Human   │ │   Core   │           │   │
-│  │  │(Security)│ │  Agents  │ │ in Loop  │ │  Utils   │           │   │
-│  │  └──────────┘ └──────────┘ └──────────┘ └──────────┘           │   │
-│  └─────────────────────────────────────────────────────────────────┘   │
-│  ┌─────────────────────────────────────────────────────────────────┐   │
-│  │     [Learn more about HITL Architecture]                        │   │
-│  │     (/architecture/human-in-the-loop)                           │   │
-│  └─────────────────────────────────────────────────────────────────┘   │
-│  ┌─────────────────────────────────────────────────────────────────┐   │
-│  │                      SERVICE ADAPTERS                            │   │
-│  │  Secrets │ Storage │ Artifacts │ Trace │ Terminal │ Logs       │   │
-│  └─────────────────────────────────────────────────────────────────┘   │
+│                               WORKER                                    │
+│  ┌─────────────────────────────────────────────────────────────────┐    │
+│  │                    COMPONENT REGISTRY                           │    │
+│  │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐            │    │
+│  │  │  Tools   │ │    AI    │ │  Human   │ │   Core   │            │    │
+│  │  │(Security)│ │  Agents  │ │ in Loop  │ │  Utils   │            │    │
+│  │  └──────────┘ └──────────┘ └──────────┘ └──────────┘            │    │
+│  └─────────────────────────────────────────────────────────────────┘    │
+│  ┌─────────────────────────────────────────────────────────────────┐    │
+│  │                      SERVICE ADAPTERS                           │    │
+│  │  Secrets │ Storage │ Artifacts │ Trace │ Terminal │ Logs        │    │
+│  └─────────────────────────────────────────────────────────────────┘    │
 └─────────────────────────────────────────────────────────────────────────┘
                                     │
 ┌───────────────────────────────────▼─────────────────────────────────────┐
-│                           INFRASTRUCTURE                                 │
-│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐      │
-│  │PostgreSQL│ │  MinIO   │ │  Redis   │ │Redpanda  │ │   Loki   │      │
-│  │  (Data)  │ │ (Files)  │ │(Terminal)│ │ (Kafka)  │ │  (Logs)  │      │
-│  └──────────┘ └──────────┘ └──────────┘ └──────────┘ └──────────┘      │
+│                           INFRASTRUCTURE                                │
+│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐       │
+│  │PostgreSQL│ │  MinIO   │ │  Redis   │ │Redpanda  │ │   Loki   │       │
+│  │  (Data)  │ │ (Files)  │ │(Terminal)│ │ (Kafka)  │ │  (Logs)  │       │
+│  └──────────┘ └──────────┘ └──────────┘ └──────────┘ └──────────┘       │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -79,51 +75,14 @@ ShipSec Studio is an open-source, no-code security workflow orchestration platfo
 
 ---
 
-## Monorepo Structure
+## Core Deep-Dives
 
-```
-shipsec-studio/
-├── frontend/                 # React workflow builder
-│   └── src/
-│       ├── components/       # UI components
-│       ├── pages/            # Route pages
-│       ├── store/            # Zustand stores
-│       └── hooks/            # Custom hooks
-│
-├── backend/                  # NestJS API
-│   └── src/
-│       ├── workflows/        # Workflow CRUD + DSL compiler
-│       ├── secrets/          # AES-256 encrypted secrets
-│       ├── storage/          # MinIO file management
-│       ├── trace/            # Event tracking
-│       ├── auth/             # Clerk authentication
-│       ├── webhooks/         # Webhook triggers
-│       ├── schedules/        # CRON scheduling
-│       ├── agents/           # AI agent management
-│       ├── human-inputs/     # Manual approvals/forms
-│       └── integrations/     # OAuth connections
-│
-├── worker/                   # Component execution
-│   └── src/
-│       ├── components/       # Component implementations
-│       │   ├── security/     # Subfinder, DNSX, Nuclei, etc.
-│       │   ├── ai/           # LLM, Agents, MCP
-│       │   ├── core/         # HTTP, FileLoader, Logic
-│       │   ├── notification/ # Slack, Email
-│       │   ├── manual-action/# Approvals, Forms
-│       │   └── github/       # GitHub integrations
-│       ├── adapters/         # Service implementations
-│       └── temporal/         # Workflow/activity definitions
-│
-├── packages/
-│   ├── component-sdk/        # Component definition framework
-│   ├── backend-client/       # Generated API client
-│   └── shared/               # Shared types and utilities
-│
-└── docker/                   # Infrastructure configs
-    ├── docker-compose.infra.yml
-    └── docker-compose.full.yml
-```
+To keep this guide concise, complicated subsystems are documented in their own dedicated files:
+
+- **[Workflow Compilation (DSL)](/architecture/workflow-compilation)**: How visual graphs are transformed into executable instructions.
+- **[Temporal Orchestration](/architecture/temporal-orchestration)**: How we use Temporal for durability and worker scaling.
+- **[Streaming Pipelines](/architecture/streaming-pipelines)**: How terminal, logs, and events are delivered in real-time.
+- **[Human-in-the-Loop](/architecture/human-in-the-loop)**: How we pause workflows for manual approvals and forms.
 
 ---
 
@@ -142,182 +101,22 @@ Components are the building blocks of workflows:
 
 ---
 
-## Component Runners
-
-Components can execute in different environments:
-
-| Runner | Use Case | Example |
-|--------|----------|---------|
-| **inline** | Pure TypeScript — HTTP calls, transforms, logic | HTTP Request, File Loader |
-| **docker** | CLI tools running in containers | Subfinder, DNSX, Nuclei |
-| **remote** | External executors (future) | K8s jobs, ECS tasks |
-
----
-
-## Real-time Streaming
-
-Three separate pipelines for different data types:
-
-### Terminal Streaming
-```
-Docker Container → PTY Output → Redis Streams → SSE → xterm.js
-```
-- Pattern: `terminal:{runId}:{nodeRef}:{stream}`
-- Low-latency (<50ms) for real-time terminal display
-
-### Event Streaming
-```
-Component → Trace Events → Kafka → Backend → WebSocket → Timeline
-```
-- Events: `NODE_STARTED`, `NODE_COMPLETED`, `NODE_FAILED`, `NODE_PROGRESS`, `AWAITING_INPUT`
-- Powers the execution timeline and status updates
-
-### Log Streaming
-```
-Component → Logs → Kafka → Loki → Backend API → Frontend
-```
-- Structured logs with nanosecond precision
-- Queryable by run ID, node, time range, log level
-
----
-
-## Workflow Execution Flow
-
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│ 1. DESIGN                                                           │
-│    Frontend: User creates workflow in ReactFlow visual builder      │
-│    └─→ POST /api/v1/workflows with nodes & edges                   │
-└───────────────────────────────────┬─────────────────────────────────┘
-                                    ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│ 2. COMPILE                                                          │
-│    Backend: Validates graph and compiles to DSL                     │
-│    └─→ Topological sort → Join strategies → Store in PostgreSQL    │
-└───────────────────────────────────┬─────────────────────────────────┘
-                                    ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│ 3. EXECUTE                                                          │
-│    POST /api/v1/workflows/{id}/run                                  │
-│    └─→ Backend calls Temporal.startWorkflow()                      │
-└───────────────────────────────────┬─────────────────────────────────┘
-                                    ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│ 4. ORCHESTRATE                                                      │
-│    Temporal schedules workflow on "shipsec-workflows" queue         │
-│    └─→ Worker picks up and executes components as activities       │
-└───────────────────────────────────┬─────────────────────────────────┘
-                                    ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│ 5. COMPONENT EXECUTION                                              │
-│    Worker: runComponentActivity()                                    │
-│    ├─→ Look up component in registry                               │
-│    ├─→ Create ExecutionContext with service adapters               │
-│    ├─→ Execute (inline TypeScript OR Docker container)             │
-│    └─→ Stream terminal, events, logs in real-time                  │
-└───────────────────────────────────┬─────────────────────────────────┘
-                                    ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│ 6. MONITOR                                                          │
-│    Frontend receives real-time updates:                             │
-│    ├─→ Terminal: Redis Streams → SSE                               │
-│    ├─→ Events: Kafka → WebSocket                                   │
-│    └─→ Status: Polling /runs/{runId}/status                        │
-└─────────────────────────────────────────────────────────────────────┘
-```
-
----
-
-## Service Adapters
-
-Worker injects these services into component execution context:
-
-| Adapter | Purpose | Backend |
-|---------|---------|---------|
-| **SecretsAdapter** | Encrypted secret retrieval | PostgreSQL + AES-256-GCM |
-| **FileStorageAdapter** | File download/upload | MinIO |
-| **ArtifactAdapter** | Component output storage | MinIO + PostgreSQL |
-| **TraceAdapter** | Event recording | Kafka + PostgreSQL |
-| **TerminalStreamAdapter** | Real-time terminal output | Redis Streams |
-| **LokiLogAdapter** | Structured log aggregation | Loki |
-
----
-
-## Database Schema
-
-```sql
--- Workflow definitions
-workflows (
-  id UUID PRIMARY KEY,
-  name TEXT NOT NULL,
-  description TEXT,
-  graph JSONB NOT NULL,           -- ReactFlow nodes/edges
-  compiled_dsl JSONB,             -- Compiled execution plan
-  organization_id VARCHAR,
-  created_at TIMESTAMP,
-  updated_at TIMESTAMP
-);
-
--- Workflow execution instances  
-workflow_runs (
-  run_id TEXT PRIMARY KEY,
-  workflow_id UUID REFERENCES workflows(id),
-  temporal_run_id TEXT,
-  inputs JSONB NOT NULL,
-  status VARCHAR,                 -- PENDING, RUNNING, COMPLETED, FAILED
-  started_at TIMESTAMP,
-  completed_at TIMESTAMP
-);
-
--- Secrets (encrypted at rest)
-secrets (
-  id UUID PRIMARY KEY,
-  name TEXT NOT NULL UNIQUE,
-  organization_id VARCHAR
-);
-
-secret_versions (
-  id UUID PRIMARY KEY,
-  secret_id UUID REFERENCES secrets(id),
-  version INTEGER NOT NULL,
-  encrypted_value BYTEA NOT NULL,
-  iv BYTEA NOT NULL,
-  auth_tag BYTEA NOT NULL,
-  encryption_key_id TEXT,
-  is_active BOOLEAN DEFAULT true
-);
-
--- Trace events
-trace_events (
-  id UUID PRIMARY KEY,
-  run_id TEXT NOT NULL,
-  node_ref TEXT NOT NULL,
-  type VARCHAR NOT NULL,          -- NODE_STARTED, NODE_COMPLETED, etc.
-  timestamp TIMESTAMP NOT NULL,
-  sequence INTEGER,
-  data JSONB
-);
-```
-
----
-
 ## Security Architecture
 
 ### Authentication & Multi-tenancy
 - **Clerk Integration** — Production-ready authentication for hosted environments.
 - **Local Auth** — Default for local setup using `ADMIN_USERNAME` / `ADMIN_PASSWORD`.
 - **Organization Isolation** — All data scoped by `organization_id`.
-- **Role-Based Access** — Admin, Member, Viewer roles.
 
 ### Secrets Management
-- **AES-256-GCM** encryption at rest (NOT HashiCorp Vault)
-- **Versioned secrets** with active/inactive tracking
-- **Master key** via `SECRET_STORE_MASTER_KEY` environment variable
+- **AES-256-GCM** encryption at rest.
+- **Versioned secrets** with active/inactive tracking.
+- **Master key** via `SECRET_STORE_MASTER_KEY` environment variable.
 
 ### Container Isolation
-- **IsolatedContainerVolume** — Per-tenant, per-run Docker volumes
-- **Network isolation** — Components run with `network: none` or `bridge`
-- **Automatic cleanup** — Volumes destroyed after execution
+- **IsolatedContainerVolume** — Per-tenant, per-run Docker volumes. See **[Isolated Volumes](/development/isolated-volumes)**.
+- **Network isolation** — Components run with `network: none` or `bridge`.
+- **Automatic cleanup** — Volumes destroyed after execution.
 
 ---
 
@@ -337,5 +136,4 @@ trace_events (
 ## Learn More
 
 - **Component Development**: `/development/component-development`
-- **Isolated Volumes**: `/development/isolated-volumes`
 - **Getting Started**: `/getting-started`
