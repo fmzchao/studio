@@ -1,4 +1,4 @@
-import { channel } from 'node:diagnostics_channel';
+import { subscribe, unsubscribe } from 'node:diagnostics_channel';
 import { performance } from 'node:perf_hooks';
 
 import type { HarTimings } from '../types';
@@ -13,12 +13,11 @@ type TimingData = {
 };
 
 export class UndiciTimingAdapter implements IHttpTimingAdapter {
+  private static readonly REQUEST_CREATE_CHANNEL = 'undici:request:create';
+  private static readonly REQUEST_HEADERS_CHANNEL = 'undici:request:headers';
   private readonly timings = new Map<string, TimingData>();
   private readonly correlationQueueByUrl = new Map<string, string[]>();
   private readonly correlationByRequest = new WeakMap<object, string>();
-
-  private readonly requestCreateChannel = channel('undici:request:create');
-  private readonly requestHeadersChannel = channel('undici:request:headers');
 
   private readonly handleRequestCreate = (message: unknown) => {
     const payload = message as Record<string, unknown>;
@@ -62,8 +61,8 @@ export class UndiciTimingAdapter implements IHttpTimingAdapter {
   };
 
   constructor() {
-    this.requestCreateChannel.subscribe(this.handleRequestCreate);
-    this.requestHeadersChannel.subscribe(this.handleRequestHeaders);
+    subscribe(UndiciTimingAdapter.REQUEST_CREATE_CHANNEL, this.handleRequestCreate);
+    subscribe(UndiciTimingAdapter.REQUEST_HEADERS_CHANNEL, this.handleRequestHeaders);
   }
 
   startTracking(correlationId: string, url: string): void {
@@ -115,8 +114,8 @@ export class UndiciTimingAdapter implements IHttpTimingAdapter {
   }
 
   dispose(): void {
-    this.requestCreateChannel.unsubscribe(this.handleRequestCreate);
-    this.requestHeadersChannel.unsubscribe(this.handleRequestHeaders);
+    unsubscribe(UndiciTimingAdapter.REQUEST_CREATE_CHANNEL, this.handleRequestCreate);
+    unsubscribe(UndiciTimingAdapter.REQUEST_HEADERS_CHANNEL, this.handleRequestHeaders);
     this.timings.clear();
     this.correlationQueueByUrl.clear();
   }
