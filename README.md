@@ -11,12 +11,10 @@
 # ShipSec Studio
 **Open-Source Security Workflow Orchestration Platform.**
 
-> [!IMPORTANT]
 > ShipSec is currently in active development. We are optimizing the platform for stable production use and high-performance security operations.
 
 ShipSec Studio provides a visual DSL and runtime for building, executing, and monitoring automated security workflows. It decouples security logic from infrastructure management, providing a durable and isolated environment for running security tooling at scale.
 
-## 📺 Demo
 
 <div align="center">
   <a href="https://youtu.be/7uyv43VforM">
@@ -82,6 +80,8 @@ ShipSec Studio is designed for enterprise-grade durability and horizontal scalab
 - **Orchestration Plane (Temporal)**: Manages workflow state, concurrency, and persistent wait states.
 - **Execution Plane (Worker)**: Stateless agents that pull tasks from Temporal and execute tool-bound activities in isolated runtimes.
 - **Monitoring (SSE/Loki)**: Real-time telemetry pipeline for deterministic execution visibility.
+
+Learn more about our design decisions and system components in the **[Architecture Deep-dive](/docs/architecture.mdx)**.
 
 ---
 
