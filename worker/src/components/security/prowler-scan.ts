@@ -12,6 +12,7 @@ import {
 } from '@shipsec/component-sdk';
 import type { DockerRunnerConfig } from '@shipsec/component-sdk';
 import { IsolatedContainerVolume } from '../../utils/isolated-volume';
+import { awsCredentialContractName } from '../core/credentials/aws-contract';
 
 const recommendedFlagOptions = [
   {
@@ -198,6 +199,47 @@ const recommendedFlagMap = new Map<RecommendedFlagId, string[]>(
   recommendedFlagOptions.map((option) => [option.id, [...option.args]]),
 );
 
+/**
+ * Sets ownership of volume contents so non-root container users can write.
+ * Prowler runs as UID 1000 (prowler user), so we chown the mount point.
+ */
+async function setVolumeOwnership(volume: IsolatedContainerVolume, uid: number = 1000, gid: number = 1000): Promise<void> {
+  const volumeName = volume.getVolumeName();
+  if (!volumeName) return;
+
+  return new Promise((resolve, reject) => {
+    const proc = spawn('docker', [
+      'run',
+      '--rm',
+      '-v',
+      `${volumeName}:/data`,
+      'alpine:3.20',
+      'chown',
+      '-R',
+      `${uid}:${gid}`,
+      '/data',
+    ]);
+
+    let stderr = '';
+
+    proc.stderr.on('data', (data) => {
+      stderr += data.toString();
+    });
+
+    proc.on('error', (error) => {
+      reject(error);
+    });
+
+    proc.on('close', (code) => {
+      if (code !== 0) {
+        reject(new Error(`Failed to set volume ownership: ${stderr.trim()}`));
+      } else {
+        resolve();
+      }
+    });
+  });
+}
+
 async function listVolumeFiles(volume: IsolatedContainerVolume): Promise<string[]> {
   const volumeName = volume.getVolumeName();
   if (!volumeName) return [];
@@ -292,9 +334,9 @@ const definition: ComponentDefinition<Input, Output> = {
       {
         id: 'credentials',
         label: 'AWS Credentials',
-        dataType: port.json(),
+        dataType: port.credential(awsCredentialContractName),
         required: false,
-        description: 'Structured credentials object (`{ accessKeyId, secretAccessKey, sessionToken? }`).',
+        description: 'AWS credentials from the AWS Credentials Bundle component.',
       },
       {
         id: 'regions',
@@ -548,6 +590,10 @@ const definition: ComponentDefinition<Input, Output> = {
       await outputVolume.initialize({});
       outputVolumeInitialized = true;
         context.logger.info(`[ProwlerScan] Created isolated output volume: ${outputVolume.getVolumeName()}`);
+
+        // Set ownership so prowler user (UID 1000) can write to the output directory
+        await setVolumeOwnership(outputVolume, 1000, 1000);
+        context.logger.info('[ProwlerScan] Set output volume ownership for prowler user');
         dockerRunner.volumes = [
           ...(dockerRunner.volumes ?? []),
           outputVolume.getVolumeConfig('/output', false),
