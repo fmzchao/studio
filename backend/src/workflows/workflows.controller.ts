@@ -838,10 +838,12 @@ export class WorkflowsController {
   async getNodeIODetail(
     @Param('runId') runId: string,
     @Param('nodeRef') nodeRef: string,
+    @Query('full') full: string | undefined,
     @CurrentAuth() auth: AuthContext | null,
   ) {
     await this.workflowsService.ensureRunAccess(runId, auth);
-    const nodeIO = await this.nodeIOService.getNodeIO(runId, nodeRef);
+    const isFull = full === 'true' || full === '1';
+    const nodeIO = await this.nodeIOService.getNodeIO(runId, nodeRef, isFull);
     if (!nodeIO) {
       throw new BadRequestException(`Node I/O not found for node ${nodeRef} in run ${runId}`);
     }

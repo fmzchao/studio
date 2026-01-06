@@ -53,12 +53,12 @@ export class NodeIOService {
   /**
    * Get full I/O details for a specific node
    */
-  async getNodeIO(runId: string, nodeRef: string): Promise<NodeIODetail | null> {
+  async getNodeIO(runId: string, nodeRef: string, full = false): Promise<NodeIODetail | null> {
     const record = await this.repository.findByRunAndNode(runId, nodeRef);
     if (!record) {
       return null;
     }
-    return this.toDetail(record);
+    return this.toDetail(record, full);
   }
 
   /**
@@ -66,7 +66,7 @@ export class NodeIOService {
    */
   async listDetails(runId: string, organizationId?: string | null): Promise<NodeIODetail[]> {
     const records = await this.repository.listByRunId(runId, organizationId);
-    return Promise.all(records.map((r) => this.toDetail(r)));
+    return Promise.all(records.map((r) => this.toDetail(r, false)));
   }
 
   private toSummary(record: NodeIORecord): NodeIOSummary {
@@ -85,27 +85,85 @@ export class NodeIOService {
     };
   }
 
-  private async toDetail(record: NodeIORecord): Promise<NodeIODetail> {
+  async toDetail(record: NodeIORecord, full = false): Promise<NodeIODetail> {
     let inputs = record.inputs ?? null;
     let outputs = record.outputs ?? null;
 
-    if (record.inputsSpilled && record.inputsStorageRef) {
-      try {
-        const buffer = await this.storage.downloadFile(record.inputsStorageRef);
-        inputs = JSON.parse(buffer.toString('utf8'));
-      } catch (err) {
-        this.logger.error(`Failed to fetch spilled inputs from ${record.inputsStorageRef}`, err);
-        inputs = { _error: 'Failed to fetch spilled data', _ref: record.inputsStorageRef };
+    // Helper to detect if a payload is actually a spill marker
+    const isSpillMarker = (data: any): boolean => {
+      return data && typeof data === 'object' && data['__shipsec_spilled__'] === true && typeof data['storageRef'] === 'string';
+    };
+
+    let inputsSpilled = record.inputsSpilled;
+    let inputsStorageRef = record.inputsStorageRef;
+    let inputsSize = record.inputsSize;
+
+    if (!inputsSpilled && isSpillMarker(inputs)) {
+      inputsSpilled = true;
+      inputsStorageRef = (inputs as any).storageRef;
+      inputsSize = (inputs as any).originalSize ?? 0;
+    }
+
+    let outputsSpilled = record.outputsSpilled;
+    let outputsStorageRef = record.outputsStorageRef;
+    let outputsSize = record.outputsSize;
+
+    if (!outputsSpilled && isSpillMarker(outputs)) {
+      outputsSpilled = true;
+      outputsStorageRef = (outputs as any).storageRef;
+      outputsSize = (outputs as any).originalSize ?? 0;
+    }
+
+    if (inputsSpilled && inputsStorageRef) {
+      if (full) {
+        try {
+          const buffer = await this.storage.downloadFile(inputsStorageRef);
+          inputs = JSON.parse(buffer.toString('utf8'));
+        } catch (err) {
+          this.logger.error(`Failed to fetch spilled inputs from ${inputsStorageRef}`, err);
+          inputs = { _error: 'Failed to fetch spilled data', _ref: inputsStorageRef };
+        }
+      } else {
+        // Fetch preview
+         try {
+          const buffer = await this.storage.downloadFilePreview(inputsStorageRef, 2048);
+          const previewStr = buffer.toString('utf8');
+          inputs = { 
+            _spilled: true,
+            _truncated: true,
+            size: inputsSize,
+            preview: previewStr.slice(0, 500) + '...',
+            _ref: inputsStorageRef 
+          };
+        } catch (err) {
+           inputs = { _spilled: true, size: inputsSize, _ref: inputsStorageRef };
+        }
       }
     }
 
-    if (record.outputsSpilled && record.outputsStorageRef) {
-      try {
-        const buffer = await this.storage.downloadFile(record.outputsStorageRef);
-        outputs = JSON.parse(buffer.toString('utf8'));
-      } catch (err) {
-        this.logger.error(`Failed to fetch spilled outputs from ${record.outputsStorageRef}`, err);
-        outputs = { _error: 'Failed to fetch spilled data', _ref: record.outputsStorageRef };
+    if (outputsSpilled && outputsStorageRef) {
+      if (full) {
+        try {
+          const buffer = await this.storage.downloadFile(outputsStorageRef);
+          outputs = JSON.parse(buffer.toString('utf8'));
+        } catch (err) {
+          this.logger.error(`Failed to fetch spilled outputs from ${outputsStorageRef}`, err);
+          outputs = { _error: 'Failed to fetch spilled data', _ref: outputsStorageRef };
+        }
+      } else {
+         try {
+          const buffer = await this.storage.downloadFilePreview(outputsStorageRef, 2048);
+          const previewStr = buffer.toString('utf8');
+          outputs = { 
+            _spilled: true, 
+            _truncated: true,
+            size: outputsSize, 
+            preview: previewStr.slice(0, 500) + '...',
+            _ref: outputsStorageRef 
+          };
+        } catch (err) {
+           outputs = { _spilled: true, size: outputsSize, _ref: outputsStorageRef };
+        }
       }
     }
 
@@ -118,10 +176,10 @@ export class NodeIOService {
       durationMs: record.durationMs,
       inputs,
       outputs,
-      inputsSize: record.inputsSize,
-      outputsSize: record.outputsSize,
-      inputsSpilled: record.inputsSpilled,
-      outputsSpilled: record.outputsSpilled,
+      inputsSize,
+      outputsSize,
+      inputsSpilled,
+      outputsSpilled,
       errorMessage: record.errorMessage,
     };
   }

@@ -1,6 +1,7 @@
 import '../../components';
 import { Context } from '@temporalio/activity';
 import { ApplicationFailure } from '@temporalio/common';
+import * as crypto from 'node:crypto';
 import {
   componentRegistry,
   createExecutionContext,
@@ -85,6 +86,7 @@ export async function runComponentActivity(
     ref: action.ref,
     timestamp: new Date().toISOString()
   });
+  console.log(`[Activity] Action params:`, params);
 
   console.log(`📋 Activity input details:`, {
     componentId: action.componentId,
@@ -215,7 +217,7 @@ export async function runComponentActivity(
     // normalisation/parsing inside `execute` runs.
     // Docker/remote execution should be invoked from within
     // the component via `runComponentWithRunner`.
-    const output = await component.execute(parsedParams, context);
+    let output = await component.execute(parsedParams, context);
 
     // Check if component requested suspension (e.g. approval gate)
     const isSuspended = output && typeof output === 'object' && 'pending' in output && (output as any).pending === true;
@@ -226,6 +228,40 @@ export async function runComponentActivity(
       : undefined;
 
     if (!isSuspended) {
+      // 1. Check for payload size and spill if necessary
+      if (output) {
+        try {
+          const outputStr = JSON.stringify(output);
+          const size = Buffer.byteLength(outputStr, 'utf8');
+          const SPILL_THRESHOLD = 2 * 1024 * 1024; // 2MB
+
+          if (size > SPILL_THRESHOLD && globalStorage) {
+            console.log(`📦 [ACTIVITY] Output size ${size} bytes exceeds threshold. Spilling to storage...`);
+            const fileId = crypto.randomUUID();
+            
+            await globalStorage.uploadFile(
+              fileId,
+              'output.json',
+              Buffer.from(outputStr),
+              'application/json'
+            );
+            
+            console.log(`📦 [ACTIVITY] Spilled output to ${fileId}`);
+            
+            // Replace output with spilled marker
+            output = {
+              __shipsec_spilled__: true,
+              storageRef: fileId,
+              originalSize: size,
+              _type: 'spilled_output'
+            };
+          }
+        } catch (err) {
+          console.warn('⚠️ [ACTIVITY] Failed to check/spill output size', err);
+          // Continue with original output - if it fails in Temporal, it fails.
+        }
+      }
+
       // Record node I/O completion
       globalNodeIO?.recordCompletion({
         runId: input.runId,
@@ -234,6 +270,8 @@ export async function runComponentActivity(
         status: 'completed',
       });
 
+      console.log(`✅ [ACTIVITY COMPLETE] runComponentActivity finished for ${action.ref}`);
+      
       context.trace?.record({
         type: 'NODE_COMPLETED',
         timestamp: new Date().toISOString(),
@@ -246,6 +284,7 @@ export async function runComponentActivity(
     return { output, activeOutputPorts };
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
+    console.error(`❌ [ACTIVITY FAIL] runComponentActivity failed for ${action.ref}:`, errorMsg);
     
     // Extract error properties without using 'any'
     let errorType: string | undefined;

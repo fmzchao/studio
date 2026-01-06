@@ -31,6 +31,20 @@ export interface IFileStorageService {
     size: number;
     uploadedAt: Date;
   }>;
+
+  /**
+   * Upload a file
+   * @param fileId Unique identifier for the file (UUID)
+   * @param fileName Original name of the file
+   * @param buffer File content
+   * @param mimeType MIME type of the file
+   */
+  uploadFile(
+    fileId: string,
+    fileName: string,
+    buffer: Buffer,
+    mimeType: string,
+  ): Promise<void>;
 }
 
 export interface ISecretsService {

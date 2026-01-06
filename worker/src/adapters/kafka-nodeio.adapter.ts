@@ -45,7 +45,7 @@ export class KafkaNodeIOAdapter implements INodeIOService {
 
   constructor(
     private readonly config: KafkaNodeIOAdapterConfig,
-    private readonly storage?: any, // Using any for now to avoid circular dependency or complex type issues with FileStorageAdapter
+    private readonly storage?: IFileStorageService,
     private readonly logger: Pick<Console, 'log' | 'error'> = console,
   ) {
     if (!config.brokers.length) {
@@ -110,7 +110,6 @@ export class KafkaNodeIOAdapter implements INodeIOService {
         
         if (size > SPILL_THRESHOLD_BYTES && this.storage) {
           const fileId = randomUUID();
-          const storageRef = `node-io/${payload.runId}/${payload.nodeRef}/inputs.json`;
           
           await this.storage.uploadFile(
             fileId,
@@ -120,32 +119,49 @@ export class KafkaNodeIOAdapter implements INodeIOService {
           );
           
           payload.inputsSpilled = true;
-          payload.inputsStorageRef = storageRef;
+          payload.inputsStorageRef = fileId;
           // Replace large inputs with marker for Kafka
           payload.inputs = { _spilled: true, size };
         }
       }
 
       if (payload.outputs) {
-        const outputsStr = JSON.stringify(payload.outputs);
-        const size = Buffer.byteLength(outputsStr, 'utf8');
-        payload.outputsSize = size;
-        
-        if (size > SPILL_THRESHOLD_BYTES && this.storage) {
-          const fileId = randomUUID();
-          const storageRef = `node-io/${payload.runId}/${payload.nodeRef}/outputs.json`;
-          
-          await this.storage.uploadFile(
-            fileId,
-            'outputs.json',
-            Buffer.from(outputsStr),
-            'application/json'
-          );
-          
+        // Detect if already spilled by activity
+        const isPreSpilled = 
+          payload.outputs.__shipsec_spilled__ === true && 
+          typeof payload.outputs.storageRef === 'string' &&
+          payload.outputs._type === 'spilled_output';
+
+        if (isPreSpilled) {
           payload.outputsSpilled = true;
-          payload.outputsStorageRef = storageRef;
-          // Replace large outputs with marker for Kafka
-          payload.outputs = { _spilled: true, size };
+          payload.outputsStorageRef = payload.outputs.storageRef as string;
+          payload.outputsSize = (payload.outputs.originalSize as number) || 0;
+          
+          // Replace markers with standard backend-friendly marker
+          payload.outputs = { 
+             _spilled: true, 
+             size: payload.outputsSize 
+          };
+        } else {
+          const outputsStr = JSON.stringify(payload.outputs);
+          const size = Buffer.byteLength(outputsStr, 'utf8');
+          payload.outputsSize = size;
+          
+          if (size > SPILL_THRESHOLD_BYTES && this.storage) {
+            const fileId = randomUUID();
+            
+            await this.storage.uploadFile(
+              fileId,
+              'outputs.json',
+              Buffer.from(outputsStr),
+              'application/json'
+            );
+            
+            payload.outputsSpilled = true;
+            payload.outputsStorageRef = fileId;
+            // Replace large outputs with marker for Kafka
+            payload.outputs = { _spilled: true, size };
+          }
         }
       }
 

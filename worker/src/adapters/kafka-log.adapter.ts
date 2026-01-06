@@ -47,21 +47,47 @@ export class KafkaLogAdapter implements WorkflowLogSink {
       return;
     }
 
-    const payload: SerializedLogEntry = {
-      ...entry,
-      timestamp: (entry.timestamp ?? new Date()).toISOString(),
-    };
+    // Chunk message if it's too large to prevent Kafka/Loki size limit errors.
+    // Loki limit is 256KB. We'll chunk at 100k characters for safety.
+    const CHUNK_SIZE = 100000;
+    const messages: string[] = [];
+    
+    if (entry.message.length <= CHUNK_SIZE) {
+      messages.push(entry.message);
+    } else {
+      const totalChars = entry.message.length;
+      const totalChunks = Math.ceil(totalChars / CHUNK_SIZE);
+      
+      for (let i = 0; i < totalChunks; i++) {
+        const start = i * CHUNK_SIZE;
+        const chunk = entry.message.substring(start, start + CHUNK_SIZE);
+        const indicator = ` [Chunk ${i + 1}/${totalChunks}]`;
+        messages.push(chunk + indicator);
+      }
+    }
+
+    const timestamp = (entry.timestamp ?? new Date()).toISOString();
 
     try {
       await this.connectPromise;
-      await this.producer.send({
-        topic: this.config.topic,
-        messages: [
-          {
-            value: JSON.stringify(payload),
-          },
-        ],
-      });
+      
+      // Send all chunks
+      for (const msg of messages) {
+        const payload: SerializedLogEntry = {
+          ...entry,
+          message: msg,
+          timestamp,
+        };
+
+        await this.producer.send({
+          topic: this.config.topic,
+          messages: [
+            {
+              value: JSON.stringify(payload),
+            },
+          ],
+        });
+      }
     } catch (error) {
       console.error('[KafkaLogAdapter] Failed to send log entry', error);
     }

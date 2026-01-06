@@ -50,6 +50,10 @@ export async function executeWorkflow(
   options: ExecuteWorkflowOptions = {},
 ): Promise<WorkflowRunResult> {
   const runId = options.runId ?? randomUUID();
+  console.log(`🏃 [WORKFLOW RUNNER] executeWorkflow called for runId: ${runId}`);
+  console.log(`📋 [WORKFLOW RUNNER] Definition has ${definition.actions.length} actions`);
+  console.log(`📋 [WORKFLOW RUNNER] Entrypoint ref: ${definition.entrypoint.ref}`);
+
   const results = new Map<string, unknown>();
   const actionsByRef = new Map<string, typeof definition.actions[number]>(
     definition.actions.map((action) => [action.ref, action]),
@@ -79,6 +83,8 @@ export async function executeWorkflow(
       actionRef: string,
       schedulerContext: WorkflowSchedulerRunContext,
     ): Promise<void> => {
+      console.log(`🎯 [WORKFLOW RUNNER] runAction called for: ${actionRef} (triggered by: ${schedulerContext.triggeredBy || 'root'})`);
+
       const action = actionsByRef.get(actionRef);
       if (!action) {
         throw new NotFoundError(`Action not found: ${actionRef}`, {
@@ -242,9 +248,12 @@ export async function executeWorkflow(
       });
 
       try {
+        console.log(`⚡️ [WORKFLOW RUNNER] Executing component: ${action.componentId} for action: ${actionRef}`);
         const rawOutput = await component.execute(parsedParams, context);
+        console.log(`✅ [WORKFLOW RUNNER] Component execution completed: ${action.componentId} for action: ${actionRef}`);
         const output = component.outputSchema.parse(rawOutput);
         results.set(action.ref, output);
+        console.log(`💾 [WORKFLOW RUNNER] Result stored for: ${actionRef}`);
         // Record node I/O completion
         options.nodeIO?.recordCompletion({
           runId,
@@ -344,6 +353,9 @@ export async function executeWorkflow(
       run: runAction,
     });
 
+    console.log(`📊 [WORKFLOW RUNNER] runWorkflowWithScheduler completed for ${runId}`);
+    console.log(`📊 [WORKFLOW RUNNER] Total results stored: ${results.size}`);
+
     const outputsObject: Record<string, unknown> = {};
     let reportedFailure = false;
     const failureDetails: string[] = [];
@@ -357,8 +369,12 @@ export async function executeWorkflow(
       }
     });
 
+    console.log(`📊 [WORKFLOW RUNNER] Output keys: ${Object.keys(outputsObject).join(', ')}`);
+    console.log(`📊 [WORKFLOW RUNNER] Reported failure: ${reportedFailure}`);
+
     if (reportedFailure) {
       const baseMessage = 'One or more workflow actions failed';
+      console.error(`❌ [WORKFLOW RUNNER] Workflow failed: ${baseMessage}: ${failureDetails.join('; ')}`);
       return {
         outputs: outputsObject,
         success: false,
@@ -369,8 +385,10 @@ export async function executeWorkflow(
       };
     }
 
+    console.log(`✅ [WORKFLOW RUNNER] Workflow completed successfully for ${runId}`);
     return { outputs: outputsObject, success: true };
   } catch (error) {
+    console.error(`❌ [WORKFLOW RUNNER] Workflow threw exception for ${runId}:`, error);
     return {
       outputs: {},
       success: false,

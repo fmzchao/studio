@@ -45,11 +45,12 @@ export class NodeIORepository {
   }): Promise<void> {
     const inputsJson = data.inputs ? JSON.stringify(data.inputs) : null;
     const computedInputsSize = inputsJson ? Buffer.byteLength(inputsJson, 'utf8') : 0;
-    
+
     // Favor provided spilled info from worker, fallback to local calculation
     const inputsSize = data.inputsSize ?? computedInputsSize;
     const inputsSpilled = data.inputsSpilled ?? (inputsSize > SPILL_THRESHOLD_BYTES);
-    const inputsStorageRef = data.inputsStorageRef ?? (inputsSpilled ? `node-io/${data.runId}/${data.nodeRef}/inputs.json` : null);
+    // Use the storage ref provided by worker (UUID), or generate a path-based fallback
+    const inputsStorageRef = data.inputsStorageRef ?? null;
 
     const insert: NodeIOInsert = {
       runId: data.runId,
@@ -89,11 +90,12 @@ export class NodeIORepository {
   }): Promise<void> {
     const outputsJson = JSON.stringify(data.outputs);
     const computedOutputsSize = Buffer.byteLength(outputsJson, 'utf8');
-    
+
     // Favor provided spilled info from worker, fallback to local calculation
     const outputsSize = data.outputsSize ?? computedOutputsSize;
     const outputsSpilled = data.outputsSpilled ?? (outputsSize > SPILL_THRESHOLD_BYTES);
-    const outputsStorageRef = data.outputsStorageRef ?? (outputsSpilled ? `node-io/${data.runId}/${data.nodeRef}/outputs.json` : null);
+    // Use the storage ref provided by worker (UUID), or generate a path-based fallback
+    const outputsStorageRef = data.outputsStorageRef ?? null;
 
     const completedAt = new Date();
 

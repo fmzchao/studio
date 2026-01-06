@@ -7,6 +7,7 @@ import {
   pgTable,
   text,
   timestamp,
+  uniqueIndex,
   varchar,
 } from 'drizzle-orm/pg-core';
 
@@ -49,7 +50,7 @@ export const nodeIOTable = pgTable(
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => ({
-    runNodeIndex: index('node_io_run_node_idx').on(table.runId, table.nodeRef),
+    runNodeIndex: uniqueIndex('node_io_run_node_idx').on(table.runId, table.nodeRef),
     runIndex: index('node_io_run_idx').on(table.runId),
     workflowIndex: index('node_io_workflow_idx').on(table.workflowId),
   }),
