@@ -356,6 +356,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workflows/runs/{runId}/node-io": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["WorkflowsController_getNodeIO"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workflows/runs/{runId}/node-io/{nodeRef}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["WorkflowsController_getNodeIODetail"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workflows/runs/{runId}/stream": {
         parameters: {
             query?: never;
@@ -2948,6 +2980,96 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    WorkflowsController_getNodeIO: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                runId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Node inputs/outputs for a workflow run */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        runId?: string;
+                        nodes?: {
+                            nodeRef?: string;
+                            componentId?: string;
+                            /** @enum {string} */
+                            status?: "running" | "completed" | "failed" | "skipped";
+                            /** Format: date-time */
+                            startedAt?: string | null;
+                            /** Format: date-time */
+                            completedAt?: string | null;
+                            durationMs?: number | null;
+                            inputs?: {
+                                [key: string]: unknown;
+                            } | null;
+                            outputs?: {
+                                [key: string]: unknown;
+                            } | null;
+                            inputsSize?: number;
+                            outputsSize?: number;
+                            inputsSpilled?: boolean;
+                            outputsSpilled?: boolean;
+                            errorMessage?: string | null;
+                        }[];
+                    };
+                };
+            };
+        };
+    };
+    WorkflowsController_getNodeIODetail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                runId: string;
+                nodeRef: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Specific node input/output for a workflow run */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        nodeRef?: string;
+                        componentId?: string;
+                        /** @enum {string} */
+                        status?: "running" | "completed" | "failed" | "skipped";
+                        /** Format: date-time */
+                        startedAt?: string | null;
+                        /** Format: date-time */
+                        completedAt?: string | null;
+                        durationMs?: number | null;
+                        inputs?: {
+                            [key: string]: unknown;
+                        } | null;
+                        outputs?: {
+                            [key: string]: unknown;
+                        } | null;
+                        inputsSize?: number;
+                        outputsSize?: number;
+                        inputsSpilled?: boolean;
+                        outputsSpilled?: boolean;
+                        errorMessage?: string | null;
+                    };
+                };
             };
         };
     };
