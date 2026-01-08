@@ -204,15 +204,25 @@ export const api = {
     },
 
     create: async (workflow: CreateWorkflowRequestDto): Promise<WorkflowResponseDto> => {
-      const response = await apiClient.createWorkflow(workflow)
-      if (response.error) throw new Error('Failed to create workflow')
+      const response = await apiClient.createWorkflow(workflow) as any
+      if (response.error) {
+        const errorMessage =
+          response.error?.message ||
+          (typeof response.error === 'string' ? response.error : 'Failed to create workflow')
+        throw new Error(errorMessage)
+      }
       if (!response.data) throw new Error('Workflow creation failed')
       return response.data
     },
 
     update: async (id: string, workflow: UpdateWorkflowRequestDto): Promise<WorkflowResponseDto> => {
-      const response = await apiClient.updateWorkflow(id, workflow)
-      if (response.error) throw new Error('Failed to update workflow')
+      const response = await apiClient.updateWorkflow(id, workflow) as any
+      if (response.error) {
+        const errorMessage =
+          response.error?.message ||
+          (typeof response.error === 'string' ? response.error : 'Failed to update workflow')
+        throw new Error(errorMessage)
+      }
       if (!response.data) throw new Error('Workflow update failed')
       return response.data
     },
@@ -676,6 +686,18 @@ export const api = {
       const response = await apiClient.listWorkflowRunChildren(runId)
       if (response.error) throw new Error('Failed to fetch child runs')
       return response.data || { runs: [] }
+    },
+    
+    listNodeIO: async (runId: string) => {
+      const response = await apiClient.listWorkflowRunNodeIO(runId)
+      if (response.error) throw new Error('Failed to fetch node I/O')
+      return response.data || []
+    },
+
+    getNodeIO: async (runId: string, nodeRef: string, full?: boolean) => {
+      const response = await apiClient.getWorkflowNodeIO(runId, nodeRef, { full })
+      if (response.error) throw new Error('Failed to fetch node I/O details')
+      return response.data
     },
 
     getLogs: async (runId: string, options?: { nodeRef?: string; stream?: 'stdout' | 'stderr' | 'console'; level?: 'debug' | 'info' | 'warn' | 'error'; limit?: number; cursor?: string; startTime?: string; endTime?: string }) => {

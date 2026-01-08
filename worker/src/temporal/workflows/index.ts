@@ -114,6 +114,7 @@ export async function shipsecWorkflowRun(
   });
 
   console.log(`[Workflow] Starting shipsec workflow run: ${input.runId}`);
+  console.log(`[Workflow] Definition actions:`, input.definition.actions.map(a => a.ref));
 
   const callChain = Array.isArray(input.callChain) && input.callChain.length > 0
     ? input.callChain
@@ -141,15 +142,17 @@ export async function shipsecWorkflowRun(
           },
         });
       },
-      run: async (actionRef, schedulerContext) => {
-        const action = actionsByRef.get(actionRef);
-        if (!action) {
-          throw ApplicationFailure.nonRetryable(
-            `Action not found: ${actionRef}`,
-            'NotFoundError',
-            [{ resourceType: 'action', resourceId: actionRef }],
-          );
-        }
+       run: async (actionRef, schedulerContext) => {
+         console.log(`[Workflow] Running action ${actionRef} with context:`, schedulerContext);
+         const action = actionsByRef.get(actionRef);
+         if (!action) {
+           throw ApplicationFailure.nonRetryable(
+             `Action not found: ${actionRef}`,
+             'NotFoundError',
+             [{ resourceType: 'action', resourceId: actionRef }],
+
+           )
+         }
 
         const { params, warnings } = buildActionParams(action, results);
         const mergedParams: Record<string, unknown> = { ...params };

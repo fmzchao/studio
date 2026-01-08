@@ -1,17 +1,23 @@
 import '../../components';
 import { Context } from '@temporalio/activity';
 import { ApplicationFailure } from '@temporalio/common';
+import * as crypto from 'node:crypto';
 import {
   componentRegistry,
   createExecutionContext,
   runComponentWithRunner,
   NotFoundError,
   ValidationError,
+  TEMPORAL_SPILL_THRESHOLD_BYTES,
+  isSpilledDataMarker,
   type IFileStorageService,
   type ISecretsService,
   type ITraceService,
+  type INodeIOService,
   type AgentTracePublisher,
 } from '@shipsec/component-sdk';
+
+import { maskSecretOutputs, createLightweightSummary } from '../utils/component-output';
 import { RedisTerminalStreamAdapter } from '../../adapters';
 import type {
   RunComponentActivityInput,
@@ -25,6 +31,7 @@ let globalStorage: IFileStorageService | undefined;
 let globalSecrets: ISecretsService | undefined;
 let globalArtifacts: ArtifactServiceFactory | undefined;
 let globalTrace: ITraceService | undefined;
+let globalNodeIO: INodeIOService | undefined;
 let globalLogs: WorkflowLogSink | undefined;
 let globalTerminal: RedisTerminalStreamAdapter | undefined;
 let globalAgentTracePublisher: AgentTracePublisher | undefined;
@@ -34,6 +41,7 @@ export function initializeComponentActivityServices(options: {
   secrets?: ISecretsService;
   artifacts?: ArtifactServiceFactory;
   trace: ITraceService;
+  nodeIO?: INodeIOService;
   logs?: WorkflowLogSink;
   terminalStream?: RedisTerminalStreamAdapter;
   agentTracePublisher?: AgentTracePublisher;
@@ -42,6 +50,7 @@ export function initializeComponentActivityServices(options: {
   globalSecrets = options.secrets;
   globalArtifacts = options.artifacts;
   globalTrace = options.trace;
+  globalNodeIO = options.nodeIO;
   globalLogs = options.logs;
   globalTerminal = options.terminalStream;
   globalAgentTracePublisher = options.agentTracePublisher;
@@ -71,35 +80,19 @@ export async function runComponentActivity(
 ): Promise<RunComponentActivityOutput> {
   const { action, params, warnings = [] } = input;
   const activityInfo = Context.current().info;
-  console.log(`🎯 ACTIVITY CALLED - runComponentActivity:`, {
-    activityId: activityInfo.activityId,
-    attempt: activityInfo.attempt,
-    workflowId: activityInfo.workflowExecution?.workflowId ?? 'unknown',
-    runId: activityInfo.workflowExecution?.runId ?? 'unknown',
-    componentId: action.componentId,
-    ref: action.ref,
-    timestamp: new Date().toISOString()
-  });
-
-  console.log(`📋 Activity input details:`, {
-    componentId: action.componentId,
-    ref: action.ref,
-    hasParams: !!params,
-    paramKeys: params ? Object.keys(params) : [],
-    warningsCount: warnings.length
-  });
+  
+  // Minimal structured logging (avoid dumping params which may be large)
+  console.log(`[Activity] ${action.componentId}:${action.ref} attempt=${activityInfo.attempt}`);
 
   const component = componentRegistry.get(action.componentId);
   if (!component) {
-    console.error(`❌ Component not found: ${action.componentId}`);
+    console.error(`[Activity] Component not found: ${action.componentId}`);
     throw new NotFoundError(`Component not registered: ${action.componentId}`, {
       resourceType: 'component',
       resourceId: action.componentId,
       details: { actionRef: action.ref },
     });
   }
-
-  console.log(`✅ Component found: ${action.componentId}`);
 
   const nodeMetadata = input.metadata ?? {};
   const streamId = nodeMetadata.streamId ?? nodeMetadata.groupId ?? action.ref;
@@ -167,13 +160,73 @@ export async function runComponentActivity(
     agentTracePublisher: globalAgentTracePublisher,
   });
 
+  // Record node I/O start
+  await globalNodeIO?.recordStart({
+    runId: input.runId,
+    nodeRef: action.ref,
+    workflowId: input.workflowId,
+    organizationId: input.organizationId,
+    componentId: action.componentId,
+    inputs: maskSecretOutputs(component, params) as Record<string, unknown>,
+  });
+
   context.trace?.record({
     type: 'NODE_STARTED',
     timestamp: new Date().toISOString(),
     level: 'info',
   });
 
-  for (const warning of warnings) {
+  const warningsToReport = [...warnings];
+
+  // Resolve spilled inputs if necessary
+  const resolvedParams = { ...params };
+  const spilledObjectsCache = new Map<string, any>();
+
+  for (const [key, value] of Object.entries(resolvedParams)) {
+    if (isSpilledDataMarker(value)) {
+      if (!globalStorage) {
+        console.warn(`[Activity] Parameter '${key}' is spilled but no storage service is available`);
+        continue;
+      }
+
+      try {
+        let fullData: any;
+        if (spilledObjectsCache.has(value.storageRef)) {
+          fullData = spilledObjectsCache.get(value.storageRef);
+        } else {
+          const content = await globalStorage.downloadFile(value.storageRef);
+          fullData = JSON.parse(content.buffer.toString('utf8'));
+          spilledObjectsCache.set(value.storageRef, fullData);
+        }
+
+
+        const handle = (value as any).__spilled_handle__;
+        if (handle && handle !== '__self__') {
+          if (fullData && typeof fullData === 'object' && Object.prototype.hasOwnProperty.call(fullData, handle)) {
+            resolvedParams[key] = fullData[handle];
+          } else {
+            console.warn(`[Activity] Spilled handle '${handle}' not found in downloaded data for parameter '${key}'`);
+            resolvedParams[key] = undefined;
+            warningsToReport.push({
+              target: key,
+              sourceRef: 'spilled-storage', // Minimal info since we don't have full mapping here
+              sourceHandle: handle,
+            });
+          }
+        } else {
+          resolvedParams[key] = fullData;
+        }
+      } catch (err) {
+        console.error(`[Activity] Failed to resolve spilled parameter '${key}':`, err);
+        throw ApplicationFailure.retryable(
+          `Failed to resolve spilled input parameter '${key}': ${err instanceof Error ? err.message : String(err)}`,
+          'SpillResolutionError'
+        );
+      }
+    }
+  }
+
+  for (const warning of warningsToReport) {
     context.trace?.record({
       type: 'NODE_PROGRESS',
       timestamp: new Date().toISOString(),
@@ -183,24 +236,25 @@ export async function runComponentActivity(
     });
   }
 
-  if (warnings.length > 0) {
-    const missing = warnings.map((warning) => `'${warning.target}'`).join(', ');
+  if (warningsToReport.length > 0) {
+    const missing = warningsToReport.map((warning) => `'${warning.target}'`).join(', ');
     throw new ValidationError(`Missing required inputs for ${action.ref}: ${missing}`, {
       fieldErrors: Object.fromEntries(
-        warnings.map((w) => [w.target, [`mapped from ${w.sourceRef}.${w.sourceHandle} was undefined`]])
+        warningsToReport.map((w) => [w.target, [`mapped from ${w.sourceRef}.${w.sourceHandle} was undefined`]])
       ),
       details: { actionRef: action.ref, componentId: action.componentId },
     });
   }
 
-  const parsedParams = component.inputSchema.parse(params);
+  const parsedParams = component.inputSchema.parse(resolvedParams);
+
 
   try {
     // Execute the component logic directly so that any
     // normalisation/parsing inside `execute` runs.
     // Docker/remote execution should be invoked from within
     // the component via `runComponentWithRunner`.
-    const output = await component.execute(parsedParams, context);
+    let output = await component.execute(parsedParams, context);
 
     // Check if component requested suspension (e.g. approval gate)
     const isSuspended = output && typeof output === 'object' && 'pending' in output && (output as any).pending === true;
@@ -211,10 +265,50 @@ export async function runComponentActivity(
       : undefined;
 
     if (!isSuspended) {
+      // 1. Check for payload size and spill if necessary
+      if (output) {
+        try {
+          const outputStr = JSON.stringify(output);
+          const size = Buffer.byteLength(outputStr, 'utf8');
+
+          if (size > TEMPORAL_SPILL_THRESHOLD_BYTES && globalStorage) {
+            const fileId = crypto.randomUUID();
+            
+            await globalStorage.uploadFile(
+              fileId,
+              'output.json',
+              Buffer.from(outputStr),
+              'application/json'
+            );
+            
+            // Replace output with standardized spilled marker
+            output = {
+              __spilled__: true,
+              storageRef: fileId,
+              originalSize: size,
+            };
+          }
+        } catch (err) {
+          console.warn('[Activity] Failed to check/spill output size', err);
+          // Continue with original output - if it fails in Temporal, it fails.
+        }
+      }
+
+      // Record node I/O completion
+      await globalNodeIO?.recordCompletion({
+        runId: input.runId,
+        nodeRef: action.ref,
+        componentId: action.componentId,
+        outputs: maskSecretOutputs(component, output) as Record<string, unknown>,
+        status: 'completed',
+      });
+
+      // Clean up Node I/O recording - output has been recorded
+      
       context.trace?.record({
         type: 'NODE_COMPLETED',
         timestamp: new Date().toISOString(),
-        outputSummary: output as any,
+        outputSummary: createLightweightSummary(component, output),
         data: activeOutputPorts ? { activatedPorts: activeOutputPorts } : undefined,
         level: 'info',
       });
@@ -223,6 +317,7 @@ export async function runComponentActivity(
     return { output, activeOutputPorts };
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
+    console.error(`[Activity] Failed ${action.ref}: ${errorMsg}`);
     
     // Extract error properties without using 'any'
     let errorType: string | undefined;
@@ -274,6 +369,16 @@ export async function runComponentActivity(
       message: errorMsg,
       error: traceError,
       level: 'error',
+    });
+
+    // Record node I/O failure
+    await globalNodeIO?.recordCompletion({
+      runId: input.runId,
+      nodeRef: action.ref,
+      componentId: action.componentId,
+      outputs: {},
+      status: 'failed',
+      errorMessage: errorMsg,
     });
 
     const finalErrorType = errorType || 'ComponentError';
