@@ -1,5 +1,6 @@
-import { randomUUID } from 'node:crypto';
-import { performance } from 'node:perf_hooks';
+// Use non-prefixed imports for Webpack compatibility (Temporal workflow bundling)
+import { randomUUID } from 'crypto';
+import { performance } from 'perf_hooks';
 
 import type { ExecutionContext } from '../types';
 import { getTimingAdapter } from './adapters';

@@ -1,5 +1,6 @@
-import { subscribe, unsubscribe } from 'node:diagnostics_channel';
-import { performance } from 'node:perf_hooks';
+// Use non-prefixed imports for Webpack compatibility (Temporal workflow bundling)
+import { subscribe, unsubscribe } from 'diagnostics_channel';
+import { performance } from 'perf_hooks';
 
 import type { HarTimings } from '../types';
 import type { IHttpTimingAdapter } from './interface';
