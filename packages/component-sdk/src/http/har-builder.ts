@@ -2,6 +2,7 @@ import {
   DEFAULT_MAX_REQUEST_BODY_SIZE,
   DEFAULT_MAX_RESPONSE_BODY_SIZE,
   DEFAULT_SENSITIVE_HEADERS,
+  DEFAULT_SENSITIVE_QUERY_PARAMS,
   type HarEntry,
   type HarHeader,
   type HarRequest,
@@ -80,6 +81,38 @@ export function parseQueryString(url: string): HarQueryString[] {
   return query;
 }
 
+export function maskQueryParams(
+  queryParams: HarQueryString[],
+  sensitive: string[],
+): HarQueryString[] {
+  const sensitiveSet = new Set(sensitive.map((param) => param.toLowerCase()));
+  return queryParams.map((param) =>
+    sensitiveSet.has(param.name.toLowerCase())
+      ? { ...param, value: '***' }
+      : param,
+  );
+}
+
+export function maskUrlQueryParams(url: string, sensitive: string[]): string {
+  try {
+    const parsed = new URL(url);
+    const sensitiveSet = new Set(sensitive.map((param) => param.toLowerCase()));
+    const newParams = new URLSearchParams();
+    parsed.searchParams.forEach((value, name) => {
+      if (sensitiveSet.has(name.toLowerCase())) {
+        newParams.append(name, '***');
+      } else {
+        newParams.append(name, value);
+      }
+    });
+    parsed.search = newParams.toString();
+    return parsed.toString();
+  } catch {
+    // If URL parsing fails, return original
+    return url;
+  }
+}
+
 export function truncateBody(
   body: string,
   maxSize: number,
@@ -103,13 +136,16 @@ export function buildHarRequest(
     request = new Request(requestInput, init);
   }
   const sensitiveHeaders = options.sensitiveHeaders ?? DEFAULT_SENSITIVE_HEADERS;
+  const sensitiveQueryParams = options.sensitiveQueryParams ?? DEFAULT_SENSITIVE_QUERY_PARAMS;
   const maxBodySize = options.maxRequestBodySize ?? DEFAULT_MAX_REQUEST_BODY_SIZE;
   const rawBody = getBodyText(init?.body);
   const bodyText = rawBody ? truncateBody(rawBody, maxBodySize).text : undefined;
   const contentType = request.headers.get('content-type') ?? '';
 
   const headers = maskHeaders(headersToHar(request.headers), sensitiveHeaders);
-  const queryString = parseQueryString(request.url);
+  const rawQueryString = parseQueryString(request.url);
+  const queryString = maskQueryParams(rawQueryString, sensitiveQueryParams);
+  const maskedUrl = maskUrlQueryParams(request.url, sensitiveQueryParams);
 
   const postData = bodyText
     ? {
@@ -120,7 +156,7 @@ export function buildHarRequest(
 
   return {
     method: request.method,
-    url: request.url,
+    url: maskedUrl,
     httpVersion: DEFAULT_HTTP_VERSION,
     headers,
     queryString,
@@ -137,8 +173,56 @@ export async function buildHarResponse(
 ): Promise<HarResponse> {
   const sensitiveHeaders = options.sensitiveHeaders ?? DEFAULT_SENSITIVE_HEADERS;
   const maxBodySize = options.maxResponseBodySize ?? DEFAULT_MAX_RESPONSE_BODY_SIZE;
-  const rawBody = await response.text();
-  const { text } = truncateBody(rawBody, maxBodySize);
+
+  // Read body with streaming to avoid buffering entire response
+  let bodyText = '';
+  let totalSize = 0;
+  let truncated = false;
+
+  if (response.body) {
+    // Use streaming to read only up to maxBodySize bytes
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder('utf-8');
+    const chunks: string[] = [];
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value, { stream: true });
+        totalSize += value.byteLength;
+
+        if (bodyText.length < maxBodySize) {
+          const remaining = maxBodySize - bodyText.length;
+          if (chunk.length <= remaining) {
+            chunks.push(chunk);
+            bodyText += chunk;
+          } else {
+            chunks.push(chunk.slice(0, remaining));
+            bodyText += chunk.slice(0, remaining);
+            truncated = true;
+            // Cancel the stream to avoid reading remaining data
+            await reader.cancel();
+            break;
+          }
+        } else {
+          truncated = true;
+          await reader.cancel();
+          break;
+        }
+      }
+    } catch {
+      // If streaming fails, fall through and handle gracefully
+    }
+  } else {
+    // Fallback for responses without streaming body
+    const rawBody = await response.text();
+    totalSize = rawBody.length;
+    const result = truncateBody(rawBody, maxBodySize);
+    bodyText = result.text;
+    truncated = result.truncated;
+  }
 
   const headers = maskHeaders(headersToHar(response.headers), sensitiveHeaders);
   const contentType = response.headers.get('content-type') ?? '';
@@ -151,13 +235,13 @@ export async function buildHarResponse(
     headers,
     cookies: [],
     content: {
-      size: rawBody.length,
+      size: totalSize,
       mimeType: contentType,
-      text,
+      text: bodyText,
     },
     redirectURL,
     headersSize: -1,
-    bodySize: rawBody.length,
+    bodySize: totalSize,
   };
 }
 

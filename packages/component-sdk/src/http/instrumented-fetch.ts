@@ -9,6 +9,7 @@ import {
   DEFAULT_MAX_REQUEST_BODY_SIZE,
   DEFAULT_MAX_RESPONSE_BODY_SIZE,
   DEFAULT_SENSITIVE_HEADERS,
+  DEFAULT_SENSITIVE_QUERY_PARAMS,
   type HarTimings,
   type HttpInstrumentationOptions,
   type HttpRequestInput,
@@ -18,6 +19,7 @@ const resolveOptions = (options?: HttpInstrumentationOptions): Required<Omit<Htt
   maxRequestBodySize: options?.maxRequestBodySize ?? DEFAULT_MAX_REQUEST_BODY_SIZE,
   maxResponseBodySize: options?.maxResponseBodySize ?? DEFAULT_MAX_RESPONSE_BODY_SIZE,
   sensitiveHeaders: options?.sensitiveHeaders ?? DEFAULT_SENSITIVE_HEADERS,
+  sensitiveQueryParams: options?.sensitiveQueryParams ?? DEFAULT_SENSITIVE_QUERY_PARAMS,
 });
 
 const buildTimings = (partial: Partial<HarTimings>): HarTimings => ({

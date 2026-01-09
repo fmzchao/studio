@@ -21,12 +21,14 @@ export type HttpResponseLike = {
   headers: HttpHeaders;
   text: () => Promise<string>;
   clone: () => HttpResponseLike;
+  body: ReadableStream<Uint8Array> | null;
 };
 
 export interface HttpInstrumentationOptions {
   maxRequestBodySize?: number;
   maxResponseBodySize?: number;
   sensitiveHeaders?: string[];
+  sensitiveQueryParams?: string[];
   correlationId?: string;
 }
 
@@ -45,4 +47,24 @@ export const DEFAULT_SENSITIVE_HEADERS = [
   'password',
   'cookie',
   'set-cookie',
+];
+
+export const DEFAULT_SENSITIVE_QUERY_PARAMS = [
+  'api_key',
+  'apikey',
+  'api-key',
+  'key',
+  'token',
+  'access_token',
+  'accesstoken',
+  'secret',
+  'password',
+  'bearer',
+  'auth',
+  'authorization',
+  'credential',
+  'sig',
+  'signature',
+  'x-amz-security-token',
+  'x-amz-credential',
 ];
