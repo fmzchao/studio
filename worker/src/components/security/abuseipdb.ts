@@ -122,7 +122,7 @@ const definition: ComponentDefinition<Input, Output> = {
 
     context.logger.info(`[AbuseIPDB] Checking IP: ${ipAddress}`);
 
-    const response = await fetch(url, {
+    const response = await context.http.fetch(url, {
       method: 'GET',
       headers: {
         'Key': apiKey,

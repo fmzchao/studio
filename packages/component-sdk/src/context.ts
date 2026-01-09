@@ -32,6 +32,7 @@ import type {
   ITraceService,
   TraceEvent,
 } from './interfaces';
+import { createHttpClient } from './http/instrumented-fetch';
 
 export interface CreateContextOptions {
   runId: string;
@@ -144,7 +145,10 @@ export function createExecutionContext(options: CreateContextOptions): Execution
     terminalCollector,
     metadata,
     agentTracePublisher,
+    http: undefined as unknown as ExecutionContext['http'],
   };
+
+  (context as ExecutionContext).http = createHttpClient(context);
 
   // Override logger methods to use logCollector instead of trace.record
   if (logCollector) {

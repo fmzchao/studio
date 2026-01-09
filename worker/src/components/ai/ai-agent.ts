@@ -338,11 +338,18 @@ class MCPClient {
   private readonly endpoint: string;
   private readonly sessionId: string;
   private readonly headers?: Record<string, string>;
+  private readonly fetcher: ExecutionContext['http']['fetch'];
 
-  constructor(options: { endpoint: string; sessionId: string; headers?: Record<string, string> }) {
+  constructor(options: {
+    endpoint: string;
+    sessionId: string;
+    headers?: Record<string, string>;
+    fetcher: ExecutionContext['http']['fetch'];
+  }) {
     this.endpoint = options.endpoint.replace(/\/+$/, '');
     this.sessionId = options.sessionId;
     this.headers = sanitizeHeaders(options.headers);
+    this.fetcher = options.fetcher;
   }
 
   async execute(toolName: string, args: unknown): Promise<unknown> {
@@ -352,7 +359,7 @@ class MCPClient {
       arguments: args ?? {},
     };
 
-    const response = await fetch(this.endpoint, {
+    const response = await this.fetcher(this.endpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -472,6 +479,7 @@ type RegisterMcpToolParams = {
   sessionId: string;
   toolFactory: ToolFn;
   agentStream: AgentStreamRecorder;
+  fetcher: ExecutionContext['http']['fetch'];
   logger?: {
     warn?: (...args: unknown[]) => void;
   };
@@ -482,6 +490,7 @@ function registerMcpTools({
   sessionId,
   toolFactory,
   agentStream,
+  fetcher,
   logger,
 }: RegisterMcpToolParams): RegisteredMcpTool[] {
   if (!Array.isArray(tools) || tools.length === 0) {
@@ -520,6 +529,7 @@ function registerMcpTools({
       endpoint,
       sessionId,
       headers: tool.headers,
+      fetcher,
     });
 
     const description =
@@ -1127,6 +1137,7 @@ Loop the Conversation State output back into the next agent invocation to keep m
       sessionId,
       toolFactory: toolFn,
       agentStream,
+      fetcher: context.http.fetch,
       logger: context.logger,
     });
     for (const entry of registeredMcpTools) {

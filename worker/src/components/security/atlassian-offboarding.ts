@@ -325,7 +325,7 @@ const definition: ComponentDefinition<Input, Output> = {
     let searchResponse: Response;
     const searchStartedAt = Date.now();
     try {
-      searchResponse = await fetch(`https://api.atlassian.com/admin/v1/orgs/${orgId}/users/search`, {
+      searchResponse = await context.http.fetch(`https://api.atlassian.com/admin/v1/orgs/${orgId}/users/search`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${accessToken}`,
@@ -449,7 +449,7 @@ const definition: ComponentDefinition<Input, Output> = {
 
       let deleteResponse: Response;
       try {
-        deleteResponse = await fetch(
+        deleteResponse = await context.http.fetch(
           `https://api.atlassian.com/admin/v1/orgs/${orgId}/directory/users/${accountId}`,
           {
             method: 'DELETE',

@@ -190,7 +190,7 @@ const definition: ComponentDefinition<Input, Output, Params> = {
           configKey: 'webhookUrl',
         });
       }
-      const response = await fetch(webhookUrl, {
+      const response = await context.http.fetch(webhookUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -209,7 +209,7 @@ const definition: ComponentDefinition<Input, Output, Params> = {
       body.channel = channel;
       body.thread_ts = thread_ts;
 
-      const response = await fetch('https://slack.com/api/chat.postMessage', {
+      const response = await context.http.fetch('https://slack.com/api/chat.postMessage', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
