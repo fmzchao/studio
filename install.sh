@@ -423,7 +423,8 @@ install_just() {
       else
         warn "Homebrew is not installed. Installing just via script..."
         mkdir -p ~/.local/bin
-        if curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | bash -s -- --to ~/.local/bin; then
+        # Use --force to overwrite if already exists
+        if curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | bash -s -- --to ~/.local/bin --force; then
           export PATH="$HOME/.local/bin:$PATH"
           info "${GREEN}just installed to ~/.local/bin${NC}"
           warn "Add ~/.local/bin to your PATH permanently by adding this to your shell profile:"
@@ -438,11 +439,31 @@ install_just() {
     linux|wsl)
       info "Installing just via official script..."
       mkdir -p ~/.local/bin
-      if curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | bash -s -- --to ~/.local/bin; then
+      # Use --force to overwrite if already exists
+      if curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | bash -s -- --to ~/.local/bin --force; then
+        # Add to PATH for current session
         export PATH="$HOME/.local/bin:$PATH"
         info "${GREEN}just installed to ~/.local/bin${NC}"
-        # Check if ~/.local/bin is in PATH
-        if ! echo "$PATH" | grep -q "$HOME/.local/bin"; then
+        
+        # Check if ~/.local/bin is already in shell profile
+        local shell_profile=""
+        if [ -n "${BASH_VERSION:-}" ]; then
+          shell_profile="$HOME/.bashrc"
+        elif [ -n "${ZSH_VERSION:-}" ]; then
+          shell_profile="$HOME/.zshrc"
+        elif [ -f "$HOME/.bashrc" ]; then
+          shell_profile="$HOME/.bashrc"
+        elif [ -f "$HOME/.profile" ]; then
+          shell_profile="$HOME/.profile"
+        fi
+        
+        # Add to shell profile if not already there
+        if [ -n "$shell_profile" ] && [ -f "$shell_profile" ]; then
+          if ! grep -q '\.local/bin' "$shell_profile" 2>/dev/null; then
+            printf '\n# Added by ShipSec Studio installer\nexport PATH="$HOME/.local/bin:$PATH"\n' >> "$shell_profile"
+            info "Added ~/.local/bin to PATH in $shell_profile"
+          fi
+        else
           warn "Add ~/.local/bin to your PATH permanently by adding this to your shell profile:"
           printf "    export PATH=\"\$HOME/.local/bin:\$PATH\"\n"
         fi
@@ -775,13 +796,81 @@ start_docker_daemon() {
         warn "Docker CLI is installed, but no Docker runtime is running."
         info "The 'docker' command needs a runtime (Docker Desktop or Colima) to work."
         printf "\n"
-        info "Please choose one of these options:"
+        
+        if is_interactive && command_exists brew; then
+          info "Would you like to install a Docker runtime now?"
+          printf "\n"
+          info "  1) Colima (CLI-only, lightweight, recommended)"
+          info "  2) Docker Desktop (GUI application)"
+          info "  3) Skip (I'll install manually)"
+          printf "\n"
+          
+          printf "    Enter choice [1/2/3]: "
+          local choice=""
+          read -r choice || choice="3"
+          
+          case "$choice" in
+            1)
+              info "Installing Colima..."
+              printf "\n"
+              if brew install colima docker-compose; then
+                info "${GREEN}Colima installed!${NC}"
+                info "Starting Colima..."
+                if colima start; then
+                  info "${GREEN}Colima is running! Docker daemon is ready.${NC}"
+                  return 0
+                else
+                  err "Failed to start Colima. Try running: colima start"
+                  return 1
+                fi
+              else
+                err "Failed to install Colima"
+                return 1
+              fi
+              ;;
+            2)
+              info "Installing Docker Desktop..."
+              printf "\n"
+              if brew install --cask docker; then
+                info "${GREEN}Docker Desktop installed!${NC}"
+                info "Starting Docker Desktop..."
+                open -g "/Applications/Docker.app"
+                
+                printf "    Waiting for Docker to be ready"
+                local start=$(date +%s)
+                while ! docker info >/dev/null 2>&1; do
+                  local now=$(date +%s)
+                  local elapsed=$((now - start))
+                  if [ "$elapsed" -ge "$WAIT_DOCKER_SEC" ]; then
+                    printf "\n\n"
+                    warn "Docker Desktop is taking a while to start."
+                    info "Please wait for Docker Desktop to finish starting, then run this script again."
+                    return 1
+                  fi
+                  printf "."
+                  sleep 2
+                done
+                printf " ${GREEN}ready!${NC}\n"
+                return 0
+              else
+                err "Failed to install Docker Desktop"
+                return 1
+              fi
+              ;;
+            *)
+              info "Skipping Docker runtime installation."
+              ;;
+          esac
+        fi
+        
         printf "\n"
-        info "  ${BOLD} Option 1: Install & start Colima (CLI-only, lightweight)${NC}"
+        info "Please install a Docker runtime manually:"
+        printf "\n"
+        info "  ${BOLD}Option 1: Colima (CLI-only, lightweight)${NC}"
         printf "    brew install colima docker-compose\n"
         printf "    colima start\n"
         printf "\n"
-        info "  ${BOLD} Option 2: Install & open Docker Desktop${NC}"
+        info "  ${BOLD}Option 2: Docker Desktop${NC}"
         printf "    brew install --cask docker\n"
         printf "    # Then open Docker Desktop from Applications\n"
         printf "\n"
@@ -1099,8 +1188,8 @@ printf "\n"
 MISSING_DEPS=""
 ALL_OK=true
 
-# Check each dependency
-for dep in docker just curl jq git; do
+# Check each dependency (docker last since it may require logout/login on Linux)
+for dep in just curl jq git docker; do
   if command_exists "$dep"; then
     case "$dep" in
       docker) ver=$(docker --version 2>/dev/null | sed 's/Docker version //' | cut -d',' -f1) ;;
