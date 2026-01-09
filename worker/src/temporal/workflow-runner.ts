@@ -7,6 +7,7 @@ import {
   type IFileStorageService,
   type ISecretsService,
   type ITraceService,
+  type INodeIOService,
   type LogEventInput,
 } from '@shipsec/component-sdk';
 import type {
@@ -20,6 +21,7 @@ import {
   type WorkflowSchedulerRunContext,
   WorkflowSchedulerError,
 } from './workflow-scheduler';
+import { maskSecretOutputs, createLightweightSummary } from './utils/component-output';
 import { buildActionParams } from './input-resolver';
 import type { ArtifactServiceFactory } from './artifact-factory';
 
@@ -31,6 +33,7 @@ export interface ExecuteWorkflowOptions {
   secrets?: ISecretsService;
   artifacts?: ArtifactServiceFactory;
   trace?: ITraceService;
+  nodeIO?: INodeIOService;
   logs?: WorkflowLogSink;
   organizationId?: string | null;
   workflowId?: string;
@@ -47,6 +50,10 @@ export async function executeWorkflow(
   options: ExecuteWorkflowOptions = {},
 ): Promise<WorkflowRunResult> {
   const runId = options.runId ?? randomUUID();
+  console.log(`🏃 [WORKFLOW RUNNER] executeWorkflow called for runId: ${runId}`);
+  console.log(`📋 [WORKFLOW RUNNER] Definition has ${definition.actions.length} actions`);
+  console.log(`📋 [WORKFLOW RUNNER] Entrypoint ref: ${definition.entrypoint.ref}`);
+
   const results = new Map<string, unknown>();
   const actionsByRef = new Map<string, typeof definition.actions[number]>(
     definition.actions.map((action) => [action.ref, action]),
@@ -76,6 +83,8 @@ export async function executeWorkflow(
       actionRef: string,
       schedulerContext: WorkflowSchedulerRunContext,
     ): Promise<void> => {
+      console.log(`🎯 [WORKFLOW RUNNER] runAction called for: ${actionRef} (triggered by: ${schedulerContext.triggeredBy || 'root'})`);
+
       const action = actionsByRef.get(actionRef);
       if (!action) {
         throw new NotFoundError(`Action not found: ${actionRef}`, {
@@ -195,6 +204,16 @@ export async function executeWorkflow(
         }
       }
 
+      // Record node I/O start
+      await options.nodeIO?.recordStart({
+        runId,
+        nodeRef: action.ref,
+        workflowId: options.workflowId,
+        organizationId: options.organizationId,
+        componentId: action.componentId,
+        inputs: maskSecretOutputs(component, params) as Record<string, unknown>,
+      });
+
       const parsedParams = component.inputSchema.parse(params);
 
       // Create execution context with SDK interfaces
@@ -229,16 +248,27 @@ export async function executeWorkflow(
       });
 
       try {
+        console.log(`⚡️ [WORKFLOW RUNNER] Executing component: ${action.componentId} for action: ${actionRef}`);
         const rawOutput = await component.execute(parsedParams, context);
+        console.log(`✅ [WORKFLOW RUNNER] Component execution completed: ${action.componentId} for action: ${actionRef}`);
         const output = component.outputSchema.parse(rawOutput);
         results.set(action.ref, output);
+        console.log(`💾 [WORKFLOW RUNNER] Result stored for: ${actionRef}`);
+        // Record node I/O completion
+        await options.nodeIO?.recordCompletion({
+          runId,
+          nodeRef: action.ref,
+          componentId: action.componentId,
+          outputs: maskSecretOutputs(component, output) as Record<string, unknown>,
+          status: 'completed',
+        });
 
         options.trace?.record({
           type: 'NODE_COMPLETED',
           runId,
           nodeRef: action.ref,
           timestamp: new Date().toISOString(),
-          outputSummary: maskSecretOutputs(component, output),
+          outputSummary: createLightweightSummary(component, output),
           level: 'info',
           context: {
             runId,
@@ -307,6 +337,16 @@ export async function executeWorkflow(
             failure,
           },
         });
+        // Record node I/O failure
+        await options.nodeIO?.recordCompletion({
+          runId,
+          nodeRef: action.ref,
+          componentId: action.componentId,
+          outputs: {}, // No successful output
+          status: 'failed',
+          errorMessage: errorMsg,
+        });
+
         throw error;
       }
     };
@@ -314,6 +354,9 @@ export async function executeWorkflow(
     await runWorkflowWithScheduler(definition, {
       run: runAction,
     });
+
+    console.log(`📊 [WORKFLOW RUNNER] runWorkflowWithScheduler completed for ${runId}`);
+    console.log(`📊 [WORKFLOW RUNNER] Total results stored: ${results.size}`);
 
     const outputsObject: Record<string, unknown> = {};
     let reportedFailure = false;
@@ -328,8 +371,12 @@ export async function executeWorkflow(
       }
     });
 
+    console.log(`📊 [WORKFLOW RUNNER] Output keys: ${Object.keys(outputsObject).join(', ')}`);
+    console.log(`📊 [WORKFLOW RUNNER] Reported failure: ${reportedFailure}`);
+
     if (reportedFailure) {
       const baseMessage = 'One or more workflow actions failed';
+      console.error(`❌ [WORKFLOW RUNNER] Workflow failed: ${baseMessage}: ${failureDetails.join('; ')}`);
       return {
         outputs: outputsObject,
         success: false,
@@ -340,8 +387,10 @@ export async function executeWorkflow(
       };
     }
 
+    console.log(`✅ [WORKFLOW RUNNER] Workflow completed successfully for ${runId}`);
     return { outputs: outputsObject, success: true };
   } catch (error) {
+    console.error(`❌ [WORKFLOW RUNNER] Workflow threw exception for ${runId}:`, error);
     return {
       outputs: {},
       success: false,
@@ -368,39 +417,4 @@ function extractFailureMessage(value: { success: boolean; error?: unknown }): st
     return errorMessage;
   }
   return 'Component reported failure';
-}
-
-function maskSecretOutputs(component: RegisteredComponent, output: unknown): unknown {
-  const secretPorts =
-    component.metadata?.outputs?.filter((port) => {
-      if (!port.dataType) {
-        return false;
-      }
-      if (port.dataType.kind === 'primitive') {
-        return port.dataType.name === 'secret';
-      }
-      if (port.dataType.kind === 'contract') {
-        return Boolean(port.dataType.credential);
-      }
-      return false;
-    }) ?? [];
-  if (secretPorts.length === 0) {
-    return output;
-  }
-
-  if (secretPorts.some((port) => port.id === '__self__')) {
-    return '***';
-  }
-
-  if (output && typeof output === 'object' && !Array.isArray(output)) {
-    const clone = { ...(output as Record<string, unknown>) };
-    for (const port of secretPorts) {
-      if (Object.prototype.hasOwnProperty.call(clone, port.id)) {
-        clone[port.id] = '***';
-      }
-    }
-    return clone;
-  }
-
-  return '***';
 }

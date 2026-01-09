@@ -35,6 +35,7 @@ import { cn } from '@/lib/utils'
 import type { ExecutionLog } from '@/schemas/execution'
 import { RunArtifactsPanel } from '@/components/artifacts/RunArtifactsPanel'
 import { AgentTracePanel } from '@/components/timeline/AgentTracePanel'
+import { NodeIOInspector } from '@/components/timeline/NodeIOInspector'
 import { getTriggerDisplay } from '@/utils/triggerDisplay'
 import { RunInfoDisplay } from '@/components/timeline/RunInfoDisplay'
 
@@ -390,6 +391,14 @@ export function ExecutionInspector({ onRerunRun }: ExecutionInspectorProps = {})
             >
               Artifacts
             </Button>
+            <Button
+              variant={inspectorTab === 'io' ? 'default' : 'ghost'}
+              size="sm"
+              className="h-6 px-2.5 text-xs"
+              onClick={() => setInspectorTab('io')}
+            >
+              I/O
+            </Button>
           </div>
           {inspectorTab === 'logs' && (
             <select
@@ -524,6 +533,10 @@ export function ExecutionInspector({ onRerunRun }: ExecutionInspectorProps = {})
 
           {inspectorTab === 'agent' && (
             <AgentTracePanel runId={selectedRunId ?? null} />
+          )}
+
+          {inspectorTab === 'io' && (
+            <NodeIOInspector />
           )}
         </div>
       </aside>

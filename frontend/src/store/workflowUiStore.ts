@@ -5,7 +5,7 @@ export type WorkflowMode = 'design' | 'execution'
 
 interface WorkflowUiState {
   mode: WorkflowMode
-  inspectorTab: 'events' | 'logs' | 'artifacts' | 'agent'
+  inspectorTab: 'events' | 'logs' | 'artifacts' | 'agent' | 'io'
   libraryOpen: boolean
   inspectorWidth: number
   /** Currently focused terminal panel's node ID (for z-index stacking) */
