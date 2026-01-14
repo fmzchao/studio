@@ -213,13 +213,42 @@ import { port } from '@shipsec/component-sdk';
 port.text()                    // String
 port.number()                  // Number
 port.boolean()                 // Boolean
-port.secret()                  // Secret value
+port.secret()                  // Secret value (masked in UI)
 port.json()                    // JSON object
 port.any()                     // Any type
+port.file()                    // File reference
 port.list(port.text())         // Array<string>
 port.map(port.text())          // Record<string, string>
 port.credential('github')      // OAuth credential contract
 ```
+
+### Entry Point Runtime Input Types
+
+The Entry Point component supports dynamic runtime inputs that users provide when triggering workflows:
+
+| Type | Description | UI Rendering |
+|------|-------------|--------------|
+| `text` | Text input | Multi-line textarea |
+| `number` | Numeric input | Number field |
+| `file` | File upload | File picker |
+| `json` | JSON data | JSON textarea |
+| `array` | List of values | Comma-separated or JSON array |
+| `secret` | Sensitive data | Password field (masked) |
+
+**Example: Secret runtime input**
+
+```typescript
+// Entry point configuration
+const runtimeInputs = [
+  { id: 'apiKey', label: 'API Key', type: 'secret', required: true },
+  { id: 'target', label: 'Target URL', type: 'text', required: true },
+];
+```
+
+When a workflow with secret inputs is triggered:
+1. The UI shows a password field for the secret
+2. The value flows through as a `port.secret()` output
+3. Downstream components receive the secret string value
 
 ---
 

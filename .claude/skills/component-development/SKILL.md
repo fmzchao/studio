@@ -109,11 +109,23 @@ const volume = new IsolatedContainerVolume(tenantId, context.runId);
 try {
   await volume.initialize({ 'input.txt': data });
   // volumes: [volume.getVolumeConfig('/path', true)]
+  // Note: Permissions are auto-set for nonroot containers
 } finally {
   await volume.cleanup();
 }
 ```
 → See: `docs/development/isolated-volumes.mdx`
+
+### Entry Point Runtime Inputs
+```typescript
+// Supported types: text, number, file, json, array, secret
+const runtimeInputs = [
+  { id: 'apiKey', label: 'API Key', type: 'secret', required: true },
+  { id: 'targets', label: 'Targets', type: 'array', required: true },
+];
+// Secret type renders as password field in UI
+```
+→ See: `docs/development/component-development.mdx#entry-point-runtime-input-types`
 
 ### Dynamic Ports
 ```typescript

@@ -163,6 +163,51 @@ export class IsolatedContainerVolume {
       // Use docker run with stdin to write the file
       await this.writeFileToVolume(filename, contentString);
     }
+
+    // Make the volume directory writable by all users (including nonroot containers)
+    // This is safe because volumes are isolated per-run
+    await this.setVolumePermissions();
+  }
+
+  /**
+   * Sets permissions on the volume directory to allow nonroot containers to write.
+   * Uses chmod 777 on /data to support distroless nonroot images (uid 65532).
+   */
+  private async setVolumePermissions(): Promise<void> {
+    if (!this.volumeName) {
+      throw new ConfigurationError('Volume not initialized', {
+        details: { tenantId: this.tenantId, runId: this.runId },
+      });
+    }
+
+    return new Promise((resolve, reject) => {
+      const proc = spawn('docker', [
+        'run',
+        '--rm',
+        '-v', `${this.volumeName}:/data`,
+        '--entrypoint', 'sh',
+        'alpine:latest',
+        '-c', 'chmod -R 777 /data',
+      ]);
+
+      let stderr = '';
+
+      proc.stderr.on('data', (data) => {
+        stderr += data.toString();
+      });
+
+      proc.on('error', (error) => {
+        reject(new Error(`Failed to set volume permissions: ${error.message}`));
+      });
+
+      proc.on('close', (code) => {
+        if (code !== 0) {
+          reject(new Error(`Failed to set volume permissions: exit code ${code}, stderr: ${stderr}`));
+        } else {
+          resolve();
+        }
+      });
+    });
   }
 
   /**

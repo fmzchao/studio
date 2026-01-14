@@ -14,7 +14,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Play, Loader2 } from 'lucide-react'
 import { api } from '@/services/api'
 
-type RuntimeInputType = 'file' | 'text' | 'number' | 'json' | 'array' | 'string'
+type RuntimeInputType = 'file' | 'text' | 'number' | 'json' | 'array' | 'string' | 'secret'
 type NormalizedRuntimeInputType = Exclude<RuntimeInputType, 'string'>
 
 const normalizeRuntimeInputType = (
@@ -277,6 +277,34 @@ export function RunWorkflowDialog({
               defaultValue={
                 typeof inputs[input.id] === 'number' || typeof inputs[input.id] === 'string'
                   ? (inputs[input.id] as string | number)
+                  : ''
+              }
+            />
+            {input.description && (
+              <p className="text-xs text-muted-foreground">{input.description}</p>
+            )}
+            {hasError && (
+              <p className="text-xs text-red-500">{errors[input.id]}</p>
+            )}
+          </div>
+        )
+
+      case 'secret':
+        return (
+          <div className="space-y-2">
+            <Label htmlFor={input.id}>
+              {input.label}
+              {input.required && <span className="text-red-500 ml-1">*</span>}
+            </Label>
+            <Input
+              id={input.id}
+              type="password"
+              placeholder="Enter secret value"
+              onChange={(e) => handleInputChange(input.id, e.target.value, inputType)}
+              className={hasError ? 'border-red-500' : ''}
+              defaultValue={
+                inputs[input.id] !== undefined && inputs[input.id] !== null
+                  ? String(inputs[input.id])
                   : ''
               }
             />

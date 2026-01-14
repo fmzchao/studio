@@ -16,7 +16,7 @@ const runtimeInputDefinitionSchema = z.preprocess((value) => {
 }, z.object({
   id: z.string().describe('Unique identifier for this input'),
   label: z.string().describe('Display label for the input field'),
-  type: z.enum(['file', 'text', 'number', 'json', 'array']).describe('Type of input data'),
+  type: z.enum(['file', 'text', 'number', 'json', 'array', 'secret']).describe('Type of input data'),
   required: z.boolean().default(true).describe('Whether this input is required'),
   description: z.string().optional().describe('Help text for the input'),
 }));
@@ -125,7 +125,9 @@ const definition: ComponentDefinition<Input, Output> = {
         });
       }
       outputs[inputDef.id] = value;
-      context.logger.info(`[EntryPoint] Output '${inputDef.id}' = ${typeof value === 'object' ? JSON.stringify(value) : value}`);
+      // Mask secret values in logs
+      const logValue = inputDef.type === 'secret' ? '***' : (typeof value === 'object' ? JSON.stringify(value) : value);
+      context.logger.info(`[EntryPoint] Output '${inputDef.id}' = ${logValue}`);
     }
 
     context.emitProgress(`Collected ${Object.keys(outputs).length} runtime inputs`);

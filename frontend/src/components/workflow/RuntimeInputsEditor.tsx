@@ -12,7 +12,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 
-type RuntimeInputType = 'file' | 'text' | 'number' | 'json' | 'array' | 'string'
+type RuntimeInputType = 'file' | 'text' | 'number' | 'json' | 'array' | 'string' | 'secret'
 type NormalizedRuntimeInputType = Exclude<RuntimeInputType, 'string'>
 
 const normalizeRuntimeInputType = (type: RuntimeInputType): NormalizedRuntimeInputType =>
@@ -188,6 +188,7 @@ export function RuntimeInputsEditor({ value, onChange }: RuntimeInputsEditorProp
                     <SelectItem value="number">Number</SelectItem>
                     <SelectItem value="json">JSON</SelectItem>
                     <SelectItem value="array">Array</SelectItem>
+                    <SelectItem value="secret">Secret</SelectItem>
                   </SelectContent>
                 </Select>
                 <p className="text-[10px] text-muted-foreground">

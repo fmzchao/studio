@@ -107,4 +107,50 @@ describe('entry-point component', () => {
       "Required runtime input 'User' (user) was not provided",
     );
   });
+
+  it('should handle secret runtime inputs', async () => {
+    const component = componentRegistry.get<EntryPointInput, EntryPointOutput>('core.workflow.entrypoint');
+    if (!component) throw new Error('Component not registered');
+
+    const context = createExecutionContext({
+      runId: 'test-run',
+      componentRef: 'trigger-test',
+    });
+
+    const params = component.inputSchema.parse({
+      runtimeInputs: [
+        { id: 'apiKey', label: 'API Key', type: 'secret', required: true },
+        { id: 'token', label: 'Token', type: 'secret', required: false },
+      ],
+      __runtimeData: {
+        apiKey: 'super-secret-key',
+        token: 'optional-token',
+      },
+    });
+
+    const result = await component.execute(params, context);
+
+    expect(result).toEqual({
+      apiKey: 'super-secret-key',
+      token: 'optional-token',
+    });
+  });
+
+  it('should resolve secret ports correctly', () => {
+    const component = componentRegistry.get<EntryPointInput, EntryPointOutput>('core.workflow.entrypoint');
+    if (!component) throw new Error('Component not registered');
+
+    const params = {
+      runtimeInputs: [
+        { id: 'apiKey', label: 'API Key', type: 'secret', required: true },
+      ],
+    };
+
+    const ports = component.resolvePorts?.(params as any);
+    expect(ports).toBeDefined();
+    expect(ports!.outputs).toHaveLength(1);
+    expect(ports!.outputs[0].id).toBe('apiKey');
+    expect(ports!.outputs[0].dataType.kind).toBe('primitive');
+    expect((ports!.outputs[0].dataType as any).name).toBe('secret');
+  });
 });

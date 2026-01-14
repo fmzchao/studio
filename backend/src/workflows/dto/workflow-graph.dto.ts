@@ -242,7 +242,7 @@ export class WorkflowVersionResponseDto extends createZodDto(WorkflowVersionResp
 export const RuntimeInputSchema = z.object({
   id: z.string(),
   label: z.string(),
-  type: z.enum(['text', 'string', 'number', 'json', 'array', 'file', 'boolean']),
+  type: z.enum(['text', 'string', 'number', 'json', 'array', 'file', 'boolean', 'secret']),
   required: z.boolean().default(true),
   description: z.string().optional(),
   defaultValue: z.unknown().optional(),
