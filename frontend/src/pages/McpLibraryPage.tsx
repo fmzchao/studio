@@ -76,11 +76,29 @@ const TRANSPORT_TYPES = [
 
 type TransportType = (typeof TRANSPORT_TYPES)[number]['value']
 
-function HealthIndicator({ status }: { status: McpHealthStatus | null }) {
+function HealthIndicator({ status, checking }: { status: McpHealthStatus | null, checking?: boolean }) {
   const statusConfig = {
     healthy: { icon: CheckCircle2, color: 'text-green-500', label: 'Healthy' },
     unhealthy: { icon: AlertCircle, color: 'text-red-500', label: 'Unhealthy' },
     unknown: { icon: HelpCircle, color: 'text-gray-400', label: 'Unknown' },
+  }
+
+  if (checking) {
+    return (
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger>
+            <div className="flex items-center gap-1.5">
+              <RefreshCw className="h-4 w-4 text-blue-500 animate-spin" />
+              <span className="text-xs text-muted-foreground">Checking...</span>
+            </div>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Checking server status...</p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    )
   }
 
   const config = statusConfig[status ?? 'unknown']
@@ -153,6 +171,7 @@ export function McpLibraryPage() {
   const [serverToDelete, setServerToDelete] = useState<string | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
   const [testingServer, setTestingServer] = useState<string | null>(null)
+  const [checkingServers, setCheckingServers] = useState<Set<string>>(new Set())
   const [toolsDialogOpen, setToolsDialogOpen] = useState(false)
   const [selectedServerForTools, setSelectedServerForTools] = useState<string | null>(null)
   const [jsonValue, setJsonValue] = useState('')
@@ -189,13 +208,33 @@ export function McpLibraryPage() {
   useEffect(() => {
     if (servers.length > 0) {
       // Health check all servers in parallel (don't await, let them run in background)
-      servers.forEach((server) => {
-        testConnection(server.id).catch(() => {
-          // Silently ignore individual health check errors
-        })
+      const serverIds = servers.map(s => s.id)
+      setCheckingServers(new Set(serverIds))
+      Promise.allSettled(
+        serverIds.map((serverId) =>
+          testConnection(serverId).catch(() => {
+            // Silently ignore individual health check errors
+          })
+        )
+      ).finally(() => {
+        setCheckingServers(new Set())
       })
     }
   }, [servers.length]) // Only re-run when server count changes
+
+  // Sync JSON config to Manual form when valid single-server JSON is entered
+  useEffect(() => {
+    if (!jsonValue.trim() || editingServer) return
+
+    const { servers: parsedServers, error } = parseClaudeCodeConfig(jsonValue)
+    if (error || parsedServers.length !== 1) return
+
+    // Only sync if JSON tab is active and the form data differs
+    const parsedConfig = parsedServers[0].config
+    if (activeTab === 'json' && parsedConfig.name !== formData.name) {
+      setFormData(parsedConfig)
+    }
+  }, [jsonValue, activeTab, editingServer]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const filteredServers = useMemo(() => {
     const query = searchQuery.trim().toLowerCase()
@@ -304,25 +343,52 @@ export function McpLibraryPage() {
       }
 
       if (editingServer) {
+        // Mark as checking BEFORE the update to prevent "Unknown" flash
+        setCheckingServers((prev) => new Set([...prev, editingServer]))
         await updateServer(editingServer, payload)
         // Run health check after update to refresh status and tools
-        testConnection(editingServer).catch(() => {
-          // Silently ignore health check errors on update
-        })
+        testConnection(editingServer)
+          .then(async () => {
+            // Fetch all tools after health check to update tool counts
+            await fetchAllTools()
+          })
+          .catch(() => {
+            // Silently ignore health check errors on update
+          })
+          .finally(() => {
+            setCheckingServers((prev) => {
+              const next = new Set(prev)
+              next.delete(editingServer)
+              return next
+            })
+          })
         toast({ title: 'Server updated', description: `${payload.name} has been updated.` })
       } else {
         const newServer = await createServer(payload)
-        // Immediately run health check to set status and discover tools
-        testConnection(newServer.id).then((result) => {
-          if (result.toolCount !== undefined && result.toolCount > 0) {
-            toast({
-              title: 'Server ready',
-              description: `Discovered ${result.toolCount} tool(s) from ${payload.name}.`,
+        // Immediately add to checking set - batched with store update to prevent "Unknown" flash
+        setCheckingServers((prev) => new Set([...prev, newServer.id]))
+        // Run health check to set status and discover tools
+        testConnection(newServer.id)
+          .then(async (result) => {
+            // Fetch all tools after health check to update tool counts
+            await fetchAllTools()
+            if (result.toolCount !== undefined && result.toolCount > 0) {
+              toast({
+                title: 'Server ready',
+                description: `Discovered ${result.toolCount} tool(s) from ${payload.name}.`,
+              })
+            }
+          })
+          .catch(() => {
+            // Silently ignore health check errors
+          })
+          .finally(() => {
+            setCheckingServers((prev) => {
+              const next = new Set(prev)
+              next.delete(newServer.id)
+              return next
             })
-          }
-        }).catch(() => {
-          // Silently ignore health check errors
-        })
+          })
         toast({ title: 'Server created', description: `${payload.name} has been added.` })
       }
 
@@ -559,8 +625,36 @@ export function McpLibraryPage() {
         })
       )
 
-      const succeeded = results.filter((r) => r.status === 'fulfilled').length
+      // Extract successfully created servers
+      type ServerResponse = Awaited<ReturnType<typeof createServer>>
+      const createdServers = results
+        .filter((r): r is PromiseFulfilledResult<ServerResponse> => r.status === 'fulfilled')
+        .map((r) => r.value)
+
+      const succeeded = createdServers.length
       const failed = results.filter((r) => r.status === 'rejected').length
+
+      // Mark all created servers as checking to prevent "Unknown" flash
+      if (createdServers.length > 0) {
+        setCheckingServers(new Set(createdServers.map((s) => s.id)))
+
+        // Run health checks in parallel to discover tools (non-blocking)
+        Promise.allSettled(
+          createdServers.map((server) => testConnection(server.id).catch(() => {}))
+        )
+          .then(async () => {
+            // Fetch all tools after health checks complete
+            await fetchAllTools()
+          })
+          .finally(() => {
+            // Clear checking state for all created servers
+            setCheckingServers((prev) => {
+              const next = new Set(prev)
+              createdServers.forEach((s) => next.delete(s.id))
+              return next
+            })
+          })
+      }
 
       if (failed > 0) {
         toast({
@@ -710,7 +804,7 @@ export function McpLibraryPage() {
                     {server.endpoint ?? server.command ?? '—'}
                   </TableCell>
                   <TableCell>
-                    <HealthIndicator status={healthStatus[server.id] ?? null} />
+                    <HealthIndicator status={healthStatus[server.id] ?? null} checking={checkingServers.has(server.id)} />
                   </TableCell>
                   <TableCell className="text-center">
                     {toolCountsByServer[server.id]?.total > 0 ? (
