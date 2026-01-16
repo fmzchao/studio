@@ -139,6 +139,13 @@ export class McpServerResponse {
   @ApiProperty({ description: 'Whether encrypted headers are configured' })
   hasHeaders!: boolean;
 
+  @ApiPropertyOptional({
+    type: [String],
+    nullable: true,
+    description: 'Header key names (values are encrypted server-side)',
+  })
+  headerKeys?: string[] | null;
+
   @ApiProperty()
   enabled!: boolean;
 

@@ -16,6 +16,7 @@ interface McpServerResponse {
   command?: string | null
   args?: string[] | null
   hasHeaders: boolean
+  headerKeys?: string[] | null
   enabled: boolean
   healthCheckUrl?: string | null
   lastHealthCheck?: string | null

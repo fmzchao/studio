@@ -35,7 +35,10 @@ export class McpServersService {
     return organizationId;
   }
 
-  private mapServerToResponse(record: McpServerRecord): McpServerResponse {
+  private mapServerToResponse(
+    record: McpServerRecord,
+    headerKeys?: string[] | null,
+  ): McpServerResponse {
     return {
       id: record.id,
       name: record.name,
@@ -45,6 +48,7 @@ export class McpServersService {
       command: record.command,
       args: record.args,
       hasHeaders: record.headers !== null,
+      headerKeys: headerKeys ?? null,
       enabled: record.enabled,
       healthCheckUrl: record.healthCheckUrl,
       lastHealthCheck: record.lastHealthCheck?.toISOString() ?? null,
@@ -52,6 +56,27 @@ export class McpServersService {
       createdAt: record.createdAt.toISOString(),
       updatedAt: record.updatedAt.toISOString(),
     };
+  }
+
+  /**
+   * Extract header keys from encrypted headers without exposing values
+   */
+  private async extractHeaderKeys(
+    headers: McpServerRecord['headers'],
+  ): Promise<string[] | null> {
+    if (!headers) return null;
+    try {
+      const decrypted = await this.encryption.decryptHeaders({
+        ciphertext: headers.ciphertext,
+        iv: headers.iv,
+        authTag: headers.authTag,
+        keyId: headers.keyId,
+      });
+      return Object.keys(decrypted);
+    } catch (error) {
+      this.logger.warn('Failed to extract header keys', error);
+      return null;
+    }
   }
 
   private mapToolToResponse(
@@ -85,7 +110,9 @@ export class McpServersService {
   async getServer(auth: AuthContext | null, id: string): Promise<McpServerResponse> {
     const organizationId = this.assertOrganizationId(auth);
     const server = await this.repository.findById(id, { organizationId });
-    return this.mapServerToResponse(server);
+    // Extract header keys for single server fetch (used in edit UI)
+    const headerKeys = await this.extractHeaderKeys(server.headers);
+    return this.mapServerToResponse(server, headerKeys);
   }
 
   async createServer(
@@ -129,7 +156,9 @@ export class McpServersService {
       createdBy: auth?.userId || null,
     });
 
-    return this.mapServerToResponse(server);
+    // Return header keys from input (we know the keys since we just created with them)
+    const headerKeys = input.headers ? Object.keys(input.headers) : null;
+    return this.mapServerToResponse(server, headerKeys);
   }
 
   async updateServer(
@@ -208,11 +237,23 @@ export class McpServersService {
     }
 
     if (Object.keys(updates).length === 0) {
-      return this.mapServerToResponse(current);
+      const headerKeys = await this.extractHeaderKeys(current.headers);
+      return this.mapServerToResponse(current, headerKeys);
     }
 
     const server = await this.repository.update(id, updates, { organizationId });
-    return this.mapServerToResponse(server);
+
+    // Determine header keys for response
+    let headerKeys: string[] | null = null;
+    if (input.headers !== undefined) {
+      // Headers were explicitly set in this update
+      headerKeys = input.headers ? Object.keys(input.headers) : null;
+    } else {
+      // Headers unchanged, extract from existing
+      headerKeys = await this.extractHeaderKeys(server.headers);
+    }
+
+    return this.mapServerToResponse(server, headerKeys);
   }
 
   async toggleServer(auth: AuthContext | null, id: string): Promise<McpServerResponse> {

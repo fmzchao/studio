@@ -148,6 +148,12 @@ interface ServerFormData {
   enabled: boolean
 }
 
+interface HeaderEntry {
+  key: string
+  value: string
+  isStored: boolean // True if this key came from backend (value is encrypted)
+}
+
 const INITIAL_FORM_DATA: ServerFormData = {
   name: '',
   description: '',
@@ -178,6 +184,7 @@ export function McpLibraryPage() {
   const [jsonParseError, setJsonParseError] = useState<string | null>(null)
   const [isImporting, setIsImporting] = useState(false)
   const [activeTab, setActiveTab] = useState<'manual' | 'json'>('manual')
+  const [headerEntries, setHeaderEntries] = useState<HeaderEntry[]>([])
 
   const {
     servers,
@@ -194,6 +201,7 @@ export function McpLibraryPage() {
     fetchServerTools,
     fetchAllTools,
     toggleTool,
+    refreshHealth,
   } = useMcpServerStore()
 
   // Enable health polling on this page
@@ -216,9 +224,14 @@ export function McpLibraryPage() {
             // Silently ignore individual health check errors
           })
         )
-      ).finally(() => {
-        setCheckingServers(new Set())
-      })
+      )
+        .then(async () => {
+          // Refresh health status in store after all checks complete
+          await refreshHealth()
+        })
+        .finally(() => {
+          setCheckingServers(new Set())
+        })
     }
   }, [servers.length]) // Only re-run when server count changes
 
@@ -235,6 +248,44 @@ export function McpLibraryPage() {
       setFormData(parsedConfig)
     }
   }, [jsonValue, activeTab, editingServer]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Populate header entries when editing a server
+  useEffect(() => {
+    if (editingServer) {
+      const server = servers.find(s => s.id === editingServer)
+      if (server?.headerKeys && server.headerKeys.length > 0) {
+        setHeaderEntries(
+          server.headerKeys.map(key => ({ key, value: '', isStored: true }))
+        )
+      } else {
+        setHeaderEntries([])
+      }
+    } else {
+      // Reset when creating new server
+      setHeaderEntries([])
+    }
+  }, [editingServer, servers])
+
+  // Header entry management functions
+  const addHeaderEntry = () => {
+    setHeaderEntries(prev => [...prev, { key: '', value: '', isStored: false }])
+  }
+
+  const updateHeaderEntry = (index: number, field: 'key' | 'value', value: string) => {
+    setHeaderEntries(prev => {
+      const updated = [...prev]
+      updated[index] = { ...updated[index], [field]: value }
+      // If user starts typing in a stored entry's value, mark it as being edited
+      if (field === 'value' && updated[index].isStored && value) {
+        // Keep isStored true but value will indicate replacement
+      }
+      return updated
+    })
+  }
+
+  const removeHeaderEntry = (index: number) => {
+    setHeaderEntries(prev => prev.filter((_, i) => i !== index))
+  }
 
   const filteredServers = useMemo(() => {
     const query = searchQuery.trim().toLowerCase()
@@ -261,8 +312,8 @@ export function McpLibraryPage() {
     return counts
   }, [servers, tools])
 
-  // Generate Claude Code style JSON from form data
-  const formDataToJson = (data: ServerFormData): string => {
+  // Generate Claude Code style JSON from form data (for JSON tab display)
+  const formDataToJson = (data: ServerFormData, serverHeaderKeys?: string[] | null): string => {
     const serverConfig: Record<string, unknown> = {}
 
     if (data.transportType === 'stdio') {
@@ -274,13 +325,29 @@ export function McpLibraryPage() {
       serverConfig.url = data.endpoint
     }
 
-    if (data.headers.trim()) {
-      try {
-        serverConfig.headers = JSON.parse(data.headers)
-      } catch {
-        // Keep as string if invalid JSON
-        serverConfig.headers = data.headers
+    // Show existing header keys with masked values, plus any new headers from form
+    const headersToShow: Record<string, string> = {}
+
+    // Add existing headers with masked values
+    if (serverHeaderKeys && serverHeaderKeys.length > 0) {
+      for (const key of serverHeaderKeys) {
+        headersToShow[key] = '****'
       }
+    }
+
+    // Add/override with new header entries that have values
+    for (const entry of headerEntries) {
+      if (entry.key.trim()) {
+        if (entry.value.trim()) {
+          headersToShow[entry.key] = '****' // Mask new values too in JSON view
+        } else if (entry.isStored) {
+          headersToShow[entry.key] = '****'
+        }
+      }
+    }
+
+    if (Object.keys(headersToShow).length > 0) {
+      serverConfig.headers = headersToShow
     }
 
     return JSON.stringify({
@@ -316,7 +383,7 @@ export function McpLibraryPage() {
       enabled: server.enabled,
     }
     setFormData(editFormData)
-    setJsonValue(formDataToJson(editFormData))
+    setJsonValue(formDataToJson(editFormData, server.headerKeys))
     setJsonParseError(null)
     setActiveTab('manual')
     setEditorOpen(true)
@@ -325,6 +392,14 @@ export function McpLibraryPage() {
   const handleSave = async () => {
     setIsSaving(true)
     try {
+      // Build headers from headerEntries - only include entries with new values
+      const headersPayload = headerEntries
+        .filter(e => e.key.trim() && e.value.trim()) // Only entries with key AND new value
+        .reduce((acc, entry) => {
+          acc[entry.key.trim()] = entry.value.trim()
+          return acc
+        }, {} as Record<string, string>)
+
       const payload: CreateMcpServer = {
         name: formData.name.trim(),
         description: formData.description.trim() || undefined,
@@ -336,9 +411,7 @@ export function McpLibraryPage() {
         args: formData.transportType === 'stdio' && formData.args.trim()
           ? formData.args.split('\n').map((a) => a.trim()).filter(Boolean)
           : undefined,
-        headers: formData.headers.trim()
-          ? JSON.parse(formData.headers)
-          : undefined,
+        headers: Object.keys(headersPayload).length > 0 ? headersPayload : undefined,
         enabled: true, // Always enabled on create, can toggle from list
       }
 
@@ -351,6 +424,8 @@ export function McpLibraryPage() {
           .then(async () => {
             // Fetch all tools after health check to update tool counts
             await fetchAllTools()
+            // Refresh health status in store before clearing checking state
+            await refreshHealth()
           })
           .catch(() => {
             // Silently ignore health check errors on update
@@ -372,6 +447,8 @@ export function McpLibraryPage() {
           .then(async (result) => {
             // Fetch all tools after health check to update tool counts
             await fetchAllTools()
+            // Refresh health status in store before clearing checking state
+            await refreshHealth()
             if (result.toolCount !== undefined && result.toolCount > 0) {
               toast({
                 title: 'Server ready',
@@ -645,6 +722,8 @@ export function McpLibraryPage() {
           .then(async () => {
             // Fetch all tools after health checks complete
             await fetchAllTools()
+            // Refresh health status in store before clearing checking state
+            await refreshHealth()
           })
           .finally(() => {
             // Clear checking state for all created servers
@@ -1008,20 +1087,66 @@ export function McpLibraryPage() {
                 </>
               )}
 
-              <div className="space-y-2">
-                <Label htmlFor="headers">Headers (JSON)</Label>
-                <Textarea
-                  id="headers"
-                  value={formData.headers}
-                  onChange={(e) => setFormData({ ...formData, headers: e.target.value })}
-                  placeholder='{"Authorization": "Bearer xxx"}'
-                  rows={3}
-                  className="font-mono text-sm"
-                />
+              <div className="space-y-3">
+                <Label>Headers</Label>
+                {headerEntries.length > 0 ? (
+                  <div className="space-y-2">
+                    {headerEntries.map((entry, index) => (
+                      <div key={index} className="flex gap-2 items-center">
+                        <Input
+                          value={entry.key}
+                          onChange={(e) => updateHeaderEntry(index, 'key', e.target.value)}
+                          placeholder="Header name"
+                          className="flex-1 font-mono text-sm"
+                          disabled={entry.isStored}
+                        />
+                        <div className="relative flex-1">
+                          <Input
+                            type="password"
+                            value={entry.isStored && !entry.value ? '••••••••' : entry.value}
+                            onChange={(e) => updateHeaderEntry(index, 'value', e.target.value)}
+                            placeholder={entry.isStored ? 'Enter new value to replace' : 'Value'}
+                            className="font-mono text-sm pr-10"
+                            readOnly={entry.isStored && !entry.value}
+                            onFocus={(e) => {
+                              if (entry.isStored && !entry.value) {
+                                e.target.readOnly = false
+                                e.target.value = ''
+                              }
+                            }}
+                          />
+                        </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => removeHeaderEntry(index)}
+                          className="h-9 w-9 text-muted-foreground hover:text-destructive"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground py-2">
+                    No headers configured. Add headers for authentication.
+                  </p>
+                )}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={addHeaderEntry}
+                  className="w-full"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Header
+                </Button>
                 <p className="text-xs text-muted-foreground">
-                  {editingServer
-                    ? 'Leave empty to keep existing headers, or enter new JSON to replace.'
-                    : 'Optional authentication headers in JSON format.'}
+                  {editingServer && headerEntries.some(e => e.isStored)
+                    ? 'Existing header values are encrypted. Enter a new value to replace.'
+                    : 'Headers are securely encrypted when stored.'}
                 </p>
               </div>
 

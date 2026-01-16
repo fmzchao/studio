@@ -1222,6 +1222,179 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/mcp-servers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List all MCP servers */
+        get: operations["McpServersController_listServers"];
+        put?: never;
+        /** Create a new MCP server configuration */
+        post: operations["McpServersController_createServer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/mcp-servers/enabled": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List enabled MCP servers only */
+        get: operations["McpServersController_listEnabledServers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/mcp-servers/tools": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List all tools from enabled MCP servers */
+        get: operations["McpServersController_getAllTools"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/mcp-servers/health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get health status of all enabled servers */
+        get: operations["McpServersController_getHealthStatuses"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/mcp-servers/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a specific MCP server */
+        get: operations["McpServersController_getServer"];
+        put?: never;
+        post?: never;
+        /** Delete an MCP server configuration */
+        delete: operations["McpServersController_deleteServer"];
+        options?: never;
+        head?: never;
+        /** Update an MCP server configuration */
+        patch: operations["McpServersController_updateServer"];
+        trace?: never;
+    };
+    "/api/v1/mcp-servers/{id}/tools": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List discovered tools from a server */
+        get: operations["McpServersController_getServerTools"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/mcp-servers/{id}/toggle": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Toggle MCP server enabled/disabled status */
+        post: operations["McpServersController_toggleServer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/mcp-servers/{id}/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Test connection to an MCP server */
+        post: operations["McpServersController_testConnection"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/mcp-servers/{id}/discover": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Force re-discover tools from an MCP server */
+        post: operations["McpServersController_discoverTools"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/mcp-servers/{serverId}/tools/{toolId}/toggle": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Toggle a tool enabled/disabled state */
+        post: operations["McpServersController_toggleToolEnabled"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/testing/webhooks": {
         parameters: {
             query?: never;
@@ -2149,6 +2322,105 @@ export interface components {
                 status: "pending" | "resolved" | "expired" | "cancelled";
                 respondedAt: string | null;
             };
+        };
+        McpServerResponse: {
+            id: string;
+            name: string;
+            description?: string;
+            /** @enum {string} */
+            transportType: "http" | "stdio" | "sse" | "websocket";
+            endpoint?: string;
+            command?: string;
+            args?: string[];
+            /** @description Whether encrypted headers are configured */
+            hasHeaders: boolean;
+            /** @description Header key names (values are encrypted server-side) */
+            headerKeys?: string[] | null;
+            enabled: boolean;
+            healthCheckUrl?: string;
+            lastHealthCheck?: string;
+            /** @enum {string} */
+            lastHealthStatus?: "healthy" | "unhealthy" | "unknown";
+            createdAt: string;
+            updatedAt: string;
+        };
+        McpToolResponse: {
+            id: string;
+            toolName: string;
+            description?: string;
+            inputSchema?: Record<string, never>;
+            serverId: string;
+            serverName: string;
+            enabled: boolean;
+            discoveredAt: string;
+        };
+        HealthStatusResponse: {
+            serverId: string;
+            /** @enum {string} */
+            status: "healthy" | "unhealthy" | "unknown";
+            checkedAt?: string;
+        };
+        CreateMcpServerDto: {
+            /** @description Human-readable unique name for the MCP server */
+            name: string;
+            /** @description Optional description */
+            description?: string;
+            /**
+             * @description Transport type for connecting to the MCP server
+             * @enum {string}
+             */
+            transportType: "http" | "stdio" | "sse" | "websocket";
+            /** @description URL endpoint for HTTP/SSE/WebSocket transports */
+            endpoint?: string;
+            /** @description Command to run for stdio transport */
+            command?: string;
+            /** @description Arguments for stdio command */
+            args?: string[];
+            /** @description HTTP headers for authentication (will be encrypted) */
+            headers?: {
+                [key: string]: string;
+            };
+            /** @description Custom health check URL (optional) */
+            healthCheckUrl?: string;
+            /**
+             * @description Whether the server is enabled
+             * @default true
+             */
+            enabled: boolean;
+        };
+        UpdateMcpServerDto: {
+            /** @description Human-readable unique name for the MCP server */
+            name?: string;
+            /** @description Optional description */
+            description?: string;
+            /**
+             * @description Transport type for connecting to the MCP server
+             * @enum {string}
+             */
+            transportType?: "http" | "stdio" | "sse" | "websocket";
+            /** @description URL endpoint for HTTP/SSE/WebSocket transports */
+            endpoint?: string;
+            /** @description Command to run for stdio transport */
+            command?: string;
+            /** @description Arguments for stdio command */
+            args?: string[];
+            /** @description HTTP headers for authentication (will be encrypted). Set to null to clear. */
+            headers?: {
+                [key: string]: string;
+            } | null;
+            /** @description Custom health check URL (optional) */
+            healthCheckUrl?: string;
+            /** @description Whether the server is enabled */
+            enabled?: boolean;
+        };
+        TestConnectionResponse: {
+            success: boolean;
+            message?: string;
+            toolCount?: number;
+            /** @description MCP protocol version reported by the server */
+            protocolVersion?: string;
+            /** @description Response time in milliseconds */
+            responseTimeMs?: number;
         };
     };
     responses: never;
@@ -4685,6 +4957,276 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PublicResolveResultDto"];
+                };
+            };
+        };
+    };
+    McpServersController_listServers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["McpServerResponse"][];
+                };
+            };
+        };
+    };
+    McpServersController_createServer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateMcpServerDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["McpServerResponse"];
+                };
+            };
+        };
+    };
+    McpServersController_listEnabledServers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["McpServerResponse"][];
+                };
+            };
+        };
+    };
+    McpServersController_getAllTools: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["McpToolResponse"][];
+                };
+            };
+        };
+    };
+    McpServersController_getHealthStatuses: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HealthStatusResponse"][];
+                };
+            };
+        };
+    };
+    McpServersController_getServer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["McpServerResponse"];
+                };
+            };
+        };
+    };
+    McpServersController_deleteServer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    McpServersController_updateServer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateMcpServerDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["McpServerResponse"];
+                };
+            };
+        };
+    };
+    McpServersController_getServerTools: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["McpToolResponse"][];
+                };
+            };
+        };
+    };
+    McpServersController_toggleServer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["McpServerResponse"];
+                };
+            };
+        };
+    };
+    McpServersController_testConnection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TestConnectionResponse"];
+                };
+            };
+        };
+    };
+    McpServersController_discoverTools: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["McpToolResponse"][];
+                };
+            };
+        };
+    };
+    McpServersController_toggleToolEnabled: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                serverId: string;
+                toolId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["McpToolResponse"];
                 };
             };
         };
