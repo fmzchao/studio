@@ -1,12 +1,15 @@
 /**
  * ShipSec Component SDK
- * 
+ *
  * This SDK provides the core primitives for building workflow components:
  * - Type definitions and interfaces
  * - Component registry
  * - Execution context
  * - Component runners
  * - Standardized error types
+ * - Zod-first port metadata (new)
+ * - Zod port extraction (new)
+ * - JSON schema generation (new)
  */
 
 export * from './types';
@@ -23,3 +26,10 @@ export * from './http/har-builder';
 export * from './http/instrumented-fetch';
 export * from './http/adapters/interface';
 export * from './http/adapters';
+
+// NEW Zod-first typing system (Phase 1)
+export * from './port-meta';
+export * from './zod-ports';
+export * from './json-schema';
+export * from './schema-validation';
+
