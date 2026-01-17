@@ -24,17 +24,12 @@ const parameterSchema = parameters({
   }),
 });
 
-type Input = z.infer<typeof inputSchema>;
-type Params = z.infer<typeof parameterSchema>;
-
 const outputSchema = outputs({
   destination: port(destinationWriterSchema(), {
     label: 'Destination',
     description: 'Connect this to writer components to store outputs in the artifact store.',
   }),
 });
-
-type Output = z.infer<typeof outputSchema>;
 
 const definition = defineComponent({
   id: 'core.destination.artifact',
@@ -53,7 +48,7 @@ const definition = defineComponent({
     description: 'Configure the built-in artifact destination for writers.',
     icon: 'HardDriveDownload',
   },
-  async execute({ params }, context): Promise<Output> {
+  async execute({ params }, context) {
     const destinations: Array<'run' | 'library'> = [];
     if (params.saveToRunArtifacts) {
       destinations.push('run');

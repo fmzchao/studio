@@ -11,6 +11,7 @@ import {
   withPortMeta,
 } from '@shipsec/component-sdk';
 import type { PortMeta } from '@shipsec/component-sdk/port-meta';
+import type { ComponentDefinition } from '@shipsec/component-sdk';
 
 // Runtime input definition schema
 const runtimeInputDefinitionSchema = z.preprocess((value) => {
@@ -41,12 +42,9 @@ const inputSchema = inputs({
   }),
 });
 
-type Input = z.infer<typeof inputSchema>;
-
-// Output is dynamic based on runtimeInputs configuration
-type Output = Record<string, unknown>;
-
-const outputSchema = outputs({}).catchall(z.unknown());
+// EntryPoint has dynamic outputs based on runtimeInputs parameter
+// We use an empty base schema and resolvePorts adds the actual outputs
+const outputSchema = outputs({});
 
 const parameterSchema = parameters({
   runtimeInputs: param(
@@ -60,8 +58,6 @@ const parameterSchema = parameters({
     },
   ),
 });
-
-type Params = z.infer<typeof parameterSchema>;
 
 const definition = defineComponent({
   id: 'core.workflow.entrypoint',
@@ -91,7 +87,7 @@ const definition = defineComponent({
       'Prompt operators for runtime parameters such as target domains or API keys.',
     ],
   },
-  resolvePorts(params: Params) {
+  resolvePorts(params: z.infer<typeof parameterSchema>) {
     const runtimeInputs = Array.isArray(params.runtimeInputs)
       ? params.runtimeInputs
       : [];
@@ -117,12 +113,15 @@ const definition = defineComponent({
     }
 
     return {
+      inputs: inputSchema,
       outputs: outputs(outputShape),
     };
   },
   async execute({ inputs, params }, context) {
-    const { runtimeInputs } = params;
-    const { __runtimeData } = inputs;
+    // Type params properly from the parameter schema
+    const runtimeInputs = params.runtimeInputs ?? [];
+    const __runtimeData = inputs.__runtimeData;
+
     context.logger.info(`[EntryPoint] Executing with runtime inputs: ${JSON.stringify(runtimeInputs)}`);
     
     // If no runtime inputs defined, return empty object
@@ -149,13 +148,25 @@ const definition = defineComponent({
     }
 
     context.emitProgress(`Collected ${Object.keys(outputs).length} runtime inputs`);
-    return outputs;
+    return outputs as EntryPointOutput;
   },
-});
+}) as ComponentDefinition<
+  Record<string, any>,
+  Record<string, any>,
+  Record<string, any>,
+  EntryPointInput,
+  EntryPointOutput,
+  EntryPointParams
+>;
 
 componentRegistry.register(definition);
 
-export type { Input as EntryPointInput, Output as EntryPointOutput };
+// Export types - Output is dynamic so we use a record type
+type EntryPointInput = z.infer<typeof inputSchema>;
+type EntryPointParams = z.infer<typeof parameterSchema>;
+type EntryPointOutput = Record<string, unknown>;
+
+export type { EntryPointInput, EntryPointParams, EntryPointOutput };
 
 function runtimeInputTypeToSchema(type: string): { schema: z.ZodTypeAny; meta?: PortMeta } {
   switch (type) {

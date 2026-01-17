@@ -24,8 +24,6 @@ const inputSchema = inputs({
   }),
 });
 
-type Input = z.infer<typeof inputSchema>;
-
 const outputSchema = outputs({
   items: port(z.array(z.string()), {
     label: 'Items',
@@ -36,8 +34,6 @@ const outputSchema = outputs({
     description: 'Total number of strings packed.',
   }),
 });
-
-type Output = z.infer<typeof outputSchema>;
 
 const definition = defineComponent({
   id: 'core.array.pack',

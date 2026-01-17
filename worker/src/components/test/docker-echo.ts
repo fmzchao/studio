@@ -19,9 +19,6 @@ const outputSchema = outputs({
   }),
 });
 
-type Input = z.infer<typeof inputSchema>;
-type Output = z.infer<typeof outputSchema>;
-
 const definition = defineComponent({
   id: 'test.docker.echo',
   label: 'Docker Echo Test',

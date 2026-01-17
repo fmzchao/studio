@@ -214,8 +214,6 @@ const parameterSchema = parameters({
   }),
 });
 
-type Input = z.infer<typeof inputSchema>;
-type Params = z.infer<typeof parameterSchema>;
 
 type DnsxRecord = {
   host: string;
@@ -224,17 +222,6 @@ type DnsxRecord = {
   resolver?: string[];
   answers: Record<string, string[]>;
   timestamp?: string;
-};
-
-type Output = {
-  results: DnsxRecord[];
-  rawOutput: string;
-  domainCount: number;
-  recordCount: number;
-  recordTypes: string[];
-  resolvers: string[];
-  resolvedHosts: string[];
-  errors?: string[];
 };
 
 const dnsxLineSchema = z
@@ -1036,5 +1023,9 @@ const definition = defineComponent({
 });
 
 componentRegistry.register(definition);
+
+// Create local type aliases for backward compatibility
+type Input = typeof inputSchema['__inferred'];
+type Output = typeof outputSchema['__inferred'];
 
 export type { Input as DnsxInput, Output as DnsxOutput };

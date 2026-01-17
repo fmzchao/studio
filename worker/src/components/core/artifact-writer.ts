@@ -59,9 +59,6 @@ const parameterSchema = parameters({
   ),
 });
 
-type Input = z.infer<typeof inputSchema>;
-type Params = z.infer<typeof parameterSchema>;
-
 const outputSchema = outputs({
   artifactId: port(z.string().optional(), {
     label: 'Artifact ID',
@@ -84,8 +81,6 @@ const outputSchema = outputs({
     description: 'Indicates whether the artifact was persisted.',
   }),
 });
-
-type Output = z.infer<typeof outputSchema>;
 
 const definition = defineComponent({
   id: 'core.artifact.writer',
@@ -161,5 +156,9 @@ const definition = defineComponent({
 });
 
 componentRegistry.register(definition);
+
+// Create local type aliases for backward compatibility
+type Input = typeof inputSchema['__inferred'];
+type Output = typeof outputSchema['__inferred'];
 
 export type { Input as ArtifactWriterInput, Output as ArtifactWriterOutput };

@@ -123,7 +123,6 @@ const parameterSchema = parameters({
   ),
 });
 
-type Input = z.infer<typeof inputSchema>;
 
 const findingSchema = z.object({
   url: z.string(),
@@ -179,7 +178,6 @@ const outputSchema = outputs({
   }),
 });
 
-type Output = z.infer<typeof outputSchema>;
 
 const httpxRunnerOutputSchema = z.object({
   results: z.array(z.unknown()).optional().default([]),
@@ -532,6 +530,10 @@ function normaliseString(value: unknown): string | null {
 }
 
 componentRegistry.register(definition);
+
+// Create local type aliases for backward compatibility
+type Input = typeof inputSchema['__inferred'];
+type Output = typeof outputSchema['__inferred'];
 
 export type { Input as HttpxInput, Output as HttpxOutput };
 

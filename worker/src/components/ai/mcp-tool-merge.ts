@@ -26,17 +26,12 @@ const parameterSchema = parameters({
   ),
 });
 
-type Input = z.infer<typeof inputSchema>;
-type Params = z.infer<typeof parameterSchema>;
-
 const outputSchema = outputs({
   tools: port(z.array(McpToolDefinitionSchema()), {
     label: 'Merged Tools',
     description: 'Combined MCP tool list with duplicates removed by id.',
   }),
 });
-
-type Output = z.infer<typeof outputSchema>;
 
 const definition = defineComponent({
   id: 'core.mcp.tools.merge',
@@ -59,7 +54,7 @@ const definition = defineComponent({
       type: 'shipsecai',
     },
   },
-  resolvePorts(params: Params) {
+  resolvePorts(params: z.infer<typeof parameterSchema>) {
     const slots = normalizeSlots(params.slots);
     const inputShape: Record<string, z.ZodTypeAny> = {};
     for (const slot of slots) {
@@ -100,7 +95,7 @@ const definition = defineComponent({
   },
 });
 
-function normalizeSlots(slotsInput: Params['slots']): Array<{ id: string; label: string }> {
+function normalizeSlots(slotsInput: z.infer<typeof parameterSchema>['slots']): Array<{ id: string; label: string }> {
   const fallback = [
     { id: 'toolsA', label: 'Tools A' },
     { id: 'toolsB', label: 'Tools B' },

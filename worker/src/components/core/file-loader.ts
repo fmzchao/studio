@@ -18,19 +18,6 @@ const inputSchema = inputs({
   }),
 });
 
-type Input = z.infer<typeof inputSchema>;
-
-type Output = {
-  file: {
-    id: string;
-    name: string;
-    mimeType: string;
-    size: number;
-    content: string; // base64 encoded
-  };
-  textContent: string; // decoded text content
-};
-
 const outputSchema = outputs({
   file: port(fileContractSchema(), {
     label: 'File Data',
@@ -126,5 +113,9 @@ const definition = defineComponent({
 });
 
 componentRegistry.register(definition);
+
+// Create local type aliases for backward compatibility
+type Input = typeof inputSchema['__inferred'];
+type Output = typeof outputSchema['__inferred'];
 
 export type { Input as FileLoaderInput, Output as FileLoaderOutput };

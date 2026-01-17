@@ -6,22 +6,42 @@ import type {
   InputsSchema,
   OutputsSchema,
   ParametersSchema,
-  PortSchema,
-  ParamSchema,
 } from './types';
 
-export function port<T extends z.ZodTypeAny>(schema: T, meta: PortMeta): PortSchema<T> {
-  return withPortMeta(schema, meta) as PortSchema<T>;
+/**
+ * Create a port schema with metadata and return a branded Zod type.
+ *
+ * Internally uses a Port class to store metadata, but returns a Zod schema
+ * for backward compatibility with existing code that expects Zod objects.
+ *
+ * @example
+ * ```ts
+ * const textPort = port(z.string(), { label: 'Text' });
+ * // Returns: ZodString with metadata attached
+ * ```
+ */
+export function port<T extends z.ZodTypeAny>(schema: T, meta: PortMeta): T {
+  return withPortMeta(schema, meta);
 }
 
-export function param<T extends z.ZodTypeAny>(schema: T, meta: ParamMeta): ParamSchema<T> {
-  return withParamMeta(schema, meta) as ParamSchema<T>;
+/**
+ * Create a parameter schema with metadata and return a branded Zod type.
+ *
+ * @example
+ * ```ts
+ * const modeParam = param(z.enum(['upper', 'lower']), {
+ *   label: 'Mode',
+ *   editor: 'select',
+ * });
+ * // Returns: ZodEnum with metadata attached
+ * ```
+ */
+export function param<T extends z.ZodTypeAny>(schema: T, meta: ParamMeta): T {
+  return withParamMeta(schema, meta);
 }
 
 /**
  * Create a branded inputs schema from a record of port schemas.
- *
- * The inferred type is automatically stored in the schema for type-safe component definitions.
  *
  * @example
  * ```ts

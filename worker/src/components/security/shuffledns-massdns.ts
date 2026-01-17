@@ -151,14 +151,6 @@ const parameterSchema = parameters({
   ),
 });
 
-type Input = z.infer<typeof inputSchema>;
-
-type Output = {
-  subdomains: string[];
-  rawOutput: string;
-  domainCount: number;
-  subdomainCount: number;
-};
 
 const outputSchema = outputs({
   subdomains: port(z.array(z.string()), {
@@ -420,5 +412,9 @@ const definition = defineComponent({
 });
 
 componentRegistry.register(definition);
+
+// Create local type aliases for backward compatibility
+type Input = typeof inputSchema['__inferred'];
+type Output = typeof outputSchema['__inferred'];
 
 export type { Input as ShufflednsMassdnsInput, Output as ShufflednsMassdnsOutput };

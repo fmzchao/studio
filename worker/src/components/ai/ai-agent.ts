@@ -314,26 +314,12 @@ const parameterSchema = parameters({
   ),
 });
 
-type Input = z.infer<typeof inputSchema>;
-type Params = z.infer<typeof parameterSchema>;
-
 type ConversationState = z.infer<typeof conversationStateSchema>;
 type ToolInvocationEntry = z.infer<typeof toolInvocationSchema>;
 
 type McpToolArgument = z.infer<typeof McpToolArgumentSchema>;
 
 type ReasoningStep = z.infer<typeof reasoningStepSchema>;
-
-type Output = {
-  responseText: string;
-  structuredOutput: unknown;
-  conversationState: ConversationState;
-  toolInvocations: ToolInvocationEntry[];
-  reasoningTrace: ReasoningStep[];
-  usage?: unknown;
-  rawResponse: unknown;
-  agentRunId: string;
-};
 
 const outputSchema = outputs({
   responseText: port(z.string(), {
@@ -966,7 +952,7 @@ function attemptJsonFix(text: string): unknown | null {
   }
 }
 
-const definition = defineComponent<Input, Output, Params>({
+const definition = defineComponent({
   id: 'core.ai.agent',
   label: 'AI SDK Agent',
   category: 'ai',

@@ -71,9 +71,9 @@ const definition = defineComponent({
     context.logger.info(`[GitHub] Providing connection ${trimmedConnectionId} to downstream nodes.`);
     context.emitProgress(`Selected GitHub connection ${trimmedConnectionId}.`);
 
-    return {
+    return outputSchema.parse({
       connectionId: trimmedConnectionId,
-    };
+    });
   },
 });
 

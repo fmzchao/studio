@@ -23,9 +23,6 @@ const parameterSchema = parameters({
   ),
 });
 
-type Input = z.infer<typeof inputSchema>;
-type Params = z.infer<typeof parameterSchema>;
-
 const outputSchema = outputs({
   label: port(z.string(), {
     label: 'Label',
@@ -40,8 +37,6 @@ const outputSchema = outputs({
     description: 'Timestamp when the sleep ended.',
   }),
 });
-
-type Output = z.infer<typeof outputSchema>;
 
 const definition = defineComponent({
   id: 'test.sleep.parallel',
@@ -89,5 +84,9 @@ const definition = defineComponent({
 if (!componentRegistry.has(definition.id)) {
   componentRegistry.register(definition);
 }
+
+// Create local type aliases for backward compatibility
+type Input = typeof inputSchema['__inferred'];
+type Output = typeof outputSchema['__inferred'];
 
 export type { Input as SleepParallelInput, Output as SleepParallelOutput };

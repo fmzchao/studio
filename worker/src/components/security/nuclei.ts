@@ -174,8 +174,6 @@ const parameterSchema = parameters({
   ),
 });
 
-type Input = z.infer<typeof inputSchema>;
-type Params = z.infer<typeof parameterSchema>;
 
 // Output schema (unchanged)
 const findingSchema = z.object({
@@ -225,7 +223,6 @@ const outputSchema = outputs({
   }),
 });
 
-type Output = z.infer<typeof outputSchema>;
 
 // Runner output schema
 const nucleiRunnerOutputSchema = z.object({
@@ -805,5 +802,9 @@ function extractStats(
 }
 
 componentRegistry.register(definition);
+
+// Create local type aliases for backward compatibility
+type Input = typeof inputSchema['__inferred'];
+type Output = typeof outputSchema['__inferred'];
 
 export type { Input as NucleiInput, Output as NucleiOutput };

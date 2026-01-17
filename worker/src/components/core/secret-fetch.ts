@@ -54,9 +54,6 @@ const parameterSchema = parameters({
   ),
 });
 
-type Input = z.infer<typeof inputSchema>;
-type Params = z.infer<typeof parameterSchema>;
-
 type Output = {
   secret: unknown;
   metadata: {

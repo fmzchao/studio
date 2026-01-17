@@ -185,30 +185,6 @@ const parameterSchema = parameters({
   ),
 });
 
-type Input = z.infer<typeof inputSchema>;
-type Params = z.infer<typeof parameterSchema>;
-
-type Output = {
-  subdomains: string[];
-  rawOutput: string;
-  domainCount: number;
-  subdomainCount: number;
-  options: {
-    active: boolean;
-    bruteForce: boolean;
-    includeIps: boolean;
-    enableAlterations: boolean;
-    recursive: boolean;
-    verbose: boolean;
-    demoMode: boolean;
-    timeoutMinutes: number | null;
-    minForRecursive: number | null;
-    maxDepth: number | null;
-    dnsQueryRate: number | null;
-    customFlags: string | null;
-  };
-};
-
 const outputSchema = outputs({
   subdomains: port(z.array(z.string()), {
     label: 'Discovered Subdomains',
@@ -547,7 +523,7 @@ printf '{"subdomains":%s,"rawOutput":"%s","domainCount":%d,"subdomainCount":%d,"
       data: { domains: inputs.domains, options: optionsSummary },
     });
 
-    const normalizedInput: Input & Params = {
+    const normalizedInput: typeof inputSchema['__inferred'] & typeof parameterSchema['__inferred'] = {
       ...runnerPayload,
       customFlags: customFlags ?? undefined,
     };
@@ -603,5 +579,9 @@ printf '{"subdomains":%s,"rawOutput":"%s","domainCount":%d,"subdomainCount":%d,"
 });
 
 componentRegistry.register(definition);
+
+// Create local type aliases for backward compatibility
+type Input = typeof inputSchema['__inferred'];
+type Output = typeof outputSchema['__inferred'];
 
 export type { Input as AmassInput, Output as AmassOutput };

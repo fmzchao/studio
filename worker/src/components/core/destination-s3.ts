@@ -49,17 +49,12 @@ const parameterSchema = parameters({
   }),
 });
 
-type Input = z.infer<typeof inputSchema>;
-type Params = z.infer<typeof parameterSchema>;
-
 const outputSchema = outputs({
   destination: port(destinationWriterSchema(), {
     label: 'Destination',
     description: 'Connect to writer components to upload artifacts to S3.',
   }),
 });
-
-type Output = z.infer<typeof outputSchema>;
 
 const definition = defineComponent({
   id: 'core.destination.s3',
@@ -78,7 +73,7 @@ const definition = defineComponent({
     description: 'Configure uploads to S3 buckets for downstream writer components.',
     icon: 'CloudUpload',
   },
-  async execute({ inputs, params }, context): Promise<Output> {
+  async execute({ inputs, params }, context) {
     context.logger.info(`[S3Destination] Configured for bucket: ${params.bucket}`);
 
     const destination: DestinationConfig = {

@@ -56,9 +56,6 @@ const parameterSchema = parameters({
   }),
 });
 
-type Input = z.infer<typeof inputSchema>;
-type Params = z.infer<typeof parameterSchema>;
-
 interface UserState {
   id: string;
   email: string;

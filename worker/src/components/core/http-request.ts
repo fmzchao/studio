@@ -79,10 +79,6 @@ const parameterSchema = parameters({
   }),
 });
 
-type Input = z.infer<typeof inputSchema>;
-
-type Params = z.infer<typeof parameterSchema>;
-
 const outputSchema = outputs({
   status: port(z.number(), {
     label: 'Status Code',
@@ -109,8 +105,6 @@ const outputSchema = outputs({
     description: 'Raw string content of the response.',
   }),
 });
-
-type Output = z.infer<typeof outputSchema>;
 
 // Retry policy for HTTP requests - sensible defaults for API calls
 const httpRequestRetryPolicy: ComponentRetryPolicy = {
@@ -156,7 +150,7 @@ const definition = defineComponent({
       'Fetch threat intelligence data from VirusTotal.',
     ],
   },
-  resolvePorts(params: Params) {
+  resolvePorts(params: z.infer<typeof parameterSchema>) {
     const inputShape: Record<string, z.ZodTypeAny> = {
       url: withPortMeta(z.string().url(), {
         label: 'URL',
@@ -323,4 +317,4 @@ componentRegistry.register(definition);
 
 export { definition };
 
-export type { Input as HttpRequestInput, Output as HttpRequestOutput };
+// export type { Input as HttpRequestInput, Output as HttpRequestOutput };

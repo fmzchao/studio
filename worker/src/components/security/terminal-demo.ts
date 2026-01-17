@@ -173,13 +173,15 @@ const definition = defineComponent({
   },
   async execute({ params }, context) {
     const parsedParams = parameterSchema.parse(params);
+    const durationSeconds = parsedParams.durationSeconds;
+    const message = parsedParams.message;
 
     context.emitProgress({
-      message: `Starting terminal demo for ${parsedParams.durationSeconds} seconds...`,
+      message: `Starting terminal demo for ${durationSeconds} seconds...`,
       level: 'info',
       data: {
-        message: parsedParams.message,
-        durationSeconds: parsedParams.durationSeconds,
+        message,
+        durationSeconds,
       },
     });
 
@@ -187,16 +189,17 @@ const definition = defineComponent({
     const runnerWithEnv = {
       ...definition.runner,
       env: {
-        MESSAGE: parsedParams.message,
-        DURATION_SECONDS: parsedParams.durationSeconds.toString(),
+        MESSAGE: message,
+        DURATION_SECONDS: durationSeconds.toString(),
       },
     };
 
-    const raw = await runComponentWithRunner<typeof parsedParams, any>(
+    const raw = await runComponentWithRunner<any, string | TerminalDemoOutput>(
       runnerWithEnv,
       async () => ({
-        message: parsedParams.message,
+        message,
         stepsCompleted: 0,
+        durationSeconds,
         rawOutput: 'No output',
       }),
       parsedParams,
@@ -205,9 +208,9 @@ const definition = defineComponent({
 
     // Parse the JSON output from stderr (script writes result to stderr to avoid PTY pollution)
     let parsedOutput: any = {
-      message: parsedParams.message,
-      stepsCompleted: Math.floor(parsedParams.durationSeconds * 5), // ~5 updates per second
-      durationSeconds: parsedParams.durationSeconds,
+      message,
+      stepsCompleted: Math.floor(durationSeconds * 5), // ~5 updates per second
+      durationSeconds,
       rawOutput: 'Demo completed',
     };
 
@@ -230,9 +233,9 @@ const definition = defineComponent({
     }
 
     const result: TerminalDemoOutput = {
-      message: parsedOutput.message || parsedParams.message,
-      stepsCompleted: parsedOutput.stepsCompleted ?? Math.floor(parsedParams.durationSeconds * 5),
-      durationSeconds: parsedOutput.durationSeconds ?? parsedParams.durationSeconds,
+      message: parsedOutput.message || message,
+      stepsCompleted: parsedOutput.stepsCompleted ?? Math.floor(durationSeconds * 5),
+      durationSeconds: parsedOutput.durationSeconds ?? durationSeconds,
       rawOutput: parsedOutput.rawOutput || 'Demo completed',
     };
 

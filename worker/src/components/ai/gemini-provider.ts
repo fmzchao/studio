@@ -29,8 +29,6 @@ const inputSchema = inputs({
   ),
 });
 
-type Input = z.infer<typeof inputSchema>;
-
 const outputSchema = outputs({
   chatModel: port(LLMProviderSchema(), {
     label: 'LLM Provider Config',
@@ -38,8 +36,6 @@ const outputSchema = outputs({
       'Portable provider payload (provider, model, overrides) for wiring into AI Agent or one-shot nodes.',
   }),
 });
-
-type Output = z.infer<typeof outputSchema>;
 
 const parameterSchema = parameters({
   model: param(
@@ -82,8 +78,6 @@ const parameterSchema = parameters({
     },
   ),
 });
-
-type Params = z.infer<typeof parameterSchema>;
 
 // Retry policy for provider configuration - no retries needed for config validation
 const geminiProviderRetryPolicy: ComponentRetryPolicy = {

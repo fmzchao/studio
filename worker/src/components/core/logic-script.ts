@@ -14,6 +14,7 @@ import {
   parameters,
   param,
 } from '@shipsec/component-sdk';
+import type { ComponentDefinition } from '@shipsec/component-sdk';
 
 const variableConfigSchema = z.object({
   name: z.string().min(1),
@@ -56,11 +57,13 @@ const parameterSchema = parameters({
   }),
 });
 
+// Dynamic inputs/outputs - schemas are defined in resolvePorts based on parameters
+// For dynamic outputs, we create a base schema and catchall is added in resolvePorts
 const inputSchema = inputs({});
+const baseOutputSchema = outputs({});
 
-type Input = z.infer<typeof inputSchema>;
-type Params = z.infer<typeof parameterSchema>;
-type Output = Record<string, unknown>;
+// Type for dynamic outputs
+type DynamicOutput = Record<string, unknown>;
 
 const mapTypeToSchema = (type: string, label: string) => {
   switch (type) {
@@ -208,7 +211,7 @@ const definition = defineComponent({
   category: 'transform',
   runner: baseRunner,
   inputs: inputSchema,
-  outputs: outputs({}),
+  outputs: baseOutputSchema,
   parameters: parameterSchema,
   docs: 'Execute custom TypeScript code in a secure Docker container. Supports fetch(), async/await, and modern JS.',
   ui: {
@@ -222,7 +225,7 @@ const definition = defineComponent({
     isLatest: true,
     deprecated: false,
   },
-  resolvePorts(params: Params) {
+  resolvePorts(params: z.infer<typeof parameterSchema>) {
     const inputShape: Record<string, z.ZodTypeAny> = {};
     const outputShape: Record<string, z.ZodTypeAny> = {};
     if (Array.isArray(params.variables)) {

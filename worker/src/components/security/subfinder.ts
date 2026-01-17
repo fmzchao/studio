@@ -45,14 +45,6 @@ const parameterSchema = parameters({
   }),
 });
 
-type Input = z.infer<typeof inputSchema>;
-
-type Output = {
-  subdomains: string[];
-  rawOutput: string;
-  domainCount: number;
-  subdomainCount: number;
-};
 
 const outputSchema = outputs({
   subdomains: port(z.array(z.string()), {
@@ -288,5 +280,9 @@ subfinder -silent -dL /inputs/domains.txt 2>/dev/null || true
 });
 
 componentRegistry.register(definition);
+
+// Create local type aliases for backward compatibility
+type Input = typeof inputSchema['__inferred'];
+type Output = typeof outputSchema['__inferred'];
 
 export type { Input as SubfinderInput, Output as SubfinderOutput };

@@ -110,8 +110,6 @@ const parameterSchema = parameters({
   }),
 });
 
-type Input = z.infer<typeof inputSchema>;
-type Params = z.infer<typeof parameterSchema>;
 
 const scannerReportSchema = z
   .object({
@@ -129,16 +127,6 @@ const scannerReportSchema = z
     issues: z.array(z.any()).optional(),
   })
   .passthrough();
-
-type Output = {
-  projectRef: string | null;
-  score: number | null;
-  summary?: unknown;
-  issues?: unknown[];
-  report: unknown; // full JSON from the scanner
-  rawOutput: string; // combined stdout and/or file contents for debugging
-  errors?: string[];
-};
 
 const outputSchema = outputs({
   projectRef: port(z.string().nullable(), {
@@ -386,5 +374,9 @@ const definition = defineComponent({
 });
 
 componentRegistry.register(definition);
+
+// Create local type aliases for backward compatibility
+type Input = typeof inputSchema['__inferred'];
+type Output = typeof outputSchema['__inferred'];
 
 export type { Input as SupabaseScannerInput, Output as SupabaseScannerOutput };

@@ -50,7 +50,7 @@ const definition = defineComponent({
       'Create task checklists to track progress: - [ ] Task 1\\n- [x] Task 2',
     ],
   },
-  async execute() {
+  async execute(_payload, _context) {
     return {};
   },
 });

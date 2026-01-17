@@ -29,8 +29,6 @@ const inputSchema = inputs({
   ),
 });
 
-type Input = z.infer<typeof inputSchema>;
-
 const outputSchema = outputs({
   value: port(z.string(), {
     label: 'Selected Value',
@@ -45,8 +43,6 @@ const outputSchema = outputs({
     description: 'Total number of entries in the incoming array.',
   }),
 });
-
-type Output = z.infer<typeof outputSchema>;
 
 const definition = defineComponent({
   id: 'core.array.pick',

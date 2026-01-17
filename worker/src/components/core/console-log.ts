@@ -19,13 +19,6 @@ const inputSchema = inputs({
   }),
 });
 
-type Input = z.infer<typeof inputSchema>;
-
-type Output = {
-  logged: boolean;
-  preview: string;
-};
-
 const outputSchema = outputs({
   result: port(consoleLogResultSchema(), {
     label: 'Result',

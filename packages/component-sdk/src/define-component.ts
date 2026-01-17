@@ -49,6 +49,13 @@ type InferInputs<T> = T extends { __inferred: infer I } ? I : never;
 type InferOutputs<T> = T extends { __inferred: infer O } ? O : never;
 type InferParams<T> = T extends { __inferred: infer P } ? P : never;
 
+// Helper to infer the resolved port types from resolvePorts return type
+type InferResolvedInputs<T> = T extends { inputs: infer I } ? (I extends InputsSchema<infer S> ? z.infer<z.ZodObject<S>> : never) : never;
+type InferResolvedOutputs<T> = T extends { outputs: infer O } ? (O extends OutputsSchema<infer S> ? z.infer<z.ZodObject<S>> : never) : never;
+
+// ==============================================================================
+// Overload 1: Static ports, no parameters
+// ==============================================================================
 export function defineComponent<
   IS extends Record<string, any>,
   OS extends Record<string, any>
@@ -67,6 +74,9 @@ export function defineComponent<
   },
 ): ComponentDefinition<IS, OS, {}, InferInputs<InputsSchema<IS>>, InferOutputs<OutputsSchema<OS>>, {}>;
 
+// ==============================================================================
+// Overload 2: Static ports, with parameters
+// ==============================================================================
 export function defineComponent<
   IS extends Record<string, any>,
   OS extends Record<string, any>,
@@ -86,6 +96,65 @@ export function defineComponent<
   },
 ): ComponentDefinition<IS, OS, PS, InferInputs<InputsSchema<IS>>, InferOutputs<OutputsSchema<OS>>, InferParams<ParametersSchema<PS>>>;
 
+// ==============================================================================
+// Overload 3: Dynamic outputs (with resolvePorts), static inputs
+// ==============================================================================
+export function defineComponent<
+  IS extends Record<string, any>,
+  OS extends Record<string, any>,
+  PS extends Record<string, any>
+>(
+  definition: Omit<
+    ComponentDefinition<IS, OS, PS, any, any, InferParams<ParametersSchema<PS>>>,
+    'inputs' | 'outputs' | 'parameters' | 'execute' | 'resolvePorts'
+  > & {
+    inputs: InputsSchema<IS>;
+    outputs: OutputsSchema<OS>;
+    parameters: ParametersSchema<PS>;
+    resolvePorts: (
+      params: InferParams<ParametersSchema<PS>>,
+    ) => {
+      inputs?: InputsSchema<any>;
+      outputs: OutputsSchema<any>;
+    };
+    execute: (
+      payload: ExecutionPayload<any, InferParams<ParametersSchema<PS>>>,
+      context: ExecutionContext,
+    ) => Promise<any>;
+  },
+): ComponentDefinition<IS, OS, PS, any, any, InferParams<ParametersSchema<PS>>>;
+
+// ==============================================================================
+// Overload 4: Fully dynamic (inputs + outputs) with resolvePorts
+// ==============================================================================
+export function defineComponent<
+  IS extends Record<string, any>,
+  OS extends Record<string, any>,
+  PS extends Record<string, any>
+>(
+  definition: Omit<
+    ComponentDefinition<IS, OS, PS, any, any, InferParams<ParametersSchema<PS>>>,
+    'inputs' | 'outputs' | 'parameters' | 'execute' | 'resolvePorts'
+  > & {
+    inputs: InputsSchema<IS>;
+    outputs: OutputsSchema<OS>;
+    parameters: ParametersSchema<PS>;
+    resolvePorts: (
+      params: InferParams<ParametersSchema<PS>>,
+    ) => {
+      inputs: InputsSchema<any>;
+      outputs: OutputsSchema<any>;
+    };
+    execute: (
+      payload: ExecutionPayload<any, InferParams<ParametersSchema<PS>>>,
+      context: ExecutionContext,
+    ) => Promise<any>;
+  },
+): ComponentDefinition<IS, OS, PS, any, any, InferParams<ParametersSchema<PS>>>;
+
+// ==============================================================================
+// Fallback implementation
+// ==============================================================================
 export function defineComponent<
   IS extends Record<string, any>,
   OS extends Record<string, any>,

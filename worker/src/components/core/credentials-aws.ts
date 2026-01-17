@@ -27,16 +27,12 @@ const inputSchema = inputs({
   }),
 });
 
-type Input = z.infer<typeof inputSchema>;
-
 const outputSchema = outputs({
   credentials: port(awsCredentialSchema(), {
     label: 'AWS Credentials',
     description: 'Sensitive credential bundle that can be consumed by AWS-aware components.',
   }),
 });
-
-type Output = z.infer<typeof outputSchema>;
 
 const definition = defineComponent({
   id: 'core.credentials.aws',

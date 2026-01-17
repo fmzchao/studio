@@ -59,9 +59,6 @@ const parameterSchema = parameters({
   }),
 })
 
-type Input = z.infer<typeof inputSchema>
-type Params = z.infer<typeof parameterSchema>
-
 const outputSchema = outputs({
   result: port(z.record(z.string(), z.unknown()), {
     label: 'Result',
@@ -73,8 +70,6 @@ const outputSchema = outputs({
     label: 'Child Run ID',
   }),
 })
-
-type Output = z.infer<typeof outputSchema>
 
 const definition = defineComponent({
   id: 'core.workflow.call',
@@ -99,7 +94,7 @@ const definition = defineComponent({
       'Use a reusable enrichment workflow inside a larger pipeline.',
     ],
   },
-  resolvePorts(params: Params) {
+  resolvePorts(params: z.infer<typeof parameterSchema>) {
     const parsed = parameterSchema.safeParse(params)
     const childRuntimeInputs = parsed.success ? parsed.data.childRuntimeInputs ?? [] : []
     const reservedIds = new Set([

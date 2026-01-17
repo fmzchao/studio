@@ -56,17 +56,12 @@ const parameterSchema = parameters({
   ),
 });
 
-type Input = z.infer<typeof inputSchema>;
-type Params = z.infer<typeof parameterSchema>;
-
 const outputSchema = outputs({
   tools: port(z.array(McpToolDefinitionSchema()), {
     label: 'MCP Tools',
     description: 'List of MCP tool definitions emitted by this provider.',
   }),
 });
-
-type Output = z.infer<typeof outputSchema>;
 
 const definition = defineComponent({
   id: 'core.mcp.tools.http',

@@ -44,8 +44,6 @@ const inputSchema = inputs({
   ),
 });
 
-type Input = z.infer<typeof inputSchema>;
-
 type Output = {
   text: string;
   count: number;

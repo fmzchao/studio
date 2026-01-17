@@ -23,8 +23,6 @@ const inputSchema = inputs({
   // Dynamic variables will be injected here by resolvePorts
 });
 
-type Input = z.infer<typeof inputSchema>;
-
 const outputSchema = outputs({
   selection: port(z.unknown().describe('The selected option(s)'), {
     label: 'Selection',
@@ -62,8 +60,6 @@ const outputSchema = outputs({
     description: 'Unique identifier for the manual selection request.',
   }),
 });
-
-type Output = z.infer<typeof outputSchema>;
 
 const parameterSchema = parameters({
   title: param(z.string().optional(), {
@@ -104,8 +100,6 @@ const parameterSchema = parameters({
     description: 'Time to wait (e.g. 1h, 24h)',
   }),
 });
-
-type Params = z.infer<typeof parameterSchema>;
 
 /**
  * Simple helper to replace {{var}} placeholders in a string
@@ -178,7 +172,7 @@ const definition = defineComponent({
     isLatest: true,
     deprecated: false,
   },
-  resolvePorts(params: Params) {
+  resolvePorts(params: z.infer<typeof parameterSchema>) {
     const inputShape: Record<string, z.ZodTypeAny> = {};
     if (params.variables && Array.isArray(params.variables)) {
         for (const v of params.variables) {

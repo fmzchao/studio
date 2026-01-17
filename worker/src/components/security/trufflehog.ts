@@ -138,8 +138,6 @@ const parameterSchema = parameters({
   ),
 });
 
-type Input = z.infer<typeof inputSchema>;
-type Params = z.infer<typeof parameterSchema>;
 
 type Secret = {
   DetectorType?: string;
@@ -166,14 +164,6 @@ type Secret = {
     };
   };
   StructuredData?: Record<string, any>;
-};
-
-type Output = {
-  secrets: Secret[];
-  rawOutput: string;
-  secretCount: number;
-  verifiedCount: number;
-  hasVerifiedSecrets: boolean;
 };
 
 const outputSchema = outputs({
@@ -203,7 +193,7 @@ const outputSchema = outputs({
 });
 
 // Helper function to build TruffleHog command arguments
-function buildTruffleHogCommand(input: Input & Params): string[] {
+function buildTruffleHogCommand(input: typeof inputSchema['__inferred'] & typeof parameterSchema['__inferred']): string[] {
   const args: string[] = [input.scanType];
 
   // Add scan target based on scan type
@@ -505,5 +495,9 @@ const definition = defineComponent({
 });
 
 componentRegistry.register(definition);
+
+// Create local type aliases for backward compatibility
+type Input = typeof inputSchema['__inferred'];
+type Output = typeof outputSchema['__inferred'];
 
 export type { Input as TruffleHogInput, Output as TruffleHogOutput };

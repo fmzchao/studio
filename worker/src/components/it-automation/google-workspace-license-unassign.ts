@@ -40,9 +40,6 @@ const parameterSchema = parameters({
   }),
 });
 
-type Input = z.infer<typeof inputSchema>;
-type Params = z.infer<typeof parameterSchema>;
-
 interface UserState {
   email: string;
   orgUnitPath: string;

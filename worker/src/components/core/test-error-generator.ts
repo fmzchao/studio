@@ -79,8 +79,6 @@ const parameterSchema = parameters({
   ),
 });
 
-type Input = z.infer<typeof inputSchema>;
-type Params = z.infer<typeof parameterSchema>;
 type Output = {
   success: boolean;
   attempt: number;
@@ -103,6 +101,85 @@ const outputSchema = outputs({
     description: 'Attempt number for the execution.',
   }),
 });
+
+// Shared execution logic
+async function executeErrorGenerator(
+  inputs: Record<string, never>,
+  params: {
+    mode: 'success' | 'fail';
+    errorType: string;
+    errorMessage: string;
+    failUntilAttempt: number;
+    alwaysFail: boolean;
+    errorDetails?: Record<string, any>;
+  },
+  context: any
+) {
+  const currentAttempt = context.metadata.attempt ?? 1;
+
+  context.logger.info(`[Error Generator] Current attempt: ${currentAttempt}`);
+  context.emitProgress(`Execution attempt ${currentAttempt}...`);
+
+  if (params.mode === 'success') {
+    return {
+      result: { success: true, attempt: currentAttempt },
+      success: true,
+      attempt: currentAttempt,
+    };
+  }
+
+  const shouldFail = params.alwaysFail || currentAttempt < params.failUntilAttempt;
+
+  if (shouldFail) {
+    const msg = params.alwaysFail
+      ? `${params.errorMessage} (Permanent failure on attempt ${currentAttempt})`
+      : `${params.errorMessage} (Attempt ${currentAttempt}/${params.failUntilAttempt})`;
+
+    const details = {
+      ...params.errorDetails,
+      currentAttempt,
+      targetAttempt: params.failUntilAttempt,
+      alwaysFail: params.alwaysFail
+    };
+
+    context.logger.warn(`[Error Generator] Raising ${params.errorType}: ${msg}`);
+
+    switch (params.errorType) {
+      case 'NetworkError':
+        throw new NetworkError(msg, { details });
+      case 'RateLimitError':
+        throw new RateLimitError(msg, { details });
+      case 'ServiceError':
+        throw new ServiceError(msg, { details });
+      case 'TimeoutError':
+        throw new TimeoutError(msg, 10000, { details });
+      case 'AuthenticationError':
+        throw new AuthenticationError(msg, { details });
+      case 'NotFoundError':
+        throw new NotFoundError(msg, { details });
+      case 'ValidationError':
+        // Special case: simulate field errors
+        throw new ValidationError(msg, {
+          details,
+          fieldErrors: params.errorDetails?.fieldErrors || {
+            'api_key': ['Invalid format', 'Must be at least 32 characters'],
+            'endpoint': ['Host unreachable']
+          }
+        });
+      case 'ConfigurationError':
+        throw new ConfigurationError(msg, { details });
+      default:
+        throw new Error(msg);
+    }
+  }
+
+  context.logger.info(`[Error Generator] Success reached on attempt ${currentAttempt}`);
+  return {
+    result: { success: true, attempt: currentAttempt },
+    success: true,
+    attempt: currentAttempt,
+  };
+}
 
 const definition = defineComponent({
   id: 'test.error.generator',
@@ -127,80 +204,24 @@ const definition = defineComponent({
     isLatest: true,
     deprecated: false,
   },
-  async execute({ params }, context) {
-    const currentAttempt = context.metadata.attempt ?? 1;
-    
-    context.logger.info(`[Error Generator] Current attempt: ${currentAttempt}`);
-    context.emitProgress(`Execution attempt ${currentAttempt}...`);
-
-    if (params.mode === 'success') {
-      return {
-        result: { success: true, attempt: currentAttempt },
-        success: true,
-        attempt: currentAttempt,
-      };
-    }
-
-    const shouldFail = params.alwaysFail || currentAttempt < params.failUntilAttempt;
-
-    if (shouldFail) {
-      const msg = params.alwaysFail
-        ? `${params.errorMessage} (Permanent failure on attempt ${currentAttempt})`
-        : `${params.errorMessage} (Attempt ${currentAttempt}/${params.failUntilAttempt})`;
-
-      const details = {
-        ...params.errorDetails,
-        currentAttempt,
-        targetAttempt: params.failUntilAttempt,
-        alwaysFail: params.alwaysFail
-      };
-
-      context.logger.warn(`[Error Generator] Raising ${params.errorType}: ${msg}`);
-
-      switch (params.errorType) {
-        case 'NetworkError':
-          throw new NetworkError(msg, { details });
-        case 'RateLimitError':
-          throw new RateLimitError(msg, { details });
-        case 'ServiceError':
-          throw new ServiceError(msg, { details });
-        case 'TimeoutError':
-          throw new TimeoutError(msg, 10000, { details });
-        case 'AuthenticationError':
-          throw new AuthenticationError(msg, { details });
-        case 'NotFoundError':
-          throw new NotFoundError(msg, { details });
-        case 'ValidationError':
-          // Special case: simulate field errors
-          throw new ValidationError(msg, { 
-            details,
-            fieldErrors: params.errorDetails?.fieldErrors || {
-              'api_key': ['Invalid format', 'Must be at least 32 characters'],
-              'endpoint': ['Host unreachable']
-            }
-          });
-        case 'ConfigurationError':
-          throw new ConfigurationError(msg, { details });
-        default:
-          throw new Error(msg);
-      }
-    }
-
-    context.logger.info(`[Error Generator] Success reached on attempt ${currentAttempt}`);
-    return {
-      result: { success: true, attempt: currentAttempt },
-      success: true,
-      attempt: currentAttempt,
-    };
+  async execute({ inputs, params }, context) {
+    return executeErrorGenerator(inputs, params, context);
   },
 });
 
 componentRegistry.register(definition);
 
 const retryLimitedDefinition = defineComponent({
-  ...definition,
   id: 'test.error.retry-limited',
   label: 'Error Generator (Limited Retry)',
+  category: 'transform',
+  runner: { kind: 'inline' },
+  inputs: inputSchema,
+  outputs: outputSchema,
+  parameters: parameterSchema,
+  async execute({ inputs, params }, context) {
+    return executeErrorGenerator(inputs, params, context);
+  },
   ui: {
     ...definition.ui,
     version: '1.0.0',

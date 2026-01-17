@@ -119,6 +119,8 @@ declare const ParamBrand: unique symbol;
 declare const InputsBrand: unique symbol;
 declare const OutputsBrand: unique symbol;
 declare const ParametersBrand: unique symbol;
+declare const DynamicInputsBrand: unique symbol;
+declare const DynamicOutputsBrand: unique symbol;
 
 export type PortSchema<T extends z.ZodTypeAny = z.ZodTypeAny> = T & {
   readonly [PortBrand]: true;
@@ -151,6 +153,30 @@ export type InputsSchema<Shape extends Record<string, any> = Record<string, any>
   };
 
 /**
+ * Marker for input schemas that are dynamically resolved via resolvePorts().
+ *
+ * Use this for components whose inputs change based on parameter values.
+ * The actual port schema is provided by the resolvePorts() method at runtime.
+ *
+ * @example
+ * ```ts
+ * const inputSchema = dynamicInputs();
+ *
+ * defineComponent({
+ *   inputs: inputSchema,
+ *   resolvePorts(params) {
+ *     return {
+ *       inputs: inputs({ dynamicPort: port(z.string()) }),
+ *     };
+ *   },
+ * });
+ * ```
+ */
+export type DynamicInputsSchema = InputsSchema<{}> & {
+  readonly [DynamicInputsBrand]: true;
+};
+
+/**
  * Branded output schema that stores the inferred type for type-safe component definitions.
  *
  * @example
@@ -168,6 +194,30 @@ export type OutputsSchema<Shape extends Record<string, any> = Record<string, any
     readonly [OutputsBrand]: true;
     readonly __inferred: z.infer<z.ZodObject<Shape>>;
   };
+
+/**
+ * Marker for output schemas that are dynamically resolved via resolvePorts().
+ *
+ * Use this for components whose outputs change based on parameter values.
+ * The actual port schema is provided by the resolvePorts() method at runtime.
+ *
+ * @example
+ * ```ts
+ * const outputSchema = dynamicOutputs();
+ *
+ * defineComponent({
+ *   outputs: outputSchema,
+ *   resolvePorts(params) {
+ *     return {
+ *       outputs: outputs({ result: port(z.string()) }),
+ *     };
+ *   },
+ * });
+ * ```
+ */
+export type DynamicOutputsSchema = OutputsSchema<{}> & {
+  readonly [DynamicOutputsBrand]: true;
+};
 
 /**
  * Branded parameter schema that stores the inferred type for type-safe component definitions.

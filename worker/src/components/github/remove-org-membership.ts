@@ -151,7 +151,7 @@ const definition = defineComponent({
       teamSlug,
       userIdentifier,
       connectionId,
-    } = inputs;
+    } = inputSchema.parse(inputs);
 
     let accessToken: string;
     let tokenType = 'Bearer';
@@ -259,10 +259,10 @@ const definition = defineComponent({
         tokenScope,
       };
 
-      return {
+      return outputSchema.parse({
         ...result,
         result,
-      };
+      });
     }
 
     if (orgResponse.status === 404) {
@@ -283,10 +283,10 @@ const definition = defineComponent({
         tokenScope,
       };
 
-      return {
+      return outputSchema.parse({
         ...result,
         result,
-      };
+      });
     }
 
     const errorBody = await safeReadText(orgResponse);

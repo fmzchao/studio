@@ -63,8 +63,6 @@ const outputSchema = outputs({
   ),
 });
 
-type Input = z.infer<typeof inputSchema>;
-type Output = z.infer<typeof outputSchema>;
 
 // Retry policy for VirusTotal API - handles rate limits and transient failures
 const virusTotalRetryPolicy: ComponentRetryPolicy = {

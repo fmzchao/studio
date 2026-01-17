@@ -113,9 +113,6 @@ const outputSchema = outputs({
   ),
 });
 
-type Input = z.infer<typeof inputSchema>;
-type Output = z.infer<typeof outputSchema>;
-
 const abuseIPDBRetryPolicy: ComponentRetryPolicy = {
   maxAttempts: 4,
   initialIntervalSeconds: 2,

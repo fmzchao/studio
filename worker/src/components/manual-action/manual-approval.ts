@@ -23,8 +23,6 @@ const inputSchema = inputs({
   // Dynamic variables will be injected here by resolvePorts
 });
 
-type Input = z.infer<typeof inputSchema>;
-
 const parameterSchema = parameters({
   title: param(z.string().optional(), {
     label: 'Title',
@@ -51,8 +49,6 @@ const parameterSchema = parameters({
     description: 'How long to wait for approval (e.g., \"1h\", \"24h\", \"7d\")',
   }),
 });
-
-type Params = z.infer<typeof parameterSchema>;
 
 /**
  * Simple helper to replace {{var}} placeholders in a string
@@ -132,8 +128,6 @@ const outputSchema = outputs({
   }),
 });
 
-type Output = z.infer<typeof outputSchema>;
-
 const definition = defineComponent({
   id: 'core.manual_action.approval',
   label: 'Manual Approval',
@@ -157,7 +151,7 @@ const definition = defineComponent({
     isLatest: true,
     deprecated: false,
   },
-  resolvePorts(params: Params) {
+  resolvePorts(params: z.infer<typeof parameterSchema>) {
     const inputShape: Record<string, z.ZodTypeAny> = {};
     if (params.variables && Array.isArray(params.variables)) {
         for (const v of params.variables) {

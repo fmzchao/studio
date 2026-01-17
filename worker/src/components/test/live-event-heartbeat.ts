@@ -62,9 +62,6 @@ const parameterSchema = parameters({
   ),
 });
 
-type Input = z.infer<typeof inputSchema>;
-type Params = z.infer<typeof parameterSchema>;
-
 const outputSchema = outputs({
   summary: port(
     z.object({
@@ -81,8 +78,6 @@ const outputSchema = outputs({
     },
   ),
 });
-
-type Output = z.infer<typeof outputSchema>;
 
 const definition = defineComponent({
   id: 'test.live.event.heartbeat',
@@ -186,5 +181,9 @@ function delay(ms: number): Promise<void> {
 if (!componentRegistry.has(definition.id)) {
   componentRegistry.register(definition);
 }
+
+// Create local type aliases for backward compatibility
+type Input = typeof inputSchema['__inferred'];
+type Output = typeof outputSchema['__inferred'];
 
 export type { Input as LiveEventHeartbeatInput, Output as LiveEventHeartbeatOutput };

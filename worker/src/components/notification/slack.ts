@@ -34,9 +34,6 @@ const parameterSchema = parameters({
   }),
 });
 
-type Input = z.infer<typeof inputSchema>;
-type Params = z.infer<typeof parameterSchema>;
-
 const outputSchema = outputs({
   ok: port(z.boolean(), {
     label: 'OK',
@@ -48,8 +45,6 @@ const outputSchema = outputs({
     label: 'Error',
   }),
 });
-
-type Output = z.infer<typeof outputSchema>;
 
 /**
  * Simple helper to replace {{var}} placeholders in a string
@@ -128,7 +123,7 @@ const definition = defineComponent({
     isLatest: true,
     deprecated: false,
   },
-  resolvePorts(params: Params) {
+  resolvePorts(params: z.infer<typeof parameterSchema>) {
     const inputShape: Record<string, z.ZodTypeAny> = {
       text: port(z.string(), { label: 'Message Text' }),
       blocks: port(z.unknown().optional(), {
@@ -172,12 +167,12 @@ const definition = defineComponent({
     return { inputs: inputs(inputShape) };
   },
   async execute({ inputs, params }, context) {
-    const { 
-        text, 
-        blocks, 
-        channel, 
-        thread_ts, 
-        slackToken, 
+    const {
+        text,
+        blocks,
+        channel,
+        thread_ts,
+        slackToken,
         webhookUrl,
     } = inputs as Record<string, unknown>;
     const { authType } = params;
@@ -197,7 +192,7 @@ const definition = defineComponent({
             finalBlocks = undefined;
         }
     } else if (Array.isArray(blocks)) {
-        // If it's already an object, we'd need a deep interpolation, 
+        // If it's already an object, we'd need a deep interpolation,
         // but typically users will pass a JSON string template for simplicity.
         // For now, let's stringify and interpolate to support variables in objects too!
         const str = JSON.stringify(blocks);
@@ -218,7 +213,8 @@ const definition = defineComponent({
           configKey: 'webhookUrl',
         });
       }
-      const response = await context.http.fetch(webhookUrl, {
+      const url = typeof webhookUrl === 'string' ? webhookUrl : String(webhookUrl);
+      const response = await context.http.fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -227,7 +223,7 @@ const definition = defineComponent({
         const responseBody = await response.text();
         throw fromHttpResponse(response, responseBody);
       }
-      return { ok: true };
+      return outputSchema.parse({ ok: true });
     } else {
       if (!slackToken) {
         throw new ConfigurationError('Slack token missing.', {
@@ -237,11 +233,12 @@ const definition = defineComponent({
       body.channel = channel;
       body.thread_ts = thread_ts;
 
+      const token = typeof slackToken === 'string' ? slackToken : String(slackToken);
       const response = await context.http.fetch('https://slack.com/api/chat.postMessage', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${slackToken}`,
+          'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify(body),
       });
@@ -253,9 +250,9 @@ const definition = defineComponent({
         if (result.error === 'invalid_auth' || result.error === 'token_revoked') {
           throw new AuthenticationError(`Slack authentication failed: ${result.error}`);
         }
-        return { ok: false, error: result.error };
+        return outputSchema.parse({ ok: false, error: result.error });
       }
-      return { ok: true, ts: result.ts };
+      return outputSchema.parse({ ok: true, ts: result.ts });
     }
   },
 });

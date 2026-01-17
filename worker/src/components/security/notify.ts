@@ -185,8 +185,6 @@ const outputSchema = outputs({
   }),
 });
 
-type Input = z.infer<typeof inputSchema>;
-type Output = z.infer<typeof outputSchema>;
 
 const dockerTimeoutSeconds = (() => {
   const raw = process.env.NOTIFY_TIMEOUT_SECONDS;
@@ -407,5 +405,9 @@ cat "$MESSAGE_FILE" | "$@"
 });
 
 componentRegistry.register(definition);
+
+// Create local type aliases for backward compatibility
+type Input = typeof inputSchema['__inferred'];
+type Output = typeof outputSchema['__inferred'];
 
 export type { Input as NotifyInput, Output as NotifyOutput };

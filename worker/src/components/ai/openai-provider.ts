@@ -67,9 +67,6 @@ const parameterSchema = parameters({
   ),
 });
 
-type Input = z.infer<typeof inputSchema>;
-type Params = z.infer<typeof parameterSchema>;
-
 const outputSchema = outputs({
   chatModel: port(LLMProviderSchema(), {
     label: 'LLM Provider Config',
@@ -77,8 +74,6 @@ const outputSchema = outputs({
       'Portable provider payload (provider, model, overrides) for wiring into AI Agent or one-shot nodes.',
   }),
 });
-
-type Output = z.infer<typeof outputSchema>;
 
 // Retry policy for provider configuration - no retries needed for config validation
 const openaiProviderRetryPolicy: ComponentRetryPolicy = {

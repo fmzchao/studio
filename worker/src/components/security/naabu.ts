@@ -172,8 +172,6 @@ const outputSchema = outputs({
   }),
 });
 
-type Input = z.infer<typeof inputSchema>;
-type Output = z.infer<typeof outputSchema>;
 type Finding = z.infer<typeof findingSchema>;
 
 const dockerTimeoutSeconds = (() => {
@@ -451,5 +449,9 @@ function parseNaabuOutput(raw: string): Finding[] {
 }
 
 componentRegistry.register(definition);
+
+// Create local type aliases for backward compatibility
+type Input = typeof inputSchema['__inferred'];
+type Output = typeof outputSchema['__inferred'];
 
 export type { Input as NaabuInput, Output as NaabuOutput };

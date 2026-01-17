@@ -155,8 +155,6 @@ const parameterSchema = parameters({
   ),
 });
 
-type Input = z.infer<typeof inputSchema>;
-type Params = z.infer<typeof parameterSchema>;
 
 const prowlerFindingSchema = z
   .object({
@@ -279,7 +277,6 @@ const outputSchema = outputs({
   }),
 });
 
-type Output = z.infer<typeof outputSchema>;
 
 const recommendedFlagMap = new Map<RecommendedFlagId, string[]>(
   recommendedFlagOptions.map((option) => [option.id, [...option.args]]),
@@ -903,5 +900,9 @@ function extractRegionFromArn(resourceId?: string): string | null {
 }
 
 componentRegistry.register(definition);
+
+// Create local type aliases for backward compatibility
+type Input = typeof inputSchema['__inferred'];
+type Output = typeof outputSchema['__inferred'];
 
 export type { Input as ProwlerScanInput, Output as ProwlerScanOutput };

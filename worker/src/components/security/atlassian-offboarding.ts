@@ -82,9 +82,6 @@ const parameterSchema = parameters({
   ),
 });
 
-type Input = z.infer<typeof inputSchema>;
-type Params = z.infer<typeof parameterSchema>;
-
 const resultSchema = z.object({
   emailUsername: z.string(),
   accountId: z.string().nullable(),

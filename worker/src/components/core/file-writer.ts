@@ -84,9 +84,6 @@ const parameterSchema = parameters({
   ),
 });
 
-type Input = z.infer<typeof inputSchema>;
-type Params = z.infer<typeof parameterSchema>;
-
 const outputSchema = outputs({
   artifactId: port(z.string().optional(), {
     label: 'Artifact ID',
@@ -119,9 +116,7 @@ const outputSchema = outputs({
   }),
 });
 
-type Output = z.infer<typeof outputSchema>;
-
-function buildBufferFromContent(content: unknown, format: Params['contentFormat']): Buffer {
+function buildBufferFromContent(content: unknown, format: 'text' | 'base64' | 'json'): Buffer {
   if (format === 'base64') {
     if (typeof content !== 'string') {
       throw new ValidationError('Base64 content must be provided as a string.', {
@@ -220,5 +215,9 @@ const definition = defineComponent({
 });
 
 componentRegistry.register(definition);
+
+// Create local type aliases for backward compatibility
+type Input = typeof inputSchema['__inferred'];
+type Output = typeof outputSchema['__inferred'];
 
 export type { Input as FileWriterInput, Output as FileWriterOutput };
