@@ -1,6 +1,10 @@
 import { ZodError, ZodIssue } from 'zod';
 
-import { componentRegistry, type ComponentPortMetadata, type ConnectionType } from '@shipsec/component-sdk';
+import {
+  componentRegistry,
+  type ComponentPortMetadata,
+  type ConnectionType,
+} from '@shipsec/component-sdk';
 import {
   extractPorts,
   canConnect,
@@ -69,22 +73,40 @@ export function validateWorkflowGraph(
     actionPorts.set(action.ref, portSnapshot);
 
     const paramsForValidation = { ...(action.params ?? {}) } as Record<string, unknown>;
+    const inputOverrides = { ...(action.inputOverrides ?? {}) } as Record<string, unknown>;
     const placeholderFields = new Set<string>();
 
     for (const inputPort of portSnapshot.inputs) {
       const hasStaticValue =
-        Object.prototype.hasOwnProperty.call(paramsForValidation, inputPort.id) &&
-        paramsForValidation[inputPort.id] !== undefined;
+        Object.prototype.hasOwnProperty.call(inputOverrides, inputPort.id) &&
+        inputOverrides[inputPort.id] !== undefined;
       const hasMapping = Object.prototype.hasOwnProperty.call(action.inputMappings ?? {}, inputPort.id);
 
       if (!hasStaticValue && hasMapping) {
         const connectionType = getPortConnectionType(inputPort);
-        paramsForValidation[inputPort.id] = createPlaceholderForConnectionType(connectionType);
+        inputOverrides[inputPort.id] = createPlaceholderForConnectionType(connectionType);
         placeholderFields.add(inputPort.id);
       }
     }
 
-    const validation = component.inputs.safeParse(paramsForValidation);
+    const paramValidation = component.parameters
+      ? component.parameters.safeParse(paramsForValidation)
+      : {
+          success: Object.keys(paramsForValidation).length === 0,
+          error: new Error('Component does not accept parameters'),
+        };
+
+    if (!paramValidation.success) {
+      errors.push({
+        node: action.ref,
+        field: 'params',
+        message: `Component parameter validation failed: ${paramValidation.error?.message ?? 'Invalid parameters'}`,
+        severity: 'error',
+        suggestion: 'Check component parameter schema for required fields and correct types',
+      });
+    }
+
+    const validation = component.inputs.safeParse(inputOverrides);
     if (!validation.success) {
       const relevantIssues = validation.error.issues.filter(
         (issue) => !isPlaceholderIssue(issue, placeholderFields),
@@ -98,10 +120,10 @@ export function validateWorkflowGraph(
 
         errors.push({
           node: action.ref,
-          field: 'params',
-          message: `Component parameter validation failed: ${filteredError.message}`,
+          field: 'inputOverrides',
+          message: `Component input validation failed: ${filteredError.message}`,
           severity: 'error',
-          suggestion: 'Check component schema for required parameters and correct types',
+          suggestion: 'Check component input schema for required ports and correct types',
         });
       }
     }
@@ -171,7 +193,9 @@ function validateSecretParameters(
   errors: ValidationError[],
   warnings: ValidationError[],
 ) {
-  const secretParams = component.ui?.parameters?.filter((p: any) => p.type === 'secret') || [];
+  const secretParams = componentRegistry
+    .getMetadata(action.componentId)
+    ?.parameters?.filter((p) => p.type === 'secret') ?? [];
 
   for (const secretParam of secretParams) {
     const paramValue = action.params?.[secretParam.id];
@@ -235,8 +259,8 @@ function validateInputMappings(
 
     // Check if all required inputs have mappings or static values
     for (const input of componentInputs) {
-      const hasStaticValue = action.params?.hasOwnProperty(input.id);
-      const hasMapping = action.inputMappings?.hasOwnProperty(input.id);
+    const hasStaticValue = action.inputOverrides?.hasOwnProperty(input.id);
+    const hasMapping = action.inputMappings?.hasOwnProperty(input.id);
 
       if (input.required && !hasStaticValue && !hasMapping) {
         errors.push({
@@ -444,7 +468,7 @@ function validateEntryPointConfiguration(
   }
 
   for (const action of entryPointActions) {
-    const runtimeInputs = action.params?.runtimeInputs;
+      const runtimeInputs = action.params?.runtimeInputs;
 
     if (!Array.isArray(runtimeInputs)) {
       errors.push({

@@ -39,7 +39,7 @@ function serializeComponent(entry: CachedComponentMetadata) {
     runner: component.runner,
     inputs: entry.inputs ?? [],
     outputs: entry.outputs ?? [],
-    parameters: metadata.parameters ?? [],
+    parameters: entry.parameters ?? [],
     examples: metadata.examples ?? [],
   };
 }

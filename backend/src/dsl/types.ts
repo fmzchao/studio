@@ -4,6 +4,7 @@ export const WorkflowActionSchema = z.object({
   ref: z.string(),
   componentId: z.string(),
   params: z.record(z.string(), z.unknown()).default({}),
+  inputOverrides: z.record(z.string(), z.unknown()).default({}),
   dependsOn: z.array(z.string()).default([]),
   inputMappings: z
     .record(

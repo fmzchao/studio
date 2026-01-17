@@ -122,8 +122,9 @@ export function compileWorkflowGraph(graph: WorkflowGraphDto): WorkflowDefinitio
       streamId: _streamId,
       groupId: _groupId,
       maxConcurrency: _maxConcurrency,
-      ...componentParams
     } = config;
+    const rawParams = (config.params ?? {}) as Record<string, unknown>;
+    const rawInputOverrides = (config.inputOverrides ?? {}) as Record<string, unknown>;
 
     // Build input mappings from edges
     const inputMappings: WorkflowAction['inputMappings'] = {};
@@ -142,7 +143,8 @@ export function compileWorkflowGraph(graph: WorkflowGraphDto): WorkflowDefinitio
     }
 
     const component = componentRegistry.get(node.type);
-    const params: Record<string, unknown> = { ...componentParams };
+    const params: Record<string, unknown> = { ...rawParams };
+    const inputOverrides: Record<string, unknown> = { ...rawInputOverrides };
 
     let inputs = componentRegistry.getMetadata(node.type)?.inputs ?? [];
     if (component?.resolvePorts) {
@@ -157,16 +159,14 @@ export function compileWorkflowGraph(graph: WorkflowGraphDto): WorkflowDefinitio
       }
     }
 
-    const inputMetadata = new Map(
-      inputs.map((input) => [input.id, input]),
-    );
+    const inputMetadata = new Map(inputs.map((input) => [input.id, input]));
 
     // Remove manual values for connected ports unless the port explicitly prefers manual overrides
     for (const targetKey of Object.keys(inputMappings)) {
       const metadata = inputMetadata.get(targetKey);
       const prefersManual = metadata?.valuePriority === 'manual-first';
       if (!prefersManual) {
-        delete params[targetKey];
+        delete inputOverrides[targetKey];
       }
     }
 
@@ -177,7 +177,7 @@ export function compileWorkflowGraph(graph: WorkflowGraphDto): WorkflowDefinitio
       }
 
       const hasPortMapping = Boolean(inputMappings[inputId]);
-      const manualValue = componentParams[inputId];
+      const manualValue = inputOverrides[inputId];
       const hasManual =
         manualValue !== undefined &&
         manualValue !== null &&
@@ -194,6 +194,7 @@ export function compileWorkflowGraph(graph: WorkflowGraphDto): WorkflowDefinitio
       ref: id,
       componentId: node.type,
       params,
+      inputOverrides,
       dependsOn: Array.from(incomingEdges.get(id) ?? []),
       inputMappings,
     };

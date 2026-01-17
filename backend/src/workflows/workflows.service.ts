@@ -603,7 +603,7 @@ export class WorkflowsService {
     auth?: AuthContext | null,
     options: {
       trigger?: ExecutionTriggerMetadata;
-      nodeOverrides?: Record<string, Record<string, unknown>>;
+      nodeOverrides?: Record<string, { params?: Record<string, unknown>; inputOverrides?: Record<string, unknown> }>;
       runId?: string;
       idempotencyKey?: string;
     } = {},
@@ -752,7 +752,7 @@ export class WorkflowsService {
     auth?: AuthContext | null,
     options: {
       trigger?: ExecutionTriggerMetadata;
-      nodeOverrides?: Record<string, Record<string, unknown>>;
+      nodeOverrides?: Record<string, { params?: Record<string, unknown>; inputOverrides?: Record<string, unknown> }>;
       runId?: string;
       idempotencyKey?: string;
       parentRunId?: string;
@@ -1315,7 +1315,7 @@ export class WorkflowsService {
 
   private applyNodeOverrides(
     definition: WorkflowDefinition,
-    overrides?: Record<string, Record<string, unknown>>,
+    overrides?: Record<string, { params?: Record<string, unknown>; inputOverrides?: Record<string, unknown> }>,
   ): WorkflowDefinition {
     if (!overrides || Object.keys(overrides).length === 0) {
       return definition;
@@ -1323,7 +1323,7 @@ export class WorkflowsService {
 
     const updatedActions = definition.actions.map((action) => {
       const override = overrides[action.ref];
-      if (!override || Object.keys(override).length === 0) {
+      if (!override || (Object.keys(override.params ?? {}).length === 0 && Object.keys(override.inputOverrides ?? {}).length === 0)) {
         return action;
       }
 
@@ -1331,7 +1331,11 @@ export class WorkflowsService {
         ...action,
         params: {
           ...(action.params ?? {}),
-          ...override,
+          ...(override.params ?? {}),
+        },
+        inputOverrides: {
+          ...(action.inputOverrides ?? {}),
+          ...(override.inputOverrides ?? {}),
         },
       };
     });
@@ -1358,7 +1362,7 @@ export class WorkflowsService {
 
   private buildInputPreview(
     inputs?: Record<string, unknown>,
-    nodeOverrides?: Record<string, Record<string, unknown>>,
+    nodeOverrides?: Record<string, { params?: Record<string, unknown>; inputOverrides?: Record<string, unknown> }>,
   ): ExecutionInputPreview {
     const runtimeInputs = inputs ? { ...inputs } : {};
     const overrides = nodeOverrides ? { ...nodeOverrides } : {};

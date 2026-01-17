@@ -369,8 +369,14 @@ export class SchedulesService {
           throw new BadRequestException(`Unknown node override target "${nodeRef}"`);
         }
         const overrides = payload.nodeOverrides[nodeRef];
-        if (overrides && typeof overrides !== 'object') {
+        if (!overrides || typeof overrides !== 'object') {
           throw new BadRequestException(`Node override for "${nodeRef}" must be an object`);
+        }
+        if (overrides.params && typeof overrides.params !== 'object') {
+          throw new BadRequestException(`Node override params for "${nodeRef}" must be an object`);
+        }
+        if (overrides.inputOverrides && typeof overrides.inputOverrides !== 'object') {
+          throw new BadRequestException(`Node override inputOverrides for "${nodeRef}" must be an object`);
         }
       }
     }
