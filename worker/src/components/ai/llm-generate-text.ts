@@ -80,16 +80,6 @@ const parameterSchema = parameters({
   ),
 });
 
-type Input = z.infer<typeof inputSchema>;
-type Params = z.infer<typeof parameterSchema>;
-
-type Output = {
-  responseText: string;
-  finishReason: string | null;
-  rawResponse: unknown;
-  usage?: unknown;
-};
-
 const outputSchema = outputs({
   responseText: port(z.string(), {
     label: 'Response Text',
