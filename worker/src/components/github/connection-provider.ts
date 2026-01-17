@@ -1,26 +1,38 @@
 import { z } from 'zod';
 import {
   componentRegistry,
-  type ComponentDefinition,
-  withPortMeta,
+  defineComponent,
+  inputs,
+  outputs,
+  parameters,
+  port,
+  param,
 } from '@shipsec/component-sdk';
 
-const inputSchema = z
-  .object({
-    connectionId: z
+const inputSchema = inputs({});
+
+const parameterSchema = parameters({
+  connectionId: param(
+    z
       .string()
       .trim()
       .min(1, 'Select a GitHub connection to share downstream.')
       .describe('Existing GitHub connection ID.'),
-  })
-  .transform((value) => ({
-    connectionId: value.connectionId.trim(),
-  }));
+    {
+      label: 'GitHub Connection',
+      editor: 'text',
+      description: 'Pick an existing GitHub connection to provide to downstream steps.',
+      helpText:
+        'Connections are created via the Connections page. Selection is stored securely and tokens stay server-side.',
+    },
+  ),
+});
 
 export type GitHubConnectionProviderInput = z.infer<typeof inputSchema>;
+export type GitHubConnectionProviderParams = z.infer<typeof parameterSchema>;
 
-const outputSchema = z.object({
-  connectionId: withPortMeta(z.string(), {
+const outputSchema = outputs({
+  connectionId: port(z.string(), {
     label: 'GitHub Connection ID',
     description: 'Selected GitHub connection identifier. Wire this into GitHub components.',
   }),
@@ -28,16 +40,14 @@ const outputSchema = z.object({
 
 export type GitHubConnectionProviderOutput = z.infer<typeof outputSchema>;
 
-const definition: ComponentDefinition<
-  GitHubConnectionProviderInput,
-  GitHubConnectionProviderOutput
-> = {
+const definition = defineComponent({
   id: 'github.connection.provider',
   label: 'GitHub Connection Provider',
   category: 'input',
   runner: { kind: 'inline' },
   inputs: inputSchema,
   outputs: outputSchema,
+  parameters: parameterSchema,
   docs: 'Expose a selected GitHub integration connection so downstream components can reuse its OAuth token.',
   ui: {
     slug: 'github-connection-provider',
@@ -53,20 +63,9 @@ const definition: ComponentDefinition<
     },
     isLatest: true,
     deprecated: false,
-    parameters: [
-      {
-        id: 'connectionId',
-        label: 'GitHub Connection',
-        type: 'text',
-        required: true,
-        description: 'Pick an existing GitHub connection to provide to downstream steps.',
-        helpText:
-          'Connections are created via the Connections page. Selection is stored securely and tokens stay server-side.',
-      },
-    ],
     examples: ['Use this before GitHub removal steps to consistently reuse the same OAuth connection.'],
   },
-  async execute(params, context) {
+  async execute({ params }, context) {
     const trimmedConnectionId = params.connectionId.trim();
 
     context.logger.info(`[GitHub] Providing connection ${trimmedConnectionId} to downstream nodes.`);
@@ -76,6 +75,6 @@ const definition: ComponentDefinition<
       connectionId: trimmedConnectionId,
     };
   },
-};
+});
 
 componentRegistry.register(definition);
