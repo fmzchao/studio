@@ -22,7 +22,7 @@ import {
   getCategorySeparatorColor,
   getCategoryHeaderBackgroundColor
 } from '@/utils/categoryColors'
-import { inputSupportsManualValue, runtimeInputTypeToPortDataType } from '@/utils/portUtils'
+import { inputSupportsManualValue, runtimeInputTypeToConnectionType } from '@/utils/portUtils'
 import { WebhookDetails } from './WebhookDetails'
 import { useApiKeyStore } from '@/store/apiKeyStore'
 import { API_BASE_URL } from '@/services/api'
@@ -731,11 +731,11 @@ export const WorkflowNode = ({ data, selected, id }: NodeProps<NodeData>) => {
 
       if (Array.isArray(runtimeInputs) && runtimeInputs.length > 0) {
         effectiveOutputs = runtimeInputs.map((input: any) => {
-          const dataType = runtimeInputTypeToPortDataType(input.type || 'text')
+          const connectionType = runtimeInputTypeToConnectionType(input.type || 'text')
           return {
             id: input.id,
             label: input.label,
-            dataType,
+            connectionType,
             description: input.description || `Runtime input: ${input.label}`,
           }
         })

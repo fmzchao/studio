@@ -2,10 +2,11 @@ import type { Node, Edge, Connection } from 'reactflow'
 import type { FrontendNodeData } from '@/schemas/node'
 import type { ComponentMetadata } from '@/schemas/component'
 import {
-  arePortDataTypesCompatible,
-  describePortDataType,
+  arePortTypesCompatible,
+  describePortType,
   inputSupportsManualValue,
-  runtimeInputTypeToPortDataType,
+  resolvePortType,
+  runtimeInputTypeToConnectionType,
 } from '@/utils/portUtils'
 
 export interface ValidationResult {
@@ -78,11 +79,11 @@ export function validateConnection(
         if (Array.isArray(runtimeInputs) && runtimeInputs.length > 0) {
           sourceOutputs = runtimeInputs.map((input: any) => {
             const runtimeType = (input.type || 'text') as string
-            const dataType = runtimeInputTypeToPortDataType(runtimeType)
+            const connectionType = runtimeInputTypeToConnectionType(runtimeType)
             return {
               id: input.id,
               label: input.label,
-              dataType,
+              connectionType,
               description: input.description || `Runtime input: ${input.label}`,
             }
           })
@@ -104,16 +105,22 @@ export function validateConnection(
     return { isValid: false, error: `Invalid connection ports: ${detail}` }
   }
 
-  if (!sourcePort.dataType || !targetPort.dataType) {
+  const hasSourceType = Boolean(sourcePort.connectionType)
+  const hasTargetType = Boolean(targetPort.connectionType)
+
+  if (!hasSourceType || !hasTargetType) {
     return { isValid: false, error: 'Port type metadata unavailable' }
   }
 
   // Check type compatibility
-  if (!arePortDataTypesCompatible(sourcePort.dataType, targetPort.dataType)) {
-    const targetTypeLabel = describePortDataType(targetPort.dataType)
+  const sourceType = resolvePortType(sourcePort)
+  const targetType = resolvePortType(targetPort)
+
+  if (!arePortTypesCompatible(sourceType, targetType)) {
+    const targetTypeLabel = describePortType(targetType)
     return {
       isValid: false,
-      error: `Type mismatch: ${describePortDataType(sourcePort.dataType)} cannot connect to ${targetTypeLabel}`,
+      error: `Type mismatch: ${describePortType(sourceType)} cannot connect to ${targetTypeLabel}`,
     }
   }
 

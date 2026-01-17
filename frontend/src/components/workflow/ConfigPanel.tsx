@@ -22,9 +22,10 @@ import type { Node } from 'reactflow'
 import type { FrontendNodeData } from '@/schemas/node'
 import type { ComponentType, KeyboardEvent } from 'react'
 import {
-  describePortDataType,
+  describePortType,
   inputSupportsManualValue,
-  isListOfTextPortDataType,
+  isListOfTextPort,
+  resolvePortType,
 } from '@/utils/portUtils'
 import { API_BASE_URL, api } from '@/services/api'
 import { useWorkflowStore } from '@/store/workflowStore'
@@ -753,20 +754,21 @@ export function ConfigPanel({
                       ? manualValue.trim().length > 0
                       : true)
                   const manualLocked = hasConnection && !manualOverridesPort
+                  const portType = resolvePortType(input)
                   const primitiveName =
-                    input.dataType?.kind === 'primitive' ? input.dataType.name : null
+                    portType?.kind === 'primitive' ? portType.name : null
                   const isNumberInput = primitiveName === 'number'
                   const isBooleanInput = primitiveName === 'boolean'
-                  const isListOfTextInput = isListOfTextPortDataType(input.dataType)
+                  const isListOfTextInput = isListOfTextPort(portType)
                   const manualInputValue =
                     manualValue === undefined || manualValue === null
                       ? ''
                       : typeof manualValue === 'string'
                         ? manualValue
                         : String(manualValue)
-                  const useSecretSelect =
-                    component.id === 'core.secret.fetch' &&
-                    input.id === 'secretId'
+                  const isSecretInput =
+                    input.editor === 'secret' || primitiveName === 'secret'
+                  const useSecretSelect = isSecretInput
                   const manualPlaceholder = useSecretSelect
                     ? 'Select a secret...'
                     : input.id === 'supabaseUrl'
@@ -776,7 +778,7 @@ export function ConfigPanel({
                         : isListOfTextInput
                           ? 'Add entries or press Add to provide a list'
                           : 'Enter text to use without a connection'
-                  const typeLabel = describePortDataType(input.dataType)
+                  const typeLabel = describePortType(portType)
 
                   return (
                     <div
@@ -958,7 +960,7 @@ export function ConfigPanel({
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-sm font-medium">{output.label}</span>
                       <Badge variant="outline" className="text-[10px] font-mono px-1.5">
-                        {describePortDataType(output.dataType)}
+                        {describePortType(resolvePortType(output))}
                       </Badge>
                     </div>
                     {output.description && (

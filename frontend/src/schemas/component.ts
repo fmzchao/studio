@@ -10,45 +10,46 @@ const PrimitivePortTypes = ['any', 'text', 'secret', 'number', 'boolean', 'file'
 
 export const PrimitivePortTypeEnum = z.enum(PrimitivePortTypes)
 
-const PrimitivePortSchema = z.object({
+const PortEditorTypes = ['text', 'textarea', 'number', 'boolean', 'select', 'multi-select', 'json', 'secret'] as const
+export const PortEditorTypeEnum = z.enum(PortEditorTypes)
+
+const ConnectionPrimitiveSchema = z.object({
   kind: z.literal('primitive'),
   name: PrimitivePortTypeEnum,
-  coercion: z
-    .object({
-      from: z.array(PrimitivePortTypeEnum).optional(),
-    })
-    .optional(),
 })
 
-const ContractPortSchema = z.object({
+const ConnectionContractSchema = z.object({
   kind: z.literal('contract'),
   name: z.string().min(1),
   credential: z.boolean().optional(),
 })
 
-const ListPortSchema = z.object({
-  kind: z.literal('list'),
-  element: z.union([PrimitivePortSchema, ContractPortSchema]),
+const ConnectionAnySchema = z.object({
+  kind: z.literal('any'),
 })
 
-const MapPortSchema = z.object({
-  kind: z.literal('map'),
-  value: PrimitivePortSchema,
-})
+export const ConnectionTypeSchema: z.ZodType<any> = z.lazy(() =>
+  z.union([
+    ConnectionAnySchema,
+    ConnectionPrimitiveSchema,
+    ConnectionContractSchema,
+    z.object({
+      kind: z.literal('list'),
+      element: ConnectionTypeSchema,
+    }),
+    z.object({
+      kind: z.literal('map'),
+      element: ConnectionTypeSchema,
+    }),
+  ]),
+)
 
-export const PortDataTypeSchema = z.union([
-  PrimitivePortSchema,
-  ContractPortSchema,
-  MapPortSchema,
-  ListPortSchema,
-])
-
-export type PortDataType = z.infer<typeof PortDataTypeSchema>
+export type ConnectionType = z.infer<typeof ConnectionTypeSchema>
 
 /**
  * Defines input ports for a component
  */
-const DEFAULT_TEXT_PORT = {
+const DEFAULT_TEXT_CONNECTION = {
   kind: 'primitive',
   name: 'text',
 } as const
@@ -56,7 +57,8 @@ const DEFAULT_TEXT_PORT = {
 export const InputPortSchema = z.object({
   id: z.string(),
   label: z.string(),
-  dataType: PortDataTypeSchema.optional().default(DEFAULT_TEXT_PORT),
+  connectionType: ConnectionTypeSchema.optional().default(DEFAULT_TEXT_CONNECTION),
+  editor: PortEditorTypeEnum.optional(),
   required: z.boolean().optional(),
   description: z.string().optional(),
   valuePriority: z.enum(['manual-first', 'connection-first']).optional(),
@@ -70,7 +72,7 @@ export type InputPort = z.infer<typeof InputPortSchema>
 export const OutputPortSchema = z.object({
   id: z.string(),
   label: z.string(),
-  dataType: PortDataTypeSchema.optional().default(DEFAULT_TEXT_PORT),
+  connectionType: ConnectionTypeSchema.optional().default(DEFAULT_TEXT_CONNECTION),
   description: z.string().optional(),
   isBranching: z.boolean().optional(), // True if this port controls conditional execution
   branchColor: z.enum(['green', 'red', 'amber', 'blue', 'purple', 'slate']).optional(), // Custom color for branching ports
