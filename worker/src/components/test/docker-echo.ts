@@ -3,19 +3,26 @@
  * Used to verify Docker runner implementation
  */
 import { z } from 'zod';
-import type { ComponentDefinition } from '@shipsec/component-sdk';
-import { ContainerError } from '@shipsec/component-sdk';
+import { ContainerError, defineComponent, inputs, outputs, port } from '@shipsec/component-sdk';
 
-type Input = { message: string };
-type Output = string;
-
-const inputSchema = z.object({
-  message: z.string(),
+const inputSchema = inputs({
+  message: port(z.string(), {
+    label: 'Message',
+    description: 'Message to echo via the Docker container.',
+  }),
 });
 
-const outputSchema = z.string();
+const outputSchema = outputs({
+  message: port(z.string(), {
+    label: 'Message',
+    description: 'Echoed message from the container.',
+  }),
+});
 
-const definition: ComponentDefinition<Input, Output> = {
+type Input = z.infer<typeof inputSchema>;
+type Output = z.infer<typeof outputSchema>;
+
+const definition = defineComponent({
   id: 'test.docker.echo',
   label: 'Docker Echo Test',
   category: 'transform',
@@ -35,7 +42,6 @@ const definition: ComponentDefinition<Input, Output> = {
       details: { reason: 'inline_fallback_not_supported' },
     });
   },
-};
+});
 
 export default definition;
-
