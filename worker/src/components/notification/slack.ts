@@ -1,76 +1,55 @@
 import { z } from 'zod';
 import {
   componentRegistry,
-  ComponentDefinition,
   ConfigurationError,
   fromHttpResponse,
   AuthenticationError,
   ComponentRetryPolicy,
-  withPortMeta,
+  defineComponent,
+  inputs,
+  outputs,
+  parameters,
+  port,
+  param,
+  type PortMeta,
 } from '@shipsec/component-sdk';
 
-const inputSchema = z.object({
-  // Content
-  text: withPortMeta(z.string().describe('The plain text message or template.'), {
-    label: 'Message Text',
-  }),
-  blocks: withPortMeta(
-    z.union([z.string(), z.array(z.record(z.string(), z.any()))])
-      .optional()
-      .describe('Slack Block Kit template (JSON string) or object.'),
-    {
-      label: 'Blocks (JSON)',
-      description: 'Optional Slack Block Kit template.',
-      connectionType: { kind: 'primitive', name: 'json' },
-    },
-  ),
-  
-  // Addressing
-  channel: withPortMeta(
-    z.string().optional().describe('Channel ID or name.'),
-    { label: 'Channel' },
-  ),
-  thread_ts: withPortMeta(
-    z.string().optional().describe('Thread timestamp for replies.'),
-    { label: 'Thread TS' },
-  ),
-  
-  // Auth
-  authType: z.enum(['bot_token', 'webhook']).default('bot_token'),
-  slackToken: withPortMeta(z.string().optional(), {
-    label: 'Bot Token',
-    editor: 'secret',
-    connectionType: { kind: 'primitive', name: 'secret' },
-  }),
-  webhookUrl: withPortMeta(z.string().optional(), {
-    label: 'Webhook URL',
-    editor: 'secret',
-    connectionType: { kind: 'primitive', name: 'secret' },
-  }),
-
+const inputSchema = inputs({
   // Dynamic values will be injected here by resolvePorts
-}).catchall(z.any());
+});
+
+const parameterSchema = parameters({
+  authType: param(z.enum(['bot_token', 'webhook']).default('bot_token'), {
+    label: 'Connection Method',
+    editor: 'select',
+    options: [
+      { label: 'Slack App (Bot Token)', value: 'bot_token' },
+      { label: 'Incoming Webhook', value: 'webhook' },
+    ],
+  }),
+  variables: param(z.array(z.object({ name: z.string(), type: z.string().optional() })).default([]), {
+    label: 'Template Variables',
+    editor: 'variable-list',
+    description: 'Define variables to use as {{name}} in your message.',
+  }),
+});
 
 type Input = z.infer<typeof inputSchema>;
+type Params = z.infer<typeof parameterSchema>;
 
-const outputSchema = z.object({
-  ok: withPortMeta(z.boolean(), {
+const outputSchema = outputs({
+  ok: port(z.boolean(), {
     label: 'OK',
   }),
-  ts: withPortMeta(z.string().optional(), {
+  ts: port(z.string().optional(), {
     label: 'Timestamp',
   }),
-  error: withPortMeta(z.string().optional(), {
+  error: port(z.string().optional(), {
     label: 'Error',
   }),
 });
 
 type Output = z.infer<typeof outputSchema>;
-
-type Params = {
-  authType?: 'bot_token' | 'webhook';
-  variables?: { name: string; type: string }[];
-};
 
 /**
  * Simple helper to replace {{var}} placeholders in a string
@@ -81,31 +60,37 @@ function interpolate(template: string, vars: Record<string, any>): string {
   });
 }
 
-const mapTypeToSchema = (type: string, label: string) => {
+const mapTypeToSchema = (type: string, label: string): { schema: z.ZodTypeAny; meta?: PortMeta } => {
   switch (type) {
     case 'string':
-      return withPortMeta(z.string().optional(), { label });
+      return { schema: z.string().optional(), meta: { label } };
     case 'number':
-      return withPortMeta(z.number().optional(), { label });
+      return { schema: z.number().optional(), meta: { label } };
     case 'boolean':
-      return withPortMeta(z.boolean().optional(), { label });
+      return { schema: z.boolean().optional(), meta: { label } };
     case 'secret':
-      return withPortMeta(z.unknown().optional(), {
-        label,
-        editor: 'secret',
-        allowAny: true,
-        reason: 'Slack templates can include secret values.',
-        connectionType: { kind: 'primitive', name: 'secret' },
-      });
+      return {
+        schema: z.unknown().optional(),
+        meta: {
+          label,
+          editor: 'secret',
+          allowAny: true,
+          reason: 'Slack templates can include secret values.',
+          connectionType: { kind: 'primitive', name: 'secret' },
+        },
+      };
     case 'list':
-      return withPortMeta(z.array(z.string()).optional(), { label });
+      return { schema: z.array(z.string()).optional(), meta: { label } };
     default:
-      return withPortMeta(z.unknown().optional(), {
-        label,
-        allowAny: true,
-        reason: 'Slack templates can include arbitrary JSON values.',
-        connectionType: { kind: 'primitive', name: 'json' },
-      });
+      return {
+        schema: z.unknown().optional(),
+        meta: {
+          label,
+          allowAny: true,
+          reason: 'Slack templates can include arbitrary JSON values.',
+          connectionType: { kind: 'primitive', name: 'json' },
+        },
+      };
   }
 };
 
@@ -122,7 +107,7 @@ const slackRetryPolicy: ComponentRetryPolicy = {
   ],
 };
 
-const definition: ComponentDefinition<Input, Output, Params> = {
+const definition = defineComponent({
   id: 'core.notification.slack',
   label: 'Slack Message',
   category: 'notification',
@@ -130,6 +115,7 @@ const definition: ComponentDefinition<Input, Output, Params> = {
   retryPolicy: slackRetryPolicy,
   inputs: inputSchema,
   outputs: outputSchema,
+  parameters: parameterSchema,
   docs: 'Send dynamic Slack messages with {{variable}} support in both text and Block Kit JSON.',
   ui: {
     slug: 'slack-message',
@@ -141,30 +127,11 @@ const definition: ComponentDefinition<Input, Output, Params> = {
     author: { name: 'ShipSecAI', type: 'shipsecai' },
     isLatest: true,
     deprecated: false,
-    parameters: [
-      {
-        id: 'authType',
-        label: 'Connection Method',
-        type: 'select',
-        default: 'bot_token',
-        options: [
-          { label: 'Slack App (Bot Token)', value: 'bot_token' },
-          { label: 'Incoming Webhook', value: 'webhook' },
-        ],
-      },
-      {
-        id: 'variables',
-        label: 'Template Variables',
-        type: 'variable-list',
-        default: [],
-        description: 'Define variables to use as {{name}} in your message.',
-      }
-    ],
   },
-  resolvePorts(params) {
+  resolvePorts(params: Params) {
     const inputShape: Record<string, z.ZodTypeAny> = {
-      text: withPortMeta(z.string(), { label: 'Message Text' }),
-      blocks: withPortMeta(z.unknown().optional(), {
+      text: port(z.string(), { label: 'Message Text' }),
+      blocks: port(z.unknown().optional(), {
         label: 'Blocks (JSON)',
         allowAny: true,
         reason: 'Slack blocks can be raw JSON or string templates.',
@@ -174,7 +141,7 @@ const definition: ComponentDefinition<Input, Output, Params> = {
 
     // Auth specific inputs
     if (params.authType === 'webhook') {
-      inputShape.webhookUrl = withPortMeta(z.unknown(), {
+      inputShape.webhookUrl = port(z.unknown(), {
         label: 'Webhook URL',
         editor: 'secret',
         allowAny: true,
@@ -182,47 +149,48 @@ const definition: ComponentDefinition<Input, Output, Params> = {
         connectionType: { kind: 'primitive', name: 'secret' },
       });
     } else {
-      inputShape.slackToken = withPortMeta(z.unknown(), {
+      inputShape.slackToken = port(z.unknown(), {
         label: 'Bot Token',
         editor: 'secret',
         allowAny: true,
         reason: 'Slack bot tokens are secrets.',
         connectionType: { kind: 'primitive', name: 'secret' },
       });
-      inputShape.channel = withPortMeta(z.string(), { label: 'Channel' });
-      inputShape.thread_ts = withPortMeta(z.string().optional(), { label: 'Thread TS' });
+      inputShape.channel = port(z.string(), { label: 'Channel' });
+      inputShape.thread_ts = port(z.string().optional(), { label: 'Thread TS' });
     }
 
     // Dynamic variable inputs
     if (params.variables && Array.isArray(params.variables)) {
       for (const v of params.variables) {
         if (!v || !v.name) continue;
-        inputShape[v.name] = mapTypeToSchema(v.type || 'json', v.name);
+        const { schema, meta } = mapTypeToSchema(v.type || 'json', v.name);
+        inputShape[v.name] = port(schema, meta ?? { label: v.name });
       }
     }
 
-    return { inputs: z.object(inputShape) };
+    return { inputs: inputs(inputShape) };
   },
-  async execute(params, context) {
+  async execute({ inputs, params }, context) {
     const { 
         text, 
         blocks, 
         channel, 
         thread_ts, 
-        authType, 
         slackToken, 
         webhookUrl,
-        ...rest 
-    } = params;
+    } = inputs as Record<string, unknown>;
+    const { authType } = params;
+    const contextData = { ...params, ...inputs };
 
     // 1. Interpolate text
-    const finalText = interpolate(text, rest);
+    const finalText = interpolate(text as string, contextData);
 
     // 2. Interpolate and parse blocks if it's a template string
     let finalBlocks = blocks;
     if (typeof blocks === 'string') {
         try {
-            const interpolated = interpolate(blocks, rest);
+            const interpolated = interpolate(blocks, contextData);
             finalBlocks = JSON.parse(interpolated);
         } catch (e) {
             context.logger.warn('[Slack] Failed to parse blocks JSON after interpolation, sending as raw string');
@@ -233,7 +201,7 @@ const definition: ComponentDefinition<Input, Output, Params> = {
         // but typically users will pass a JSON string template for simplicity.
         // For now, let's stringify and interpolate to support variables in objects too!
         const str = JSON.stringify(blocks);
-        const interpolated = interpolate(str, rest);
+        const interpolated = interpolate(str, contextData);
         finalBlocks = JSON.parse(interpolated);
     }
 
@@ -290,7 +258,7 @@ const definition: ComponentDefinition<Input, Output, Params> = {
       return { ok: true, ts: result.ts };
     }
   },
-};
+});
 
 componentRegistry.register(definition);
 
