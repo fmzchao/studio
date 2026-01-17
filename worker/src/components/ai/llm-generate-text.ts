@@ -4,19 +4,19 @@ import { createOpenAI as createOpenAIImpl } from '@ai-sdk/openai';
 import { createGoogleGenerativeAI as createGoogleGenerativeAIImpl } from '@ai-sdk/google';
 import {
   componentRegistry,
-  ComponentDefinition,
   ConfigurationError,
   ComponentRetryPolicy,
-  withPortMeta,
+  defineComponent,
+  inputs,
+  outputs,
+  parameters,
+  port,
+  param,
 } from '@shipsec/component-sdk';
 import { LLMProviderSchema, type LlmProviderConfig } from '@shipsec/contracts';
 
-const inputSchema = z.object({
-  systemPrompt: z
-    .string()
-    .default('')
-    .describe('Optional system instructions that prime the model.'),
-  userPrompt: withPortMeta(
+const inputSchema = inputs({
+  userPrompt: port(
     z.string()
       .min(1, 'User prompt cannot be empty')
       .describe('Primary user prompt sent to the model.'),
@@ -25,27 +25,11 @@ const inputSchema = z.object({
       description: 'User input sent to the model.',
     },
   ),
-  temperature: z
-    .number()
-    .min(0)
-    .max(2)
-    .default(0.7)
-    .describe('Sampling temperature for the response (0-2).'),
-  maxTokens: z
-    .number()
-    .int()
-    .min(1)
-    .max(1_000_000)
-    .default(1024)
-    .describe('Maximum number of tokens to request from the model.'),
-  chatModel: withPortMeta(
-    LLMProviderSchema(),
-    {
-      label: 'Provider Config',
-      description: 'Connect an OpenAI/Gemini/OpenRouter provider component output.',
-    },
-  ),
-  modelApiKey: withPortMeta(
+  chatModel: port(LLMProviderSchema(), {
+    label: 'Provider Config',
+    description: 'Connect an OpenAI/Gemini/OpenRouter provider component output.',
+  }),
+  modelApiKey: port(
     z.string()
       .optional()
       .describe('Optional API key override (connect Secret Loader) to supersede the provider config.'),
@@ -58,7 +42,46 @@ const inputSchema = z.object({
   ),
 });
 
+const parameterSchema = parameters({
+  systemPrompt: param(
+    z.string().default('').describe('Optional system instructions that prime the model.'),
+    {
+      label: 'System Prompt',
+      editor: 'textarea',
+      rows: 3,
+      description: 'Optional system instructions that guide the model response.',
+    },
+  ),
+  temperature: param(
+    z.number().min(0).max(2).default(0.7).describe('Sampling temperature for the response (0-2).'),
+    {
+      label: 'Temperature',
+      editor: 'number',
+      min: 0,
+      max: 2,
+      description: 'Higher values increase creativity, lower values improve determinism.',
+    },
+  ),
+  maxTokens: param(
+    z
+      .number()
+      .int()
+      .min(1)
+      .max(1_000_000)
+      .default(1024)
+      .describe('Maximum number of tokens to request from the model.'),
+    {
+      label: 'Max Tokens',
+      editor: 'number',
+      min: 1,
+      max: 1_000_000,
+      description: 'Maximum number of tokens to request from the provider.',
+    },
+  ),
+});
+
 type Input = z.infer<typeof inputSchema>;
+type Params = z.infer<typeof parameterSchema>;
 
 type Output = {
   responseText: string;
@@ -67,23 +90,23 @@ type Output = {
   usage?: unknown;
 };
 
-const outputSchema = z.object({
-  responseText: withPortMeta(z.string(), {
+const outputSchema = outputs({
+  responseText: port(z.string(), {
     label: 'Response Text',
     description: 'Assistant response returned by the provider.',
   }),
-  finishReason: withPortMeta(z.string().nullable(), {
+  finishReason: port(z.string().nullable(), {
     label: 'Finish Reason',
     description: 'Provider finish reason, if supplied.',
   }),
-  rawResponse: withPortMeta(z.unknown(), {
+  rawResponse: port(z.unknown(), {
     label: 'Raw Response',
     description: 'Raw response metadata returned by the provider for debugging.',
     allowAny: true,
     reason: 'Provider response payloads vary by model and API.',
     connectionType: { kind: 'primitive', name: 'json' },
   }),
-  usage: withPortMeta(z.unknown().optional(), {
+  usage: port(z.unknown().optional(), {
     label: 'Token Usage',
     description: 'Token usage metadata returned by the provider, if available.',
     allowAny: true,
@@ -111,7 +134,7 @@ const llmGenerateTextRetryPolicy: ComponentRetryPolicy = {
   ],
 };
 
-const definition: ComponentDefinition<Input, Output> = {
+const definition = defineComponent({
   id: 'core.ai.generate-text',
   label: 'AI Generate Text',
   category: 'ai',
@@ -119,6 +142,7 @@ const definition: ComponentDefinition<Input, Output> = {
   retryPolicy: llmGenerateTextRetryPolicy,
   inputs: inputSchema,
   outputs: outputSchema,
+  parameters: parameterSchema,
   docs: 'Runs a single LLM completion using a provider config emitted by the provider components.',
   ui: {
     slug: 'ai-generate-text',
@@ -132,40 +156,10 @@ const definition: ComponentDefinition<Input, Output> = {
       name: 'ShipSecAI',
       type: 'shipsecai',
     },
-    parameters: [
-      {
-        id: 'systemPrompt',
-        label: 'System Prompt',
-        type: 'textarea',
-        required: false,
-        default: '',
-        rows: 3,
-        description: 'Optional system instructions that guide the model response.',
-      },
-      {
-        id: 'temperature',
-        label: 'Temperature',
-        type: 'number',
-        required: false,
-        default: 0.7,
-        min: 0,
-        max: 2,
-        description: 'Higher values increase creativity, lower values improve determinism.',
-      },
-      {
-        id: 'maxTokens',
-        label: 'Max Tokens',
-        type: 'number',
-        required: false,
-        default: 1024,
-        min: 1,
-        max: 1_000_000,
-        description: 'Maximum number of tokens to request from the provider.',
-      },
-    ],
   },
-  async execute(params, context, dependencies?: Dependencies) {
-    const { systemPrompt, userPrompt, temperature, maxTokens, chatModel, modelApiKey } = params;
+  async execute({ inputs, params }, context, dependencies?: Dependencies) {
+    const { systemPrompt, temperature, maxTokens } = params;
+    const { userPrompt, chatModel, modelApiKey } = inputs;
 
     const generateText = dependencies?.generateText ?? generateTextImpl;
     const createOpenAI = dependencies?.createOpenAI ?? createOpenAIImpl;

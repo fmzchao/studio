@@ -1,8 +1,12 @@
 import { z } from 'zod';
 import {
   componentRegistry,
-  ComponentDefinition,
-  withPortMeta,
+  defineComponent,
+  inputs,
+  outputs,
+  parameters,
+  port,
+  param,
 } from '@shipsec/component-sdk';
 import {
   McpToolArgumentSchema,
@@ -17,41 +21,46 @@ const toolEntrySchema = z.object({
   arguments: z.array(McpToolArgumentSchema).optional(),
 });
 
-const inputSchema = z.object({
-  endpoint: withPortMeta(
+const inputSchema = inputs({});
+
+const parameterSchema = parameters({
+  endpoint: param(
     z.string()
       .min(1, 'MCP endpoint is required')
       .describe('HTTP endpoint that implements the MCP tool invocation contract.'),
     {
-      label: 'MCP Endpoint',
-      description: 'HTTP URL for the MCP tool server (POST requests are sent here).',
+      label: 'Endpoint',
+      editor: 'text',
+      description: 'HTTP endpoint that accepts MCP tool invocations.',
     },
   ),
-  headersJson: withPortMeta(
-    z.string()
-      .optional()
-      .describe('Optional JSON object of HTTP headers (e.g., auth tokens).'),
+  headersJson: param(
+    z.string().optional().describe('Optional JSON object of HTTP headers (e.g., auth tokens).'),
     {
       label: 'Headers (JSON)',
-      description: 'Optional headers JSON (e.g., {"Authorization":"Bearer ..."}).',
+      editor: 'textarea',
+      description: 'Optional JSON object of headers (one per line).',
     },
   ),
-  tools: withPortMeta(
-    z.array(toolEntrySchema)
+  tools: param(
+    z
+      .array(toolEntrySchema)
       .default([])
       .describe('List of tool entries exposed by this MCP endpoint.'),
     {
       label: 'Tools',
-      description: 'Structured tool list (id,title,description,toolName).',
-      connectionType: { kind: 'primitive', name: 'json' },
+      editor: 'json',
+      description:
+        'Array of tool entries, e.g., [{"id":"lookup_fact","title":"Lookup Fact","arguments":[{"name":"topic","type":"string"}]}].',
     },
   ),
 });
 
 type Input = z.infer<typeof inputSchema>;
+type Params = z.infer<typeof parameterSchema>;
 
-const outputSchema = z.object({
-  tools: withPortMeta(z.array(McpToolDefinitionSchema()), {
+const outputSchema = outputs({
+  tools: port(z.array(McpToolDefinitionSchema()), {
     label: 'MCP Tools',
     description: 'List of MCP tool definitions emitted by this provider.',
   }),
@@ -59,13 +68,14 @@ const outputSchema = z.object({
 
 type Output = z.infer<typeof outputSchema>;
 
-const definition: ComponentDefinition<Input, Output> = {
+const definition = defineComponent({
   id: 'core.mcp.tools.http',
   label: 'MCP HTTP Tools',
   category: 'ai',
   runner: { kind: 'inline' },
   inputs: inputSchema,
   outputs: outputSchema,
+  parameters: parameterSchema,
   docs: 'Expose a list of MCP tools backed by an HTTP endpoint (custom or third-party).',
   ui: {
     slug: 'mcp-tools-http',
@@ -78,33 +88,8 @@ const definition: ComponentDefinition<Input, Output> = {
       name: 'ShipSecAI',
       type: 'shipsecai',
     },
-    parameters: [
-      {
-        id: 'endpoint',
-        label: 'Endpoint',
-        type: 'text',
-        required: true,
-        description: 'HTTP endpoint that accepts MCP tool invocations.',
-      },
-      {
-        id: 'headersJson',
-        label: 'Headers (JSON)',
-        type: 'textarea',
-        required: false,
-        description: 'Optional JSON object of headers (one per line).',
-      },
-      {
-        id: 'tools',
-        label: 'Tools',
-        type: 'json',
-        required: false,
-        default: [],
-        description:
-          'Array of tool entries, e.g., [{"id":"lookup_fact","title":"Lookup Fact","arguments":[{"name":"topic","type":"string"}]}].',
-      },
-    ],
   },
-  async execute(params, context) {
+  async execute({ params }, context) {
     const headers = parseHeaders(params.headersJson);
     const tools = (params.tools ?? []).map((tool) => ({
       id: tool.id,
@@ -125,7 +110,7 @@ const definition: ComponentDefinition<Input, Output> = {
 
     return { tools };
   },
-};
+});
 
 function parseHeaders(headersJson?: string | null): Record<string, string> | undefined {
   if (!headersJson || headersJson.trim().length === 0) {

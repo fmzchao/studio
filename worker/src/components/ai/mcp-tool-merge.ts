@@ -1,10 +1,12 @@
 import { z } from 'zod';
-import { componentRegistry, ComponentDefinition, withPortMeta } from '@shipsec/component-sdk';
+import { componentRegistry, defineComponent, inputs, outputs, parameters, port, param, withPortMeta } from '@shipsec/component-sdk';
 import { McpToolDefinitionSchema } from '@shipsec/contracts';
 
-const inputSchema = z
-  .object({
-    slots: z
+const inputSchema = inputs({});
+
+const parameterSchema = parameters({
+  slots: param(
+    z
       .array(
         z.object({
           id: z.string().min(1),
@@ -16,13 +18,19 @@ const inputSchema = z
         { id: 'toolsB', label: 'Tools B' },
       ])
       .describe('Configure which upstream tool lists should be merged.'),
-  })
-  .passthrough();
+    {
+      label: 'Inputs',
+      editor: 'json',
+      description: 'Array of input definitions. Example: [{"id":"toolsA","label":"Tools A"}].',
+    },
+  ),
+});
 
 type Input = z.infer<typeof inputSchema>;
+type Params = z.infer<typeof parameterSchema>;
 
-const outputSchema = z.object({
-  tools: withPortMeta(z.array(McpToolDefinitionSchema()), {
+const outputSchema = outputs({
+  tools: port(z.array(McpToolDefinitionSchema()), {
     label: 'Merged Tools',
     description: 'Combined MCP tool list with duplicates removed by id.',
   }),
@@ -30,13 +38,14 @@ const outputSchema = z.object({
 
 type Output = z.infer<typeof outputSchema>;
 
-const definition: ComponentDefinition<Input, Output> = {
+const definition = defineComponent({
   id: 'core.mcp.tools.merge',
   label: 'MCP Tool Merge',
   category: 'ai',
   runner: { kind: 'inline' },
   inputs: inputSchema,
   outputs: outputSchema,
+  parameters: parameterSchema,
   docs: 'Merge multiple MCP tool lists into a single list for the AI agent.',
   ui: {
     slug: 'mcp-tools-merge',
@@ -49,22 +58,9 @@ const definition: ComponentDefinition<Input, Output> = {
       name: 'ShipSecAI',
       type: 'shipsecai',
     },
-    parameters: [
-      {
-        id: 'slots',
-        label: 'Inputs',
-        type: 'json',
-        required: false,
-        default: [
-          { id: 'toolsA', label: 'Tools A' },
-          { id: 'toolsB', label: 'Tools B' },
-        ],
-        description: 'Array of input definitions. Example: [{"id":"toolsA","label":"Tools A"}].',
-      },
-    ],
   },
-  resolvePorts(params) {
-    const slots = normalizeSlots((params as Input).slots);
+  resolvePorts(params: Params) {
+    const slots = normalizeSlots(params.slots);
     const inputShape: Record<string, z.ZodTypeAny> = {};
     for (const slot of slots) {
       inputShape[slot.id] = withPortMeta(z.array(McpToolDefinitionSchema()), {
@@ -73,20 +69,20 @@ const definition: ComponentDefinition<Input, Output> = {
     }
 
     return {
-      inputs: z.object(inputShape),
-      outputs: z.object({
-        tools: withPortMeta(z.array(McpToolDefinitionSchema()), {
+      inputs: inputs(inputShape),
+      outputs: outputs({
+        tools: port(z.array(McpToolDefinitionSchema()), {
           label: 'Merged Tools',
         }),
       }),
     };
   },
-  async execute(params, context) {
+  async execute({ inputs, params }, context) {
     const slots = normalizeSlots(params.slots);
     const merged: Record<string, z.infer<ReturnType<typeof McpToolDefinitionSchema>>> = {};
 
     for (const slot of slots) {
-      const value = (params as Record<string, unknown>)[slot.id];
+      const value = (inputs as Record<string, unknown>)[slot.id];
       if (Array.isArray(value)) {
         for (const entry of value) {
           const parsed = McpToolDefinitionSchema().safeParse(entry);
@@ -102,9 +98,9 @@ const definition: ComponentDefinition<Input, Output> = {
 
     return { tools };
   },
-};
+});
 
-function normalizeSlots(slotsInput: Input['slots']): Array<{ id: string; label: string }> {
+function normalizeSlots(slotsInput: Params['slots']): Array<{ id: string; label: string }> {
   const fallback = [
     { id: 'toolsA', label: 'Tools A' },
     { id: 'toolsB', label: 'Tools B' },

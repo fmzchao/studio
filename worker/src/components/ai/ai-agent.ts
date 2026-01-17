@@ -13,14 +13,18 @@ import { createOpenAI as createOpenAIImpl } from '@ai-sdk/openai';
 import { createGoogleGenerativeAI as createGoogleGenerativeAIImpl } from '@ai-sdk/google';
 import {
   componentRegistry,
-  ComponentDefinition,
   ComponentRetryPolicy,
   type ExecutionContext,
   type AgentTraceEvent,
   ConfigurationError,
   ValidationError,
   fromHttpResponse,
-  withPortMeta,
+  defineComponent,
+  inputs,
+  outputs,
+  parameters,
+  port,
+  param,
 } from '@shipsec/component-sdk';
 import {
   LLMProviderSchema,
@@ -112,8 +116,8 @@ const reasoningStepSchema = z.object({
   observations: z.array(reasoningObservationSchema),
 });
 
-const inputSchema = z.object({
-  userInput: withPortMeta(
+const inputSchema = inputs({
+  userInput: port(
     z.string()
       .min(1, 'Input text cannot be empty')
       .describe('Incoming user text for this agent turn.'),
@@ -122,7 +126,7 @@ const inputSchema = z.object({
       description: 'Incoming user text for this agent turn.',
     },
   ),
-  conversationState: withPortMeta(
+  conversationState: port(
     conversationStateSchema
       .optional()
       .describe('Optional prior conversation state to maintain memory across turns.'),
@@ -132,7 +136,7 @@ const inputSchema = z.object({
       connectionType: { kind: 'primitive', name: 'json' },
     },
   ),
-  chatModel: withPortMeta(
+  chatModel: port(
     LLMProviderSchema()
       .default({
         provider: 'openai',
@@ -146,7 +150,7 @@ const inputSchema = z.object({
       connectionType: { kind: 'contract', name: llmProviderContractName, credential: true },
     },
   ),
-  modelApiKey: withPortMeta(
+  modelApiKey: port(
     z.string()
       .optional()
       .describe('Optional API key override supplied via a Secret Loader node.'),
@@ -157,7 +161,7 @@ const inputSchema = z.object({
       connectionType: { kind: 'primitive', name: 'secret' },
     },
   ),
-  mcpTools: withPortMeta(
+  mcpTools: port(
     z.array(McpToolDefinitionSchema())
       .optional()
       .describe('Normalized MCP tool definitions emitted by provider components.'),
@@ -166,60 +170,152 @@ const inputSchema = z.object({
       description: 'Connect outputs from MCP tool providers or mergers.',
     },
   ),
-  systemPrompt: z
-    .string()
-    .default('')
-    .describe('Optional system instructions that anchor the agent behaviour.'),
-  temperature: z
-    .number()
-    .min(0)
-    .max(2)
-    .default(DEFAULT_TEMPERATURE)
-    .describe('Sampling temperature. Higher values are more creative, lower values are focused.'),
-  maxTokens: z
-    .number()
-    .int()
-    .min(64)
-    .max(1_000_000)
-    .default(DEFAULT_MAX_TOKENS)
-    .describe('Maximum number of tokens to generate on the final turn.'),
-  memorySize: z
-    .number()
-    .int()
-    .min(2)
-    .max(50)
-    .default(DEFAULT_MEMORY_SIZE)
-    .describe('How many recent messages (excluding the system prompt) to retain between turns.'),
-  stepLimit: z
-    .number()
-    .int()
-    .min(1)
-    .max(12)
-    .default(DEFAULT_STEP_LIMIT)
-    .describe('Maximum sequential reasoning/tool steps before the agent stops.'),
-  structuredOutputEnabled: z
-    .boolean()
-    .default(false)
-    .describe('Enable structured JSON output that adheres to a defined schema.'),
-  schemaType: z
-    .enum(['json-example', 'json-schema'])
-    .default('json-example')
-    .describe('How to define the output schema: from a JSON example or a full JSON Schema.'),
-  jsonExample: z
-    .string()
-    .optional()
-    .describe('Example JSON object to generate schema from. All properties become required.'),
-  jsonSchema: z
-    .string()
-    .optional()
-    .describe('Full JSON Schema definition for structured output validation.'),
-  autoFixFormat: z
-    .boolean()
-    .default(false)
-    .describe('Attempt to fix malformed JSON responses from the model.'),
+});
+
+const parameterSchema = parameters({
+  systemPrompt: param(z.string().default('').describe('Optional system instructions that anchor the agent behaviour.'), {
+    label: 'System Prompt',
+    editor: 'textarea',
+    rows: 3,
+    description: 'Optional system instructions that guide the model response.',
+  }),
+  temperature: param(
+    z
+      .number()
+      .min(0)
+      .max(2)
+      .default(DEFAULT_TEMPERATURE)
+      .describe('Sampling temperature. Higher values are more creative, lower values are focused.'),
+    {
+      label: 'Temperature',
+      editor: 'number',
+      min: 0,
+      max: 2,
+      description: 'Higher values increase creativity, lower values are focused.',
+    },
+  ),
+  maxTokens: param(
+    z
+      .number()
+      .int()
+      .min(64)
+      .max(1_000_000)
+      .default(DEFAULT_MAX_TOKENS)
+      .describe('Maximum number of tokens to generate on the final turn.'),
+    {
+      label: 'Max Tokens',
+      editor: 'number',
+      min: 64,
+      max: 1_000_000,
+      description: 'Maximum number of tokens to generate on the final turn.',
+    },
+  ),
+  memorySize: param(
+    z
+      .number()
+      .int()
+      .min(2)
+      .max(50)
+      .default(DEFAULT_MEMORY_SIZE)
+      .describe('How many recent messages (excluding the system prompt) to retain between turns.'),
+    {
+      label: 'Memory Size',
+      editor: 'number',
+      min: 2,
+      max: 50,
+      description: 'How many recent turns to keep in memory (excluding the system prompt).',
+    },
+  ),
+  stepLimit: param(
+    z
+      .number()
+      .int()
+      .min(1)
+      .max(12)
+      .default(DEFAULT_STEP_LIMIT)
+      .describe('Maximum sequential reasoning/tool steps before the agent stops.'),
+    {
+      label: 'Step Limit',
+      editor: 'number',
+      min: 1,
+      max: 12,
+      description: 'Maximum reasoning/tool steps before the agent stops automatically.',
+    },
+  ),
+  structuredOutputEnabled: param(
+    z
+      .boolean()
+      .default(false)
+      .describe('Enable structured JSON output that adheres to a defined schema.'),
+    {
+      label: 'Structured Output',
+      editor: 'boolean',
+      description: 'Enable to enforce a specific JSON output structure from the AI model.',
+    },
+  ),
+  schemaType: param(
+    z
+      .enum(['json-example', 'json-schema'])
+      .default('json-example')
+      .describe('How to define the output schema: from a JSON example or a full JSON Schema.'),
+    {
+      label: 'Schema Type',
+      editor: 'select',
+      options: [
+        { label: 'Generate From JSON Example', value: 'json-example' },
+        { label: 'Define Using JSON Schema', value: 'json-schema' },
+      ],
+      description: 'Choose how to define the output structure.',
+      visibleWhen: { structuredOutputEnabled: true },
+    },
+  ),
+  jsonExample: param(
+    z
+      .string()
+      .optional()
+      .describe('Example JSON object to generate schema from. All properties become required.'),
+    {
+      label: 'JSON Example',
+      editor: 'json',
+      description:
+        'Provide an example JSON object. Property types and names will be used to generate the schema. All fields are treated as required.',
+      helpText:
+        'Example: { "name": "John", "age": 30, "skills": ["security", "architecture"] }',
+      visibleWhen: { structuredOutputEnabled: true, schemaType: 'json-example' },
+    },
+  ),
+  jsonSchema: param(
+    z
+      .string()
+      .optional()
+      .describe('Full JSON Schema definition for structured output validation.'),
+    {
+      label: 'JSON Schema',
+      editor: 'json',
+      description: 'Provide a full JSON Schema definition. Refer to json-schema.org for syntax.',
+      helpText:
+        'Example: { "type": "object", "properties": { "name": { "type": "string" } }, "required": ["name"] }',
+      visibleWhen: { structuredOutputEnabled: true, schemaType: 'json-schema' },
+    },
+  ),
+  autoFixFormat: param(
+    z
+      .boolean()
+      .default(false)
+      .describe('Attempt to fix malformed JSON responses from the model.'),
+    {
+      label: 'Auto-Fix Format',
+      editor: 'boolean',
+      description: 'Attempt to fix malformed JSON responses from the model.',
+      helpText:
+        'When enabled, tries to extract valid JSON from responses that contain extra text or formatting issues.',
+      visibleWhen: { structuredOutputEnabled: true },
+    },
+  ),
 });
 
 type Input = z.infer<typeof inputSchema>;
+type Params = z.infer<typeof parameterSchema>;
 
 type ConversationState = z.infer<typeof conversationStateSchema>;
 type ToolInvocationEntry = z.infer<typeof toolInvocationSchema>;
@@ -239,48 +335,48 @@ type Output = {
   agentRunId: string;
 };
 
-const outputSchema = z.object({
-  responseText: withPortMeta(z.string(), {
+const outputSchema = outputs({
+  responseText: port(z.string(), {
     label: 'Agent Response',
     description: 'Final assistant message produced by the agent.',
   }),
-  structuredOutput: withPortMeta(z.unknown().nullable(), {
+  structuredOutput: port(z.unknown().nullable(), {
     label: 'Structured Output',
     description: 'Parsed JSON object when structured output is enabled. Null otherwise.',
     allowAny: true,
     reason: 'Structured output is user-defined JSON.',
     connectionType: { kind: 'primitive', name: 'json' },
   }),
-  conversationState: withPortMeta(conversationStateSchema, {
+  conversationState: port(conversationStateSchema, {
     label: 'Conversation State',
     description: 'Updated conversation memory for subsequent agent turns.',
     connectionType: { kind: 'primitive', name: 'json' },
   }),
-  toolInvocations: withPortMeta(z.array(toolInvocationSchema), {
+  toolInvocations: port(z.array(toolInvocationSchema), {
     label: 'Tool Invocations',
     description: 'Array of MCP tool calls executed during this run.',
     connectionType: { kind: 'primitive', name: 'json' },
   }),
-  reasoningTrace: withPortMeta(z.array(reasoningStepSchema), {
+  reasoningTrace: port(z.array(reasoningStepSchema), {
     label: 'Reasoning Trace',
     description: 'Sequence of Think → Act → Observe steps executed by the agent.',
     connectionType: { kind: 'primitive', name: 'json' },
   }),
-  usage: withPortMeta(z.unknown().optional(), {
+  usage: port(z.unknown().optional(), {
     label: 'Usage',
     description: 'Token usage metadata returned by the provider, if available.',
     allowAny: true,
     reason: 'Usage payloads vary by model provider.',
     connectionType: { kind: 'primitive', name: 'json' },
   }),
-  rawResponse: withPortMeta(z.unknown(), {
+  rawResponse: port(z.unknown(), {
     label: 'Raw Response',
     description: 'Raw provider response payload for debugging.',
     allowAny: true,
     reason: 'Provider responses vary by model provider.',
     connectionType: { kind: 'primitive', name: 'json' },
   }),
-  agentRunId: withPortMeta(z.string(), {
+  agentRunId: port(z.string(), {
     label: 'Agent Run ID',
     description: 'Unique identifier for streaming and replaying this agent session.',
   }),
@@ -870,7 +966,7 @@ function attemptJsonFix(text: string): unknown | null {
   }
 }
 
-const definition: ComponentDefinition<Input, Output> = {
+const definition = defineComponent({
   id: 'core.ai.agent',
   label: 'AI SDK Agent',
   category: 'ai',
@@ -884,6 +980,7 @@ const definition: ComponentDefinition<Input, Output> = {
   } satisfies ComponentRetryPolicy,
   inputs: inputSchema,
   outputs: outputSchema,
+  parameters: parameterSchema,
   docs: `An AI SDK-powered agent that maintains conversation memory, calls MCP tools, and returns both the final answer and a reasoning trace.
 
 How it behaves:
@@ -908,109 +1005,9 @@ Loop the Conversation State output back into the next agent invocation to keep m
       name: 'ShipSecAI',
       type: 'shipsecai',
     },
-    parameters: [
-      {
-        id: 'systemPrompt',
-        label: 'System Instructions',
-        type: 'textarea',
-        required: false,
-        default: '',
-        rows: 4,
-        description: 'Optional system directive that guides the agent behaviour.',
-      },
-      {
-        id: 'temperature',
-        label: 'Temperature',
-        type: 'number',
-        required: false,
-        default: DEFAULT_TEMPERATURE,
-        min: 0,
-        max: 2,
-        description: 'Higher values increase creativity, lower values improve determinism.',
-      },
-      {
-        id: 'maxTokens',
-        label: 'Max Tokens',
-        type: 'number',
-        required: false,
-        default: DEFAULT_MAX_TOKENS,
-        min: 64,
-        max: 1_000_000,
-        description: 'Upper bound for tokens generated in the final response.',
-      },
-      {
-        id: 'memorySize',
-        label: 'Memory Size',
-        type: 'number',
-        required: false,
-        default: DEFAULT_MEMORY_SIZE,
-        min: 2,
-        max: 50,
-        description: 'How many recent turns to keep in memory (excluding the system prompt).',
-      },
-      {
-        id: 'stepLimit',
-        label: 'Step Limit',
-        type: 'number',
-        required: false,
-        default: DEFAULT_STEP_LIMIT,
-        min: 1,
-        max: 12,
-        description: 'Maximum reasoning/tool steps before the agent stops automatically.',
-      },
-      {
-        id: 'structuredOutputEnabled',
-        label: 'Structured Output',
-        type: 'boolean',
-        required: false,
-        default: false,
-        description: 'Enable to enforce a specific JSON output structure from the AI model.',
-      },
-      {
-        id: 'schemaType',
-        label: 'Schema Type',
-        type: 'select',
-        required: false,
-        default: 'json-example',
-        options: [
-          { label: 'Generate From JSON Example', value: 'json-example' },
-          { label: 'Define Using JSON Schema', value: 'json-schema' },
-        ],
-        description: 'Choose how to define the output structure.',
-        visibleWhen: { structuredOutputEnabled: true },
-      },
-      {
-        id: 'jsonExample',
-        label: 'JSON Example',
-        type: 'json',
-        required: false,
-        description: 'Provide an example JSON object. Property types and names will be used to generate the schema. All fields are treated as required.',
-        helpText: 'Example: { "name": "John", "age": 30, "skills": ["security", "architecture"] }',
-        visibleWhen: { structuredOutputEnabled: true, schemaType: 'json-example' },
-      },
-      {
-        id: 'jsonSchema',
-        label: 'JSON Schema',
-        type: 'json',
-        required: false,
-        description: 'Provide a full JSON Schema definition. Refer to json-schema.org for syntax.',
-        helpText: 'Example: { "type": "object", "properties": { "name": { "type": "string" } }, "required": ["name"] }',
-        visibleWhen: { structuredOutputEnabled: true, schemaType: 'json-schema' },
-      },
-      {
-        id: 'autoFixFormat',
-        label: 'Auto-Fix Format',
-        type: 'boolean',
-        required: false,
-        default: false,
-        description: 'Attempt to fix malformed JSON responses from the model.',
-        helpText: 'When enabled, tries to extract valid JSON from responses that contain extra text or formatting issues.',
-        visibleWhen: { structuredOutputEnabled: true },
-      },
-    ],
   },
   async execute(
-    params,
+    { inputs, params },
     context,
     // Optional dependencies for testing - in production these will use the default implementations
     dependencies?: {
@@ -1023,11 +1020,8 @@ Loop the Conversation State output back into the next agent invocation to keep m
       generateText?: GenerateTextFn;
     }
   ) {
+    const { userInput, conversationState, chatModel, mcpTools, modelApiKey } = inputs;
     const {
-      userInput,
-      conversationState,
-      chatModel,
-      mcpTools,
       systemPrompt,
       temperature,
       maxTokens,
@@ -1078,15 +1072,15 @@ Loop the Conversation State output back into the next agent invocation to keep m
     const effectiveModel = ensureModelName(effectiveProvider, chatModel?.modelId ?? null);
 
     let overrideApiKey = chatModel?.apiKey ?? null;
-    if (params.modelApiKey && params.modelApiKey.trim().length > 0) {
-      overrideApiKey = params.modelApiKey.trim();
+    if (modelApiKey && modelApiKey.trim().length > 0) {
+      overrideApiKey = modelApiKey.trim();
     }
 
     const effectiveApiKey = resolveApiKey(effectiveProvider, overrideApiKey);
     debugLog('Resolved model configuration', {
       effectiveProvider,
       effectiveModel,
-      hasExplicitApiKey: Boolean(chatModel?.apiKey) || Boolean(params.modelApiKey),
+      hasExplicitApiKey: Boolean(chatModel?.apiKey) || Boolean(modelApiKey),
       apiKeyProvided: Boolean(effectiveApiKey),
     });
 
@@ -1436,6 +1430,6 @@ Loop the Conversation State output back into the next agent invocation to keep m
       agentRunId,
     };
   },
-};
+});
 
 componentRegistry.register(definition);
