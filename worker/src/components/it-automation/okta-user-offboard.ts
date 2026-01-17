@@ -1,27 +1,29 @@
 import { z } from 'zod';
 import {
   componentRegistry,
-  ComponentDefinition,
   ComponentRetryPolicy,
   ConfigurationError,
   NotFoundError,
   ServiceError,
-  withPortMeta,
+  defineComponent,
+  inputs,
+  outputs,
+  parameters,
+  port,
+  param,
 } from '@shipsec/component-sdk';
 import * as Okta from '@okta/okta-sdk-nodejs';
 
-const inputSchema = z.object({
-  user_email: withPortMeta(z.string().email(), {
+const inputSchema = inputs({
+  user_email: port(z.string().email(), {
     label: 'User Email',
     description: 'Email address of the user to offboard.',
   }),
-  dry_run: z.boolean().default(false),
-  action: z.enum(['deactivate', 'delete']).default('deactivate'),
-  okta_domain: withPortMeta(z.string(), {
+  okta_domain: port(z.string(), {
     label: 'Okta Domain',
     description: 'Your Okta organization domain.',
   }),
-  apiToken: withPortMeta(
+  apiToken: port(
     z
       .string()
       .min(1, 'API token is required')
@@ -35,7 +37,27 @@ const inputSchema = z.object({
   ),
 });
 
+const parameterSchema = parameters({
+  action: param(z.enum(['deactivate', 'delete']).default('deactivate'), {
+    label: 'Action',
+    editor: 'select',
+    options: [
+      { label: 'Deactivate Only', value: 'deactivate' },
+      { label: 'Delete Permanently', value: 'delete' },
+    ],
+    description: 'Choose to deactivate (recommended) or delete the user account.',
+    helpText: 'Business logic choice - use sidebar for operational decisions.',
+  }),
+  dry_run: param(z.boolean().default(false), {
+    label: 'Dry Run Mode',
+    editor: 'boolean',
+    description: 'Preview what would happen without making actual changes.',
+    helpText: 'Safety setting - enable to test operations without affecting users.',
+  }),
+});
+
 type Input = z.infer<typeof inputSchema>;
+type Params = z.infer<typeof parameterSchema>;
 
 interface UserState {
   id: string;
@@ -73,16 +95,12 @@ export type OktaUserOffboardOutput = OktaUserOffboardResult & {
   result: OktaUserOffboardResult;
 };
 
-const resultSchema = z.object({
-  success: withPortMeta(z.boolean(), {
-    label: 'Success',
-    description: 'Whether the offboarding completed successfully.',
-  }),
-  audit: withPortMeta(z.object({
-    timestamp: z.string(),
-    action: z.string(),
-    userEmail: z.string(),
-    before: z.object({
+const auditSchema = z.object({
+  timestamp: z.string(),
+  action: z.string(),
+  userEmail: z.string(),
+  before: z
+    .object({
       id: z.string(),
       email: z.string(),
       login: z.string(),
@@ -91,37 +109,51 @@ const resultSchema = z.object({
       activated: z.string(),
       lastLogin: z.string().optional(),
       updated: z.string(),
-    }).optional(),
-    dryRun: z.boolean(),
-    changes: z.object({
-      userDeactivated: z.boolean(),
-      userDeleted: z.boolean(),
-    }),
-  }), {
+    })
+    .optional(),
+  dryRun: z.boolean(),
+  changes: z.object({
+    userDeactivated: z.boolean(),
+    userDeleted: z.boolean(),
+  }),
+});
+
+const resultSchema = z.object({
+  success: z.boolean(),
+  audit: auditSchema,
+  error: z.string().optional(),
+  userDeactivated: z.boolean(),
+  userDeleted: z.boolean(),
+  message: z.string(),
+});
+
+const outputSchema = outputs({
+  success: port(z.boolean(), {
+    label: 'Success',
+    description: 'Whether the offboarding completed successfully.',
+  }),
+  audit: port(auditSchema, {
     label: 'Audit',
     description: 'Audit log describing the offboarding attempt.',
     connectionType: { kind: 'primitive', name: 'json' },
   }),
-  error: withPortMeta(z.string().optional(), {
+  error: port(z.string().optional(), {
     label: 'Error',
     description: 'Error message when the operation fails.',
   }),
-  userDeactivated: withPortMeta(z.boolean(), {
+  userDeactivated: port(z.boolean(), {
     label: 'User Deactivated',
     description: 'Whether the user was deactivated.',
   }),
-  userDeleted: withPortMeta(z.boolean(), {
+  userDeleted: port(z.boolean(), {
     label: 'User Deleted',
     description: 'Whether the user was deleted.',
   }),
-  message: withPortMeta(z.string(), {
+  message: port(z.string(), {
     label: 'Message',
     description: 'Summary message for the offboarding attempt.',
   }),
-});
-
-const outputSchema = resultSchema.extend({
-  result: withPortMeta(resultSchema, {
+  result: port(resultSchema, {
     label: 'User Offboard Result',
     description: 'Results of the user offboarding operation including audit logs.',
     connectionType: { kind: 'primitive', name: 'json' },
@@ -218,7 +250,7 @@ async function deleteUser(
   }
 }
 
-const definition: ComponentDefinition<Input, OktaUserOffboardOutput> = {
+const definition = defineComponent({
   id: 'it-automation.okta.user-offboard',
   label: 'Okta User Offboard',
   category: 'it_ops',
@@ -232,6 +264,7 @@ const definition: ComponentDefinition<Input, OktaUserOffboardOutput> = {
   } satisfies ComponentRetryPolicy,
   inputs: inputSchema,
   outputs: outputSchema,
+  parameters: parameterSchema,
   docs: 'Offboard a user from Okta by deactivating or deleting their account to revoke access and complete the offboarding process.',
   ui: {
     slug: 'okta-user-offboard',
@@ -251,38 +284,14 @@ const definition: ComponentDefinition<Input, OktaUserOffboardOutput> = {
       'Automatically revoke all Okta access when users leave the company.',
       'Complete IT offboarding workflows with comprehensive audit trails.',
     ],
-    parameters: [
-      {
-        id: 'action',
-        label: 'Action',
-        type: 'select',
-        required: true,
-        default: 'deactivate',
-        options: [
-          { label: 'Deactivate Only', value: 'deactivate' },
-          { label: 'Delete Permanently', value: 'delete' },
-        ],
-        description: 'Choose to deactivate (recommended) or delete the user account.',
-        helpText: 'Business logic choice - use sidebar for operational decisions.',
-      },
-      {
-        id: 'dry_run',
-        label: 'Dry Run Mode',
-        type: 'boolean',
-        default: false,
-        description: 'Preview what would happen without making actual changes.',
-        helpText: 'Safety setting - enable to test operations without affecting users.',
-      },
-    ],
   },
-  async execute(params, context) {
+  async execute({ inputs, params }, context) {
     const {
       user_email,
       okta_domain,
-      action = 'deactivate',
-      dry_run = false,
       apiToken,
-    } = params;
+    } = inputs;
+    const { action = 'deactivate', dry_run = false } = params;
 
     context.logger.info(`[Okta] Starting user offboarding for ${user_email}`);
     context.emitProgress(`Initializing user offboarding process`);
@@ -444,6 +453,6 @@ const definition: ComponentDefinition<Input, OktaUserOffboardOutput> = {
       };
     }
   },
-};
+});
 
 componentRegistry.register(definition);
