@@ -1,8 +1,12 @@
 import { z } from 'zod';
 import {
   componentRegistry,
-  ComponentDefinition,
-  withPortMeta,
+  defineComponent,
+  inputs,
+  outputs,
+  parameters,
+  port,
+  param,
   type PortMeta,
 } from '@shipsec/component-sdk';
 
@@ -15,18 +19,40 @@ import {
  * It supports dynamic description templates using context variables.
  */
 
-const inputSchema = z.object({
-  // Dynamic variables will be injected here by resolvePorts via .catchall(z.any())
-}).catchall(z.any());
+const inputSchema = inputs({
+  // Dynamic variables will be injected here by resolvePorts
+});
 
 type Input = z.infer<typeof inputSchema>;
 
-type Params = {
-  title?: string;
-  description?: string;
-  variables?: { name: string; type: string }[];
-  timeout?: string;
-};
+const parameterSchema = parameters({
+  title: param(z.string().optional(), {
+    label: 'Title',
+    editor: 'text',
+    placeholder: 'Approval Required',
+    description: 'Title for the approval request',
+  }),
+  description: param(z.string().optional(), {
+    label: 'Description',
+    editor: 'textarea',
+    placeholder: 'Please review and approve... You can use {{variable}} here.',
+    description: 'Detailed description (Markdown supported)',
+    helpText: 'Provide context about what needs to be approved. Supports interpolation.',
+  }),
+  variables: param(z.array(z.object({ name: z.string(), type: z.string().optional() })).default([]), {
+    label: 'Context Variables',
+    editor: 'variable-list',
+    description: 'Define variables to use as {{name}} in your description.',
+  }),
+  timeout: param(z.string().optional(), {
+    label: 'Timeout',
+    editor: 'text',
+    placeholder: '24h',
+    description: 'How long to wait for approval (e.g., \"1h\", \"24h\", \"7d\")',
+  }),
+});
+
+type Params = z.infer<typeof parameterSchema>;
 
 /**
  * Simple helper to replace {{var}} placeholders in a string
@@ -72,35 +98,35 @@ const mapTypeToSchema = (
   }
 };
 
-const outputSchema = z.object({
-  approved: withPortMeta(z.boolean().describe('Whether the request was approved'), {
+const outputSchema = outputs({
+  approved: port(z.boolean().describe('Whether the request was approved'), {
     label: 'Approved',
     description: 'Active path when request is approved',
     isBranching: true,
     branchColor: 'green',
   }),
-  rejected: withPortMeta(z.boolean().describe('Whether the request was rejected'), {
+  rejected: port(z.boolean().describe('Whether the request was rejected'), {
     label: 'Rejected',
     description: 'Active path when request is rejected',
     isBranching: true,
     branchColor: 'red',
   }),
-  respondedBy: withPortMeta(z.string().describe('Who responded to the request'), {
+  respondedBy: port(z.string().describe('Who responded to the request'), {
     label: 'Responded By',
     description: 'The user who resolved this request',
   }),
-  responseNote: withPortMeta(
+  responseNote: port(
     z.string().optional().describe('Note provided by the responder'),
     {
       label: 'Response Note',
       description: 'The comment left by the responder',
     },
   ),
-  respondedAt: withPortMeta(z.string().describe('When the request was resolved'), {
+  respondedAt: port(z.string().describe('When the request was resolved'), {
     label: 'Responded At',
     description: 'Timestamp when the request was resolved.',
   }),
-  requestId: withPortMeta(z.string().describe('The ID of the human input request'), {
+  requestId: port(z.string().describe('The ID of the human input request'), {
     label: 'Request ID',
     description: 'Unique identifier for the manual approval request.',
   }),
@@ -108,13 +134,14 @@ const outputSchema = z.object({
 
 type Output = z.infer<typeof outputSchema>;
 
-const definition: ComponentDefinition<Input, Output, Params> = {
+const definition = defineComponent({
   id: 'core.manual_action.approval',
   label: 'Manual Approval',
   category: 'manual_action',
   runner: { kind: 'inline' },
   inputs: inputSchema,
   outputs: outputSchema,
+  parameters: parameterSchema,
   docs: 'Pauses workflow execution until a human approves or rejects. Supports Markdown and dynamic context variables in the description.',
   ui: {
     slug: 'manual-approval',
@@ -129,66 +156,33 @@ const definition: ComponentDefinition<Input, Output, Params> = {
     },
     isLatest: true,
     deprecated: false,
-    parameters: [
-      {
-        id: 'title',
-        label: 'Title',
-        type: 'text',
-        required: true,
-        placeholder: 'Approval Required',
-        description: 'Title for the approval request',
-      },
-      {
-        id: 'description',
-        label: 'Description',
-        type: 'textarea',
-        required: false,
-        placeholder: 'Please review and approve... You can use {{variable}} here.',
-        description: 'Detailed description (Markdown supported)',
-        helpText: 'Provide context about what needs to be approved. Supports interpolation.',
-      },
-      {
-          id: 'variables',
-          label: 'Context Variables',
-          type: 'variable-list',
-          default: [],
-          description: 'Define variables to use as {{name}} in your description.',
-      },
-      {
-        id: 'timeout',
-        label: 'Timeout',
-        type: 'text',
-        required: false,
-        placeholder: '24h',
-        description: 'How long to wait for approval (e.g., "1h", "24h", "7d")',
-      },
-    ],
   },
-  resolvePorts(params: any) {
+  resolvePorts(params: Params) {
     const inputShape: Record<string, z.ZodTypeAny> = {};
     if (params.variables && Array.isArray(params.variables)) {
         for (const v of params.variables) {
             if (!v || !v.name) continue;
             const { schema, meta } = mapTypeToSchema(v.type || 'json');
-            inputShape[v.name] = withPortMeta(schema.optional(), {
+            inputShape[v.name] = port(schema.optional(), {
               ...(meta ?? {}),
               label: v.name,
             });
         }
     }
     return {
-      inputs: z.object(inputShape),
+      inputs: inputs(inputShape),
       outputs: outputSchema,
     };
   },
-  async execute(params, context) {
+  async execute({ inputs, params }, context) {
     const titleTemplate = params.title || 'Approval Required';
     const descriptionTemplate = params.description || '';
     const timeoutStr = params.timeout;
 
     // Interpolate values
-    const title = interpolate(titleTemplate, params);
-    const description = interpolate(descriptionTemplate, params);
+    const contextData = { ...params, ...inputs };
+    const title = interpolate(titleTemplate, contextData);
+    const description = interpolate(descriptionTemplate, contextData);
 
     // Calculate timeout
     let timeoutAt: string | null = null;
@@ -210,10 +204,10 @@ const definition: ComponentDefinition<Input, Output, Params> = {
       title,
       description,
       timeoutAt,
-      contextData: params,
+      contextData,
     } as any;
   },
-};
+});
 
 function parseTimeout(timeout: string): number | null {
   const match = timeout.match(/^(\d+)(m|h|d)$/);
