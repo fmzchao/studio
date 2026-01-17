@@ -1,17 +1,22 @@
 import { z } from 'zod';
 import {
   componentRegistry,
-  ComponentDefinition,
   ComponentRetryPolicy,
   runComponentWithRunner,
   ServiceError,
   ValidationError,
-  withPortMeta,
+  defineComponent,
+  inputs,
+  outputs,
+  parameters,
+  port,
+  param,
 } from '@shipsec/component-sdk';
 
-const inputSchema = z.object({
-  domains: withPortMeta(
-    z.array(z.string().min(1, 'Domain cannot be empty'))
+const inputSchema = inputs({
+  domains: port(
+    z
+      .array(z.string().min(1, 'Domain cannot be empty'))
       .min(1, 'Provide at least one domain')
       .describe('Array of root domains to enumerate'),
     {
@@ -20,77 +25,168 @@ const inputSchema = z.object({
       connectionType: { kind: 'list', element: { kind: 'primitive', name: 'text' } },
     },
   ),
-  active: z
-    .boolean()
-    .optional()
-    .default(false)
-    .describe('Attempt active techniques (zone transfers, certificate name grabs)'),
-  bruteForce: z
-    .boolean()
-    .optional()
-    .default(false)
-    .describe('Enable DNS brute forcing after passive enumeration'),
-  includeIps: z
-    .boolean()
-    .optional()
-    .default(false)
-    .describe('Include discovered IP addresses alongside hostnames'),
-  customFlags: z
-    .string()
-    .trim()
-    .optional()
-    .describe('Raw CLI flags to append to the Amass command'),
-  enableAlterations: z
-    .boolean()
-    .optional()
-    .default(false)
-    .describe('Enable Amass alterations engine for mutated hostnames'),
-  recursive: z
-    .boolean()
-    .optional()
-    .default(true)
-    .describe('Allow recursive brute forcing when enough labels are discovered'),
-  minForRecursive: z
-    .number()
-    .int()
-    .positive()
-    .max(10, 'Recursive threshold above 10 is not supported')
-    .optional()
-    .describe('Labels required before recursive brute forcing starts'),
-  maxDepth: z
-    .number()
-    .int()
-    .min(1)
-    .max(10, 'Maximum depth above 10 is not supported')
-    .optional()
-    .describe('Maximum number of subdomain labels during brute forcing'),
-  dnsQueryRate: z
-    .number()
-    .int()
-    .positive()
-    .max(1000, 'DNS query rate above 1000 QPS is not supported')
-    .optional()
-    .describe('Maximum DNS queries per second across all resolvers'),
-  verbose: z
-    .boolean()
-    .optional()
-    .default(false)
-    .describe('Emit verbose Amass logging output'),
-  demoMode: z
-    .boolean()
-    .optional()
-    .default(false)
-    .describe('Censor sensitive data in the Amass output (demo mode)'),
-  timeoutMinutes: z
-    .number()
-    .int()
-    .positive()
-    .max(360, 'Timeout larger than 6 hours is not supported')
-    .optional()
-    .describe('Maximum enumeration runtime before Amass exits'),
+});
+
+const parameterSchema = parameters({
+  active: param(
+    z
+      .boolean()
+      .default(false)
+      .describe('Attempt active techniques (zone transfers, certificate name grabs)'),
+    {
+      label: 'Active Enumeration',
+      editor: 'boolean',
+      description: 'Enable active techniques (zone transfers, certificate name grabs).',
+      helpText: 'Requires network reachability for authoritative DNS and may be noisy.',
+    },
+  ),
+  bruteForce: param(
+    z
+      .boolean()
+      .default(false)
+      .describe('Enable DNS brute forcing after passive enumeration'),
+    {
+      label: 'DNS Brute Force',
+      editor: 'boolean',
+      description: 'Perform DNS brute forcing after passive enumeration.',
+      helpText: 'Increases runtime and query volume but uncovers additional hosts.',
+    },
+  ),
+  enableAlterations: param(
+    z
+      .boolean()
+      .default(false)
+      .describe('Enable Amass alterations engine for mutated hostnames'),
+    {
+      label: 'Enable Alterations',
+      editor: 'boolean',
+      description: 'Generate altered hostnames derived from known discoveries.',
+      helpText: 'Pairs well with brute forcing when exploring complex environments.',
+    },
+  ),
+  recursive: param(
+    z
+      .boolean()
+      .default(true)
+      .describe('Allow recursive brute forcing when enough labels are discovered'),
+    {
+      label: 'Recursive Brute Force',
+      editor: 'boolean',
+      description: 'Allow recursive brute forcing when sufficient labels are discovered.',
+      helpText: 'Disable to keep enumeration shallow when DNS infrastructure is fragile.',
+    },
+  ),
+  minForRecursive: param(
+    z
+      .number()
+      .int()
+      .positive()
+      .max(10, 'Recursive threshold above 10 is not supported')
+      .optional()
+      .describe('Labels required before recursive brute forcing starts'),
+    {
+      label: 'Labels Before Recursion',
+      editor: 'number',
+      min: 1,
+      max: 10,
+      description: 'Minimum number of labels before recursion begins.',
+      helpText: 'Only used when recursive brute forcing is enabled.',
+    },
+  ),
+  maxDepth: param(
+    z
+      .number()
+      .int()
+      .min(1)
+      .max(10, 'Maximum depth above 10 is not supported')
+      .optional()
+      .describe('Maximum number of subdomain labels during brute forcing'),
+    {
+      label: 'Maximum Depth',
+      editor: 'number',
+      min: 1,
+      max: 10,
+      description: 'Limit brute forcing depth (number of labels).',
+    },
+  ),
+  dnsQueryRate: param(
+    z
+      .number()
+      .int()
+      .positive()
+      .max(1000, 'DNS query rate above 1000 QPS is not supported')
+      .optional()
+      .describe('Maximum DNS queries per second across all resolvers'),
+    {
+      label: 'DNS QPS Limit',
+      editor: 'number',
+      min: 1,
+      max: 1000,
+      description: 'Throttle the maximum DNS queries per second across resolvers.',
+      helpText: 'Helpful when respecting rate limits or protecting monitored DNS.',
+    },
+  ),
+  customFlags: param(
+    z
+      .string()
+      .trim()
+      .optional()
+      .describe('Raw CLI flags to append to the Amass command'),
+    {
+      label: 'Custom CLI Flags',
+      editor: 'textarea',
+      rows: 3,
+      placeholder: '--passive --config /work/config.yaml',
+      description: 'Paste additional Amass CLI options exactly as you would on the command line.',
+      helpText: 'Flags are appended after the generated options; avoid duplicating -d domain arguments.',
+    },
+  ),
+  includeIps: param(
+    z.boolean().default(false).describe('Include discovered IP addresses alongside hostnames'),
+    {
+      label: 'Include IP Addresses',
+      editor: 'boolean',
+      description: 'Return discovered IPs alongside hostnames in the raw output.',
+    },
+  ),
+  verbose: param(
+    z.boolean().default(false).describe('Emit verbose Amass logging output'),
+    {
+      label: 'Verbose Output',
+      editor: 'boolean',
+      description: 'Emit verbose Amass logs in the workflow output.',
+    },
+  ),
+  demoMode: param(
+    z.boolean().default(false).describe('Censor sensitive data in the Amass output (demo mode)'),
+    {
+      label: 'Demo Mode',
+      editor: 'boolean',
+      description: 'Censor sensitive values in the console output.',
+    },
+  ),
+  timeoutMinutes: param(
+    z
+      .number()
+      .int()
+      .positive()
+      .max(360, 'Timeout larger than 6 hours is not supported')
+      .optional()
+      .describe('Maximum enumeration runtime before Amass exits'),
+    {
+      label: 'Timeout (minutes)',
+      editor: 'number',
+      min: 1,
+      max: 360,
+      description: 'Stop Amass after the specified number of minutes.',
+      placeholder: '15',
+      helpText: 'Leave blank to allow Amass to run to completion.',
+    },
+  ),
 });
 
 type Input = z.infer<typeof inputSchema>;
+type Params = z.infer<typeof parameterSchema>;
 
 type Output = {
   subdomains: string[];
@@ -113,24 +209,24 @@ type Output = {
   };
 };
 
-const outputSchema = z.object({
-  subdomains: withPortMeta(z.array(z.string()), {
+const outputSchema = outputs({
+  subdomains: port(z.array(z.string()), {
     label: 'Discovered Subdomains',
     description: 'Unique list of subdomains discovered by Amass.',
   }),
-  rawOutput: withPortMeta(z.string(), {
+  rawOutput: port(z.string(), {
     label: 'Raw Output',
     description: 'Raw Amass console output for deeper inspection.',
   }),
-  domainCount: withPortMeta(z.number(), {
+  domainCount: port(z.number(), {
     label: 'Domain Count',
     description: 'Number of root domains scanned.',
   }),
-  subdomainCount: withPortMeta(z.number(), {
+  subdomainCount: port(z.number(), {
     label: 'Subdomain Count',
     description: 'Number of unique subdomains discovered.',
   }),
-  options: withPortMeta(z.object({
+  options: port(z.object({
     active: z.boolean(),
     bruteForce: z.boolean(),
     includeIps: z.boolean(),
@@ -168,7 +264,7 @@ const amassRetryPolicy: ComponentRetryPolicy = {
   nonRetryableErrorTypes: ['ContainerError', 'ValidationError', 'ConfigurationError'],
 };
 
-const definition: ComponentDefinition<Input, Output> = {
+const definition = defineComponent({
   id: 'shipsec.amass.enum',
   label: 'Amass Enumeration',
   category: 'security',
@@ -391,6 +487,7 @@ printf '{"subdomains":%s,"rawOutput":"%s","domainCount":%d,"subdomainCount":%d,"
   },
   inputs: inputSchema,
   outputs: outputSchema,
+  parameters: parameterSchema,
   docs: 'Enumerate subdomains with OWASP Amass. Supports active techniques, brute forcing, alterations, recursion tuning, and DNS throttling.',
   ui: {
     slug: 'amass',
@@ -412,143 +509,51 @@ printf '{"subdomains":%s,"rawOutput":"%s","domainCount":%d,"subdomainCount":%d,"
       'Run full-depth enumeration with brute force and alterations on a scope domain.',
       'Perform quick passive reconnaissance using custom CLI flags like --passive.',
     ],
-    parameters: [
-      {
-        id: 'active',
-        label: 'Active Enumeration',
-        type: 'boolean',
-        default: false,
-        description: 'Enable active techniques (zone transfers, certificate name grabs).',
-        helpText: 'Requires network reachability for authoritative DNS and may be noisy.',
-      },
-      {
-        id: 'bruteForce',
-        label: 'DNS Brute Force',
-        type: 'boolean',
-        default: false,
-        description: 'Perform DNS brute forcing after passive enumeration.',
-        helpText: 'Increases runtime and query volume but uncovers additional hosts.',
-      },
-      {
-        id: 'enableAlterations',
-        label: 'Enable Alterations',
-        type: 'boolean',
-        default: false,
-        description: 'Generate altered hostnames derived from known discoveries.',
-        helpText: 'Pairs well with brute forcing when exploring complex environments.',
-      },
-      {
-        id: 'recursive',
-        label: 'Recursive Brute Force',
-        type: 'boolean',
-        default: true,
-        description: 'Allow recursive brute forcing when sufficient labels are discovered.',
-        helpText: 'Disable to keep enumeration shallow when DNS infrastructure is fragile.',
-      },
-      {
-        id: 'minForRecursive',
-        label: 'Labels Before Recursion',
-        type: 'number',
-        min: 1,
-        max: 10,
-        description: 'Minimum number of labels before recursion begins.',
-        helpText: 'Only used when recursive brute forcing is enabled.',
-      },
-      {
-        id: 'maxDepth',
-        label: 'Maximum Depth',
-        type: 'number',
-        min: 1,
-        max: 10,
-        description: 'Limit brute forcing depth (number of labels).',
-      },
-      {
-        id: 'dnsQueryRate',
-        label: 'DNS QPS Limit',
-        type: 'number',
-        min: 1,
-        max: 1000,
-        description: 'Throttle the maximum DNS queries per second across resolvers.',
-        helpText: 'Helpful when respecting rate limits or protecting monitored DNS.',
-      },
-      {
-        id: 'customFlags',
-        label: 'Custom CLI Flags',
-        type: 'textarea',
-        rows: 3,
-        placeholder: '--passive --config /work/config.yaml',
-        description: 'Paste additional Amass CLI options exactly as you would on the command line.',
-        helpText: 'Flags are appended after the generated options; avoid duplicating -d domain arguments.',
-      },
-      {
-        id: 'includeIps',
-        label: 'Include IP Addresses',
-        type: 'boolean',
-        default: false,
-        description: 'Return discovered IPs alongside hostnames in the raw output.',
-      },
-      {
-        id: 'verbose',
-        label: 'Verbose Output',
-        type: 'boolean',
-        default: false,
-        description: 'Emit verbose Amass logs in the workflow output.',
-      },
-      {
-        id: 'demoMode',
-        label: 'Demo Mode',
-        type: 'boolean',
-        default: false,
-        description: 'Censor sensitive values in the console output.',
-      },
-      {
-        id: 'timeoutMinutes',
-        label: 'Timeout (minutes)',
-        type: 'number',
-        min: 1,
-        max: 360,
-        description: 'Stop Amass after the specified number of minutes.',
-        placeholder: '15',
-        helpText: 'Leave blank to allow Amass to run to completion.',
-      },
-    ],
   },
-  async execute(input, context) {
+  async execute({ inputs, params }, context) {
+    const parsedParams = parameterSchema.parse(params);
+    const runnerPayload = {
+      ...inputs,
+      ...parsedParams,
+    };
+
     const customFlags =
-      input.customFlags && input.customFlags.length > 0 ? input.customFlags : null;
+      runnerPayload.customFlags && runnerPayload.customFlags.length > 0
+        ? runnerPayload.customFlags
+        : null;
 
     const optionsSummary = {
-      active: input.active ?? false,
-      bruteForce: input.bruteForce ?? false,
-      enableAlterations: input.enableAlterations ?? false,
-      includeIps: input.includeIps ?? false,
-      recursive: input.recursive ?? true,
-      minForRecursive: input.minForRecursive ?? null,
-      maxDepth: input.maxDepth ?? null,
-      dnsQueryRate: input.dnsQueryRate ?? null,
-      verbose: input.verbose ?? false,
-      demoMode: input.demoMode ?? false,
-      timeoutMinutes: input.timeoutMinutes ?? null,
+      active: parsedParams.active ?? false,
+      bruteForce: parsedParams.bruteForce ?? false,
+      enableAlterations: parsedParams.enableAlterations ?? false,
+      includeIps: parsedParams.includeIps ?? false,
+      recursive: parsedParams.recursive ?? true,
+      minForRecursive: parsedParams.minForRecursive ?? null,
+      maxDepth: parsedParams.maxDepth ?? null,
+      dnsQueryRate: parsedParams.dnsQueryRate ?? null,
+      verbose: parsedParams.verbose ?? false,
+      demoMode: parsedParams.demoMode ?? false,
+      timeoutMinutes: parsedParams.timeoutMinutes ?? null,
       customFlags,
     };
 
     context.logger.info(
-      `[Amass] Enumerating ${input.domains.length} domain(s) with options: ${JSON.stringify(optionsSummary)}`,
+      `[Amass] Enumerating ${inputs.domains.length} domain(s) with options: ${JSON.stringify(optionsSummary)}`,
     );
 
     context.emitProgress({
       message: 'Launching Amass enumeration container…',
       level: 'info',
-      data: { domains: input.domains, options: optionsSummary },
+      data: { domains: inputs.domains, options: optionsSummary },
     });
 
-    const normalizedInput: Input = {
-      ...input,
+    const normalizedInput: Input & Params = {
+      ...runnerPayload,
       customFlags: customFlags ?? undefined,
     };
 
     const result = await runComponentWithRunner(
-      this.runner,
+      definition.runner,
       async () => ({}) as Output,
       normalizedInput,
       context,
@@ -595,7 +600,7 @@ printf '{"subdomains":%s,"rawOutput":"%s","domainCount":%d,"subdomainCount":%d,"
 
     return parsed.data;
   },
-};
+});
 
 componentRegistry.register(definition);
 

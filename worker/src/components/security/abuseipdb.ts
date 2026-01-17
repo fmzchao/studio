@@ -1,101 +1,108 @@
 import { z } from 'zod';
 import {
   componentRegistry,
-  ComponentDefinition,
   ValidationError,
   ConfigurationError,
   fromHttpResponse,
   ComponentRetryPolicy,
-  withPortMeta,
+  defineComponent,
+  inputs,
+  outputs,
+  parameters,
+  port,
+  param,
   coerceBooleanFromText,
   coerceNumberFromText,
 } from '@shipsec/component-sdk';
 
-const inputSchema = z.object({
-  ipAddress: withPortMeta(z.string().describe('The IPv4 or IPv6 address you want to check.'), {
+const inputSchema = inputs({
+  ipAddress: port(z.string().describe('The IPv4 or IPv6 address you want to check.'), {
     label: 'IP Address',
   }),
-  maxAgeInDays: withPortMeta(
-    coerceNumberFromText(z.number())
-      .default(90)
-      .describe('Max age in days for reports to be included (default: 90).'),
-    {
-      label: 'Max Age (Days)',
-    },
-  ),
-  verbose: withPortMeta(
-    coerceBooleanFromText()
-      .default(false)
-      .describe('Include verbose information.'),
-    {
-      label: 'Verbose',
-    },
-  ),
-  apiKey: withPortMeta(z.string().describe('Your AbuseIPDB API Key.'), {
+  apiKey: port(z.string().describe('Your AbuseIPDB API Key.'), {
     label: 'API Key',
     editor: 'secret',
     connectionType: { kind: 'primitive', name: 'secret' },
   }),
 });
 
-const outputSchema = z.object({
-  ipAddress: withPortMeta(z.string().describe('The IP address that was checked.'), {
+const parameterSchema = parameters({
+  maxAgeInDays: param(
+    coerceNumberFromText(z.number())
+      .default(90)
+      .describe('Max age in days for reports to be included (default: 90).'),
+    {
+      label: 'Max Age (Days)',
+      editor: 'number',
+    },
+  ),
+  verbose: param(
+    coerceBooleanFromText().default(false).describe('Include verbose information.'),
+    {
+      label: 'Verbose',
+      editor: 'boolean',
+    },
+  ),
+});
+
+const outputSchema = outputs({
+  ipAddress: port(z.string().describe('The IP address that was checked.'), {
     label: 'IP Address',
   }),
-  isPublic: withPortMeta(z.boolean().optional(), {
+  isPublic: port(z.boolean().optional(), {
     label: 'Public IP',
     description: 'Whether the IP address is public.',
   }),
-  ipVersion: withPortMeta(z.number().optional(), {
+  ipVersion: port(z.number().optional(), {
     label: 'IP Version',
     description: 'IP version (4 or 6).',
   }),
-  isWhitelisted: withPortMeta(z.boolean().optional(), {
+  isWhitelisted: port(z.boolean().optional(), {
     label: 'Whitelisted',
   }),
-  abuseConfidenceScore: withPortMeta(
+  abuseConfidenceScore: port(
     z.number().describe('The confidence score (0-100).'),
     {
       label: 'Confidence Score',
     },
   ),
-  countryCode: withPortMeta(z.string().optional(), {
+  countryCode: port(z.string().optional(), {
     label: 'Country',
   }),
-  usageType: withPortMeta(z.string().optional(), {
+  usageType: port(z.string().optional(), {
     label: 'Usage Type',
     description: 'ISP usage classification from AbuseIPDB.',
   }),
-  isp: withPortMeta(z.string().optional(), {
+  isp: port(z.string().optional(), {
     label: 'ISP',
   }),
-  domain: withPortMeta(z.string().optional(), {
+  domain: port(z.string().optional(), {
     label: 'Domain',
     description: 'Associated domain, if available.',
   }),
-  hostnames: withPortMeta(z.array(z.string()).optional(), {
+  hostnames: port(z.array(z.string()).optional(), {
     label: 'Hostnames',
     description: 'Associated hostnames reported by AbuseIPDB.',
   }),
-  totalReports: withPortMeta(z.number().optional(), {
+  totalReports: port(z.number().optional(), {
     label: 'Total Reports',
   }),
-  numDistinctUsers: withPortMeta(z.number().optional(), {
+  numDistinctUsers: port(z.number().optional(), {
     label: 'Distinct Users',
     description: 'Number of distinct reporters.',
   }),
-  lastReportedAt: withPortMeta(z.string().optional(), {
+  lastReportedAt: port(z.string().optional(), {
     label: 'Last Reported At',
     description: 'Timestamp of the most recent report.',
   }),
-  reports: withPortMeta(z.array(z.record(z.string(), z.any())).optional(), {
+  reports: port(z.array(z.record(z.string(), z.any())).optional(), {
     label: 'Reports',
     description: 'Detailed reports returned by AbuseIPDB.',
     allowAny: true,
     reason: 'Report entries vary by plan and API version.',
     connectionType: { kind: 'list', element: { kind: 'primitive', name: 'json' } },
   }),
-  full_report: withPortMeta(
+  full_report: port(
     z.record(z.string(), z.any()).describe('The full raw JSON response.'),
     {
       label: 'Full Report',
@@ -121,7 +128,7 @@ const abuseIPDBRetryPolicy: ComponentRetryPolicy = {
   ],
 };
 
-const definition: ComponentDefinition<Input, Output> = {
+const definition = defineComponent({
   id: 'security.abuseipdb.check',
   label: 'AbuseIPDB Check',
   category: 'security',
@@ -129,6 +136,7 @@ const definition: ComponentDefinition<Input, Output> = {
   retryPolicy: abuseIPDBRetryPolicy,
   inputs: inputSchema,
   outputs: outputSchema,
+  parameters: parameterSchema,
   docs: 'Check the reputation of an IP address using the AbuseIPDB API.',
   ui: {
     slug: 'abuseipdb-check',
@@ -140,13 +148,10 @@ const definition: ComponentDefinition<Input, Output> = {
     author: { name: 'ShipSecAI', type: 'shipsecai' },
     isLatest: true,
     deprecated: false,
-    parameters: [
-      { id: 'maxAgeInDays', label: 'Max Age (Days)', type: 'number', default: 90 },
-      { id: 'verbose', label: 'Verbose Output', type: 'boolean', default: false },
-    ],
   },
-  async execute(params, context) {
-    const { ipAddress, apiKey, maxAgeInDays, verbose } = params;
+  async execute({ inputs, params }, context) {
+    const { ipAddress, apiKey } = inputs;
+    const { maxAgeInDays, verbose } = params;
 
     if (!ipAddress) {
       throw new ValidationError('IP Address is required', {
@@ -217,7 +222,7 @@ const definition: ComponentDefinition<Input, Output> = {
       full_report: data,
     };
   },
-};
+});
 
 componentRegistry.register(definition);
 

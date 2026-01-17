@@ -1,12 +1,16 @@
 import { z } from 'zod';
 import {
   componentRegistry,
-  ComponentDefinition,
   runComponentWithRunner,
   type DockerRunnerConfig,
   ContainerError,
   ComponentRetryPolicy,
-  withPortMeta,
+  defineComponent,
+  inputs,
+  outputs,
+  parameters,
+  port,
+  param,
 } from '@shipsec/component-sdk';
 import { IsolatedContainerVolume } from '../../utils/isolated-volume';
 
@@ -35,8 +39,8 @@ const CONTAINER_INPUT_DIR = `/${INPUT_MOUNT_NAME}`;
 const DOMAIN_FILE_NAME = 'domains.txt';
 const RESOLVER_FILE_NAME = 'resolvers.txt';
 
-const inputSchema = z.object({
-  domains: withPortMeta(
+const inputSchema = inputs({
+  domains: port(
     z.array(
       z
         .string()
@@ -49,12 +53,16 @@ const inputSchema = z.object({
       connectionType: { kind: 'list', element: { kind: 'primitive', name: 'text' } },
     },
   ),
-  recordTypes: withPortMeta(z.array(recordTypeEnum).default(['A']), {
+});
+
+const parameterSchema = parameters({
+  recordTypes: param(z.array(recordTypeEnum).default(['A']), {
     label: 'Record Types',
+    editor: 'multi-select',
+    options: recordTypeEnum.options.map((value) => ({ label: value, value })),
     description: 'DNS record types to resolve.',
-    connectionType: { kind: 'list', element: { kind: 'primitive', name: 'text' } },
   }),
-  resolvers: withPortMeta(
+  resolvers: param(
     z
       .array(
         z
@@ -68,46 +76,146 @@ const inputSchema = z.object({
       .default(['1.1.1.1:53', '1.0.0.1:53', '8.8.8.8:53', '8.8.4.4:53']),
     {
       label: 'Resolvers',
+      editor: 'json',
       description: 'Custom DNS resolvers to use for queries.',
-      connectionType: { kind: 'list', element: { kind: 'primitive', name: 'text' } },
     },
   ),
-  retryCount: z.number().int().min(1).max(10).default(2),
-  rateLimit: z.number().int().positive().max(10000).optional(),
-  threads: z.number().int().min(1).max(10000).default(100),
-  includeResponses: z.boolean().default(true),
-  responsesOnly: z.boolean().default(false),
-  statusCodeFilter: z
-    .string()
-    .trim()
-    .max(200, 'Status code filter should be a comma-separated list (max 200 chars).')
-    .optional(),
-  showCdn: z.boolean().default(false),
-  showAsn: z.boolean().default(false),
-  includeStats: z.boolean().default(false),
-  verbose: z.boolean().default(false),
-  includeRawDns: z.boolean().default(false),
-  omitRawInJson: z.boolean().default(false),
-  wildcardThreshold: z.number().int().min(1).max(1000).optional(),
-  wildcardDomain: z
-    .string()
-    .trim()
-    .max(255, 'Wildcard filter domain must be shorter than 255 characters.')
-    .optional(),
-  proxy: z
-    .string()
-    .trim()
-    .max(255, 'Proxy definitions must be shorter than 255 characters.')
-    .optional(),
-  customFlags: z
-    .string()
-    .trim()
-    .optional()
-    .describe('Raw CLI flags appended to the dnsx invocation.'),
-  outputMode: outputModeEnum.default('json'),
+  retryCount: param(z.number().int().min(1).max(10).default(2), {
+    label: 'Retry Count',
+    editor: 'number',
+    min: 1,
+    max: 10,
+    description: 'Number of retry attempts dnsx should make for failed queries.',
+  }),
+  rateLimit: param(z.number().int().positive().max(10000).optional(), {
+    label: 'Rate Limit (req/s)',
+    editor: 'number',
+    min: 1,
+    max: 10000,
+    description: 'Throttle dnsx requests per second (optional).',
+  }),
+  threads: param(z.number().int().min(1).max(10000).default(100), {
+    label: 'Thread Count',
+    editor: 'number',
+    min: 1,
+    max: 10000,
+    description: 'Number of concurrent dnsx workers (-t).',
+  }),
+  includeResponses: param(z.boolean().default(true), {
+    label: 'Include DNS Responses',
+    editor: 'boolean',
+    description: 'Adds -resp so dnsx returns answer sections (recommended for JSON mode).',
+    helpText: 'Disable only if you strictly need terse host output; JSON parsing may lose data otherwise.',
+  }),
+  responsesOnly: param(z.boolean().default(false), {
+    label: 'Responses Only',
+    editor: 'boolean',
+    description: 'Forward dnsx response blobs without the leading hostname (-resp-only).',
+  }),
+  statusCodeFilter: param(
+    z
+      .string()
+      .trim()
+      .max(200, 'Status code filter should be a comma-separated list (max 200 chars).')
+      .optional(),
+    {
+      label: 'Status Code Filter',
+      editor: 'text',
+      placeholder: 'noerror,servfail,refused',
+      description: 'Comma-separated DNS status codes to keep (dnsx -rcode).',
+    },
+  ),
+  showCdn: param(z.boolean().default(false), {
+    label: 'Show CDN Names',
+    editor: 'boolean',
+    description: 'Adds -cdn to annotate responses with detected CDN providers.',
+  }),
+  showAsn: param(z.boolean().default(false), {
+    label: 'Show ASN Info',
+    editor: 'boolean',
+    description: 'Adds -asn to include the autonomous system number for each result.',
+  }),
+  includeStats: param(z.boolean().default(false), {
+    label: 'Emit Scan Stats',
+    editor: 'boolean',
+    description: 'Adds -stats to show resolver throughput summary blocks.',
+  }),
+  includeRawDns: param(z.boolean().default(false), {
+    label: 'Include Raw DNS',
+    editor: 'boolean',
+    description: 'Adds -raw for debugging raw dns responses.',
+  }),
+  omitRawInJson: param(z.boolean().default(false), {
+    label: 'Omit Raw (JSON)',
+    editor: 'boolean',
+    description: 'Adds -omit-raw to skip base64 payloads in JSON output.',
+  }),
+  verbose: param(z.boolean().default(false), {
+    label: 'Verbose Logs',
+    editor: 'boolean',
+    description: 'Adds -verbose for additional dnsx logging.',
+  }),
+  wildcardThreshold: param(z.number().int().min(1).max(1000).optional(), {
+    label: 'Wildcard Threshold',
+    editor: 'number',
+    min: 1,
+    max: 1000,
+    description: 'Adds -wildcard-threshold to drop noisy wildcard responses.',
+  }),
+  wildcardDomain: param(
+    z
+      .string()
+      .trim()
+      .max(255, 'Wildcard filter domain must be shorter than 255 characters.')
+      .optional(),
+    {
+      label: 'Wildcard Domain',
+      editor: 'text',
+      placeholder: 'example.com',
+      description: 'Adds -wildcard-domain for focused wildcard filtering.',
+    },
+  ),
+  proxy: param(
+    z
+      .string()
+      .trim()
+      .max(255, 'Proxy definitions must be shorter than 255 characters.')
+      .optional(),
+    {
+      label: 'Proxy',
+      editor: 'text',
+      placeholder: 'socks5://127.0.0.1:9050',
+      description: 'Route all dnsx traffic through a proxy (-proxy).',
+    },
+  ),
+  customFlags: param(
+    z
+      .string()
+      .trim()
+      .optional()
+      .describe('Raw CLI flags appended to the dnsx invocation.'),
+    {
+      label: 'Custom CLI Flags',
+      editor: 'textarea',
+      rows: 3,
+      placeholder: '--rcode noerror --proxy socks5://127.0.0.1:9050',
+      description: 'Paste additional dnsx CLI options exactly as you would on the command line.',
+      helpText: 'Flags are appended after the generated options; avoid duplicating list/record selections.',
+    },
+  ),
+  outputMode: param(outputModeEnum.default('json'), {
+    label: 'Output Mode',
+    editor: 'select',
+    description: 'JSON mode (default) returns structured dnsx records; Silent mode prints resolved hosts only.',
+    options: [
+      { label: 'Silent (resolved hosts)', value: 'silent' },
+      { label: 'JSON (structured records)', value: 'json' },
+    ],
+  }),
 });
 
 type Input = z.infer<typeof inputSchema>;
+type Params = z.infer<typeof parameterSchema>;
 
 type DnsxRecord = {
   host: string;
@@ -140,43 +248,43 @@ const dnsxLineSchema = z
   })
   .passthrough();
 
-const outputSchema: z.ZodType<Output> = z.object({
-  results: withPortMeta(z.array(z.any()), {
+const outputSchema = outputs({
+  results: port(z.array(z.any()), {
     label: 'Results',
     description: 'DNS resolution results returned by dnsx.',
     allowAny: true,
     reason: 'dnsx returns heterogeneous record payloads.',
     connectionType: { kind: 'list', element: { kind: 'primitive', name: 'json' } },
   }),
-  rawOutput: withPortMeta(z.string(), {
+  rawOutput: port(z.string(), {
     label: 'Raw Output',
     description: 'Raw dnsx output for debugging.',
   }),
-  domainCount: withPortMeta(z.number(), {
+  domainCount: port(z.number(), {
     label: 'Domain Count',
     description: 'Number of domains resolved.',
   }),
-  recordCount: withPortMeta(z.number(), {
+  recordCount: port(z.number(), {
     label: 'Record Count',
     description: 'Total number of DNS records returned.',
   }),
-  recordTypes: withPortMeta(z.array(z.string()), {
+  recordTypes: port(z.array(z.string()), {
     label: 'Record Types',
     description: 'Record types included in the output.',
   }),
-  resolvers: withPortMeta(z.array(z.string()), {
+  resolvers: port(z.array(z.string()), {
     label: 'Resolvers',
     description: 'Resolvers that responded during the run.',
   }),
-  resolvedHosts: withPortMeta(z.array(z.string()), {
+  resolvedHosts: port(z.array(z.string()), {
     label: 'Resolved Hosts',
     description: 'List of hosts resolved during the run.',
   }),
-  errors: withPortMeta(z.array(z.string()).optional(), {
+  errors: port(z.array(z.string()).optional(), {
     label: 'Errors',
     description: 'Errors encountered during dnsx execution.',
   }),
-}) as z.ZodType<Output>;
+});
 
 const splitCliArgs = (input: string): string[] => {
   const args: string[] = [];
@@ -377,7 +485,7 @@ const dnsxRetryPolicy: ComponentRetryPolicy = {
   ],
 };
 
-const definition: ComponentDefinition<Input, Output> = {
+const definition = defineComponent({
   id: 'shipsec.dnsx.run',
   label: 'DNSX Resolver',
   category: 'security',
@@ -401,6 +509,7 @@ const definition: ComponentDefinition<Input, Output> = {
   },
   inputs: inputSchema,
   outputs: outputSchema,
+  parameters: parameterSchema,
   docs:
     'Executes dnsx inside Docker to resolve DNS records for the provided domains. Supports multiple record types, custom resolvers, and rate limiting.',
   ui: {
@@ -418,144 +527,11 @@ const definition: ComponentDefinition<Input, Output> = {
     },
     isLatest: true,
     deprecated: false,
-    parameters: [
-      {
-        id: 'outputMode',
-        label: 'Output Mode',
-        type: 'select',
-        default: 'json',
-        description: 'JSON mode (default) returns structured dnsx records; Silent mode prints resolved hosts only.',
-        options: [
-          { label: 'Silent (resolved hosts)', value: 'silent' },
-          { label: 'JSON (structured records)', value: 'json' },
-        ],
-      },
-      {
-        id: 'includeResponses',
-        label: 'Include DNS Responses',
-        type: 'boolean',
-        default: true,
-        description: 'Adds -resp so dnsx returns answer sections (recommended for JSON mode).',
-        helpText: 'Disable only if you strictly need terse host output; JSON parsing may lose data otherwise.',
-      },
-      {
-        id: 'responsesOnly',
-        label: 'Responses Only',
-        type: 'boolean',
-        default: false,
-        description: 'Forward dnsx response blobs without the leading hostname (-resp-only).',
-      },
-      {
-        id: 'statusCodeFilter',
-        label: 'Status Code Filter',
-        type: 'text',
-        placeholder: 'noerror,servfail,refused',
-        description: 'Comma-separated DNS status codes to keep (dnsx -rcode).',
-      },
-      {
-        id: 'threads',
-        label: 'Thread Count',
-        type: 'number',
-        min: 1,
-        max: 10000,
-        default: 100,
-        description: 'Number of concurrent dnsx workers (-t).',
-      },
-      {
-        id: 'retryCount',
-        label: 'Retry Count',
-        type: 'number',
-        default: 2,
-        min: 1,
-        max: 10,
-        description: 'Number of retry attempts dnsx should make for failed queries.',
-      },
-      {
-        id: 'rateLimit',
-        label: 'Rate Limit (req/s)',
-        type: 'number',
-        description: 'Throttle dnsx requests per second (optional).',
-        min: 1,
-        max: 10000,
-      },
-      {
-        id: 'showCdn',
-        label: 'Show CDN Names',
-        type: 'boolean',
-        default: false,
-        description: 'Adds -cdn to annotate responses with detected CDN providers.',
-      },
-      {
-        id: 'showAsn',
-        label: 'Show ASN Info',
-        type: 'boolean',
-        default: false,
-        description: 'Adds -asn to include the autonomous system number for each result.',
-      },
-      {
-        id: 'includeStats',
-        label: 'Emit Scan Stats',
-        type: 'boolean',
-        default: false,
-        description: 'Adds -stats to show resolver throughput summary blocks.',
-      },
-      {
-        id: 'includeRawDns',
-        label: 'Include Raw DNS',
-        type: 'boolean',
-        default: false,
-        description: 'Adds -raw for debugging raw dns responses.',
-      },
-      {
-        id: 'omitRawInJson',
-        label: 'Omit Raw (JSON)',
-        type: 'boolean',
-        default: false,
-        description: 'Adds -omit-raw to skip base64 payloads in JSON output.',
-      },
-      {
-        id: 'verbose',
-        label: 'Verbose Logs',
-        type: 'boolean',
-        default: false,
-        description: 'Adds -verbose for additional dnsx logging.',
-      },
-      {
-        id: 'wildcardThreshold',
-        label: 'Wildcard Threshold',
-        type: 'number',
-        min: 1,
-        max: 1000,
-        description: 'Adds -wildcard-threshold to drop noisy wildcard responses.',
-      },
-      {
-        id: 'wildcardDomain',
-        label: 'Wildcard Domain',
-        type: 'text',
-        placeholder: 'example.com',
-        description: 'Adds -wildcard-domain for focused wildcard filtering.',
-      },
-      {
-        id: 'proxy',
-        label: 'Proxy',
-        type: 'text',
-        placeholder: 'socks5://127.0.0.1:9050',
-        description: 'Route all dnsx traffic through a proxy (-proxy).',
-      },
-      {
-        id: 'customFlags',
-        label: 'Custom CLI Flags',
-        type: 'textarea',
-        rows: 3,
-        placeholder: '--rcode noerror --proxy socks5://127.0.0.1:9050',
-        description: 'Paste additional dnsx CLI options exactly as you would on the command line.',
-        helpText: 'Flags are appended after the generated options; avoid duplicating list/record selections.',
-      },
-    ],
   },
-  async execute(input, context) {
+  async execute({ inputs, params }, context) {
+    const parsedParams = parameterSchema.parse(params);
+    const { domains } = inputs;
     const {
-      domains,
       recordTypes,
       resolvers,
       retryCount,
@@ -575,7 +551,7 @@ const definition: ComponentDefinition<Input, Output> = {
       wildcardDomain,
       proxy,
       customFlags,
-    } = input;
+    } = parsedParams;
 
     const trimmedStatusCodeFilter =
       typeof statusCodeFilter === 'string' && statusCodeFilter.length > 0 ? statusCodeFilter : undefined;
@@ -636,6 +612,11 @@ const definition: ComponentDefinition<Input, Output> = {
       customFlags: customFlagArgs,
     });
 
+    const runnerPayload = {
+      ...inputs,
+      ...parsedParams,
+    };
+
     context.logger.info(
       `[DNSX] Resolving ${domainCount} domain(s) with record types: ${recordTypes.join(', ')}`,
     );
@@ -689,7 +670,7 @@ const definition: ComponentDefinition<Input, Output> = {
       rawPayload = await runComponentWithRunner(
         runnerConfig,
         async () => ({} as Output),
-        input,
+        runnerPayload,
         context,
       );
     } finally {
@@ -1052,7 +1033,7 @@ const definition: ComponentDefinition<Input, Output> = {
       errors: safeResult.data.errors,
     });
   },
-};
+});
 
 componentRegistry.register(definition);
 

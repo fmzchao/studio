@@ -1,44 +1,60 @@
 import { z } from 'zod';
 import {
   componentRegistry,
-  ComponentDefinition,
   ValidationError,
   ConfigurationError,
   fromHttpResponse,
   ComponentRetryPolicy,
-  withPortMeta,
+  defineComponent,
+  inputs,
+  outputs,
+  parameters,
+  port,
+  param,
 } from '@shipsec/component-sdk';
 
-const inputSchema = z.object({
-  indicator: withPortMeta(z.string().describe('The IP, Domain, File Hash, or URL to inspect.'), {
+const inputSchema = inputs({
+  indicator: port(z.string().describe('The IP, Domain, File Hash, or URL to inspect.'), {
     label: 'Indicator',
   }),
-  type: z.enum(['ip', 'domain', 'file', 'url']).default('ip').describe('The type of indicator.'),
-  apiKey: withPortMeta(z.string().describe('Your VirusTotal API Key.'), {
+  apiKey: port(z.string().describe('Your VirusTotal API Key.'), {
     label: 'API Key',
     editor: 'secret',
     connectionType: { kind: 'primitive', name: 'secret' },
   }),
 });
 
-const outputSchema = z.object({
-  malicious: withPortMeta(z.number().describe('Number of engines flagging this as malicious.'), {
+const parameterSchema = parameters({
+  type: param(z.enum(['ip', 'domain', 'file', 'url']).default('ip').describe('The type of indicator.'), {
+    label: 'Indicator Type',
+    editor: 'select',
+    options: [
+      { label: 'IP Address', value: 'ip' },
+      { label: 'Domain', value: 'domain' },
+      { label: 'File Hash (MD5/SHA1/SHA256)', value: 'file' },
+      { label: 'URL', value: 'url' },
+    ],
+  }),
+});
+
+const outputSchema = outputs({
+  malicious: port(z.number().describe('Number of engines flagging this as malicious.'), {
     label: 'Malicious Count',
   }),
-  suspicious: withPortMeta(z.number().describe('Number of engines flagging this as suspicious.'), {
+  suspicious: port(z.number().describe('Number of engines flagging this as suspicious.'), {
     label: 'Suspicious Count',
   }),
-  harmless: withPortMeta(z.number().describe('Number of engines flagging this as harmless.'), {
+  harmless: port(z.number().describe('Number of engines flagging this as harmless.'), {
     label: 'Harmless Count',
   }),
-  tags: withPortMeta(z.array(z.string()).optional(), {
+  tags: port(z.array(z.string()).optional(), {
     label: 'Tags',
     description: 'Tags returned by VirusTotal for the indicator.',
   }),
-  reputation: withPortMeta(z.number().optional(), {
+  reputation: port(z.number().optional(), {
     label: 'Reputation',
   }),
-  full_report: withPortMeta(
+  full_report: port(
     z.record(z.string(), z.any()).describe('The full raw JSON response from VirusTotal.'),
     {
       label: 'Full Report',
@@ -63,7 +79,7 @@ const virusTotalRetryPolicy: ComponentRetryPolicy = {
   ],
 };
 
-const definition: ComponentDefinition<Input, Output> = {
+const definition = defineComponent({
   id: 'security.virustotal.lookup',
   label: 'VirusTotal Lookup',
   category: 'security',
@@ -71,6 +87,7 @@ const definition: ComponentDefinition<Input, Output> = {
   retryPolicy: virusTotalRetryPolicy,
   inputs: inputSchema,
   outputs: outputSchema,
+  parameters: parameterSchema,
   docs: 'Check the reputation of an IP, Domain, File Hash, or URL using the VirusTotal v3 API.',
   ui: {
     slug: 'virustotal-lookup',
@@ -82,23 +99,10 @@ const definition: ComponentDefinition<Input, Output> = {
     author: { name: 'ShipSecAI', type: 'shipsecai' },
     isLatest: true,
     deprecated: false,
-    parameters: [
-       {
-        id: 'type',
-        label: 'Indicator Type',
-        type: 'select',
-        default: 'ip',
-        options: [
-          { label: 'IP Address', value: 'ip' },
-          { label: 'Domain', value: 'domain' },
-          { label: 'File Hash (MD5/SHA1/SHA256)', value: 'file' },
-          { label: 'URL', value: 'url' },
-        ],
-      },
-    ],
   },
-  async execute(params, context) {
-    const { indicator, type, apiKey } = params;
+  async execute({ inputs, params }, context) {
+    const { indicator, apiKey } = inputs;
+    const { type } = params;
 
     if (!indicator) {
       throw new ValidationError('Indicator is required', {
@@ -187,7 +191,7 @@ const definition: ComponentDefinition<Input, Output> = {
       full_report: data,
     };
   },
-};
+});
 
 componentRegistry.register(definition);
 

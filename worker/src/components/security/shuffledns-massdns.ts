@@ -1,123 +1,155 @@
 import { z } from 'zod';
 import {
   componentRegistry,
-  ComponentDefinition,
   ComponentRetryPolicy,
   runComponentWithRunner,
   type DockerRunnerConfig,
   ContainerError,
-  withPortMeta,
+  ValidationError,
+  defineComponent,
+  inputs,
+  outputs,
+  parameters,
+  port,
+  param,
 } from '@shipsec/component-sdk';
 import { IsolatedContainerVolume } from '../../utils/isolated-volume';
 
 const DEFAULT_RESOLVERS = ['1.1.1.1', '8.8.8.8'] as const;
 
 // Input schema for Shuffledns + MassDNS component
-const inputSchema = z
-  .object({
-    domains: withPortMeta(
-      z
-        .array(
-          z
-            .string()
-            .min(1)
-            .regex(/^[\w.-]+$/, 'Domains may only include letters, numbers, dots, underscores, and hyphens.'),
-        )
-        .min(1, 'Provide at least one domain.'),
-      {
-        label: 'Domains',
-        description: 'Root domains to enumerate.',
-        connectionType: { kind: 'list', element: { kind: 'primitive', name: 'text' } },
-      },
-    ),
-    mode: z
+const inputSchema = inputs({
+  domains: port(
+    z
+      .array(
+        z
+          .string()
+          .min(1)
+          .regex(/^[\w.-]+$/, 'Domains may only include letters, numbers, dots, underscores, and hyphens.'),
+      )
+      .min(1, 'Provide at least one domain.'),
+    {
+      label: 'Domains',
+      description: 'Root domains to enumerate.',
+      connectionType: { kind: 'list', element: { kind: 'primitive', name: 'text' } },
+    },
+  ),
+  words: port(
+    z
+      .array(z.string().min(1))
+      .optional()
+      .describe('Wordlist entries for bruteforce mode'),
+    {
+      label: 'Wordlist',
+      description: 'Wordlist entries for bruteforce mode.',
+      connectionType: { kind: 'list', element: { kind: 'primitive', name: 'text' } },
+    },
+  ),
+  seeds: port(
+    z
+      .array(z.string().min(1))
+      .optional()
+      .describe('Seed subdomains for resolve mode'),
+    {
+      label: 'Seeds',
+      description: 'Seed subdomains for resolve mode.',
+      connectionType: { kind: 'list', element: { kind: 'primitive', name: 'text' } },
+    },
+  ),
+  resolvers: port(
+    z
+      .array(
+        z
+          .string()
+          .min(1)
+          .regex(/^[\w.:+-]+$/, 'Resolver should be a hostname/IP, optionally with port (e.g. 1.1.1.1).'),
+      )
+      .default([...DEFAULT_RESOLVERS]),
+    {
+      label: 'Resolvers',
+      description: 'DNS resolvers to use for enumeration.',
+      connectionType: { kind: 'list', element: { kind: 'primitive', name: 'text' } },
+    },
+  ),
+  trustedResolvers: port(
+    z
+      .array(
+        z
+          .string()
+          .min(1)
+          .regex(/^[\w.:+-]+$/, 'Resolver should be a hostname/IP, optionally with port (e.g. 1.1.1.1).'),
+      )
+      .default([]),
+    {
+      label: 'Trusted Resolvers',
+      description: 'Trusted DNS resolvers for wildcard detection.',
+      connectionType: { kind: 'list', element: { kind: 'primitive', name: 'text' } },
+    },
+  ),
+});
+
+const parameterSchema = parameters({
+  mode: param(
+    z
       .enum(['bruteforce', 'resolve'])
       .default('resolve')
       .describe('Execution mode: bruteforce with a wordlist or resolve a list of seeds'),
-    words: withPortMeta(
-      z
-        .array(z.string().min(1))
-        .optional()
-        .describe('Wordlist entries for bruteforce mode'),
-      {
-        label: 'Wordlist',
-        description: 'Wordlist entries for bruteforce mode.',
-        connectionType: { kind: 'list', element: { kind: 'primitive', name: 'text' } },
-      },
-    ),
-    seeds: withPortMeta(
-      z
-        .array(z.string().min(1))
-        .optional()
-        .describe('Seed subdomains for resolve mode'),
-      {
-        label: 'Seeds',
-        description: 'Seed subdomains for resolve mode.',
-        connectionType: { kind: 'list', element: { kind: 'primitive', name: 'text' } },
-      },
-    ),
-    resolvers: withPortMeta(
-      z
-        .array(
-          z
-            .string()
-            .min(1)
-            .regex(/^[\w.:+-]+$/, 'Resolver should be a hostname/IP, optionally with port (e.g. 1.1.1.1).'),
-        )
-        .default([...DEFAULT_RESOLVERS]),
-      {
-        label: 'Resolvers',
-        description: 'DNS resolvers to use for enumeration.',
-        connectionType: { kind: 'list', element: { kind: 'primitive', name: 'text' } },
-      },
-    ),
-    trustedResolvers: withPortMeta(
-      z
-        .array(
-          z
-            .string()
-            .min(1)
-            .regex(/^[\w.:+-]+$/, 'Resolver should be a hostname/IP, optionally with port (e.g. 1.1.1.1).'),
-        )
-        .default([]),
-      {
-        label: 'Trusted Resolvers',
-        description: 'Trusted DNS resolvers for wildcard detection.',
-        connectionType: { kind: 'list', element: { kind: 'primitive', name: 'text' } },
-      },
-    ),
-    threads: z.number().int().positive().max(20000).optional().describe('Concurrent massdns resolves (-t)'),
-    retries: z.number().int().min(1).max(20).default(5).describe('Retries for DNS enumeration'),
-    wildcardStrict: z.boolean().default(false).describe('Strict wildcard checking (-sw)'),
-    wildcardThreads: z
+    {
+      label: 'Mode',
+      editor: 'select',
+      description:
+        'Choose how shuffledns operates. Resolve mode validates existing subdomains (default), Bruteforce generates permutations from a wordlist.',
+      options: [
+        { label: 'Resolve (from seeds)', value: 'resolve' },
+        { label: 'Bruteforce (with wordlist)', value: 'bruteforce' },
+      ],
+    },
+  ),
+  threads: param(
+    z.number().int().positive().max(20000).optional().describe('Concurrent massdns resolves (-t)'),
+    {
+      label: 'Threads (-t)',
+      editor: 'number',
+      min: 1,
+      max: 20000,
+    },
+  ),
+  retries: param(z.number().int().min(1).max(20).default(5).describe('Retries for DNS enumeration'), {
+    label: 'Retries',
+    editor: 'number',
+    min: 1,
+    max: 20,
+  }),
+  wildcardStrict: param(z.boolean().default(false).describe('Strict wildcard checking (-sw)'), {
+    label: 'Strict Wildcard (-sw)',
+    editor: 'boolean',
+  }),
+  wildcardThreads: param(
+    z
       .number()
       .int()
       .positive()
       .max(2000)
       .optional()
       .describe('Concurrent wildcard checks (-wt)'),
-    massdnsCmd: z
+    {
+      label: 'Wildcard Threads (-wt)',
+      editor: 'number',
+      min: 1,
+      max: 2000,
+    },
+  ),
+  massdnsCmd: param(
+    z
       .string()
       .optional()
       .describe("Optional massdns commands passed via '-mcmd' (e.g. '-i 10')"),
-  })
-  .superRefine((val, ctx) => {
-    if (val.mode === 'bruteforce' && (!Array.isArray(val.words) || val.words.length === 0)) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'Wordlist is required when using bruteforce mode',
-        path: ['words'],
-      });
-    }
-
-    if (val.mode === 'resolve' && (!Array.isArray(val.seeds) || val.seeds.length === 0)) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'Seed list is required when using resolve mode',
-        path: ['seeds'],
-      });
-    }
-  });
+    {
+      label: 'MassDNS Extra Cmd (-mcmd)',
+      editor: 'text',
+    },
+  ),
+});
 
 type Input = z.infer<typeof inputSchema>;
 
@@ -128,26 +160,26 @@ type Output = {
   subdomainCount: number;
 };
 
-const outputSchema: z.ZodType<Output> = z.object({
-  subdomains: withPortMeta(z.array(z.string()), {
+const outputSchema = outputs({
+  subdomains: port(z.array(z.string()), {
     label: 'Subdomains',
     description: 'Unique subdomains discovered by Shuffledns.',
   }),
-  rawOutput: withPortMeta(z.string(), {
+  rawOutput: port(z.string(), {
     label: 'Raw Output',
     description: 'Raw Shuffledns output for debugging.',
   }),
-  domainCount: withPortMeta(z.number(), {
+  domainCount: port(z.number(), {
     label: 'Domain Count',
     description: 'Number of domains enumerated.',
   }),
-  subdomainCount: withPortMeta(z.number(), {
+  subdomainCount: port(z.number(), {
     label: 'Subdomain Count',
     description: 'Number of unique subdomains discovered.',
   }),
 });
 
-const definition: ComponentDefinition<Input, Output> = {
+const definition = defineComponent({
   id: 'shipsec.shuffledns.massdns',
   label: 'Shuffledns + MassDNS',
   category: 'security',
@@ -163,6 +195,7 @@ const definition: ComponentDefinition<Input, Output> = {
   },
   inputs: inputSchema,
   outputs: outputSchema,
+  parameters: parameterSchema,
   docs:
     'Bruteforce or resolve subdomains using Shuffledns with MassDNS. Supports resolvers, trusted resolvers, thread control, retries, and wildcard handling.',
   retryPolicy: {
@@ -187,28 +220,20 @@ const definition: ComponentDefinition<Input, Output> = {
     },
     isLatest: true,
     deprecated: false,
-    parameters: [
-      {
-        id: 'mode',
-        label: 'Mode',
-        type: 'select',
-        default: 'resolve',
-        description: 'Choose how shuffledns operates. Resolve mode validates existing subdomains (default), Bruteforce generates permutations from a wordlist.',
-        options: [
-          { label: 'Resolve (from seeds)', value: 'resolve' },
-          { label: 'Bruteforce (with wordlist)', value: 'bruteforce' },
-        ],
-      },
-      { id: 'threads', label: 'Threads (-t)', type: 'number', min: 1, max: 20000 },
-      { id: 'retries', label: 'Retries', type: 'number', min: 1, max: 20, default: 5 },
-      { id: 'wildcardStrict', label: 'Strict Wildcard (-sw)', type: 'boolean', default: false },
-      { id: 'wildcardThreads', label: 'Wildcard Threads (-wt)', type: 'number', min: 1, max: 2000 },
-      { id: 'massdnsCmd', label: 'MassDNS Extra Cmd (-mcmd)', type: 'text' },
-    ],
   },
-  async execute(input, context) {
-    const { domains, mode } = input;
-    const modeText = mode ?? 'resolve';
+  async execute({ inputs, params }, context) {
+    const { domains, words, seeds, resolvers, trustedResolvers } = inputs;
+    const modeText = params.mode ?? 'resolve';
+    if (modeText === 'bruteforce' && (!Array.isArray(words) || words.length === 0)) {
+      throw new ValidationError('Wordlist is required when using bruteforce mode', {
+        fieldErrors: { words: ['Wordlist is required for bruteforce mode'] },
+      });
+    }
+    if (modeText === 'resolve' && (!Array.isArray(seeds) || seeds.length === 0)) {
+      throw new ValidationError('Seed list is required when using resolve mode', {
+        fieldErrors: { seeds: ['Seed list is required for resolve mode'] },
+      });
+    }
     context.logger.info(
       `[Shuffledns] ${modeText} ${domains.length} domain(s) via Shuffledns + MassDNS`,
     );
@@ -233,33 +258,33 @@ const definition: ComponentDefinition<Input, Output> = {
     flags.push('-mode', modeText);
 
     if (modeText === 'bruteforce') {
-      const wordsB64 = mkB64(input.words);
+      const wordsB64 = mkB64(words);
       if (wordsB64) env['WORDS_B64'] = wordsB64;
     } else if (modeText === 'resolve') {
-      const seedsB64 = mkB64(input.seeds);
+      const seedsB64 = mkB64(seeds);
       if (seedsB64) env['SEEDS_B64'] = seedsB64;
     }
 
-    const resolversB64 = mkB64(input.resolvers);
-    const trustedB64 = mkB64(input.trustedResolvers);
+    const resolversB64 = mkB64(resolvers);
+    const trustedB64 = mkB64(trustedResolvers);
     if (resolversB64) env['RESOLVERS_B64'] = resolversB64;
     if (trustedB64) env['TRUSTED_B64'] = trustedB64;
 
-    if (typeof input.threads === 'number' && input.threads > 0) {
-      flags.push('-t', String(input.threads));
+    if (typeof params.threads === 'number' && params.threads > 0) {
+      flags.push('-t', String(params.threads));
     }
-    if (typeof input.retries === 'number' && input.retries > 0) {
-      flags.push('-retries', String(input.retries));
+    if (typeof params.retries === 'number' && params.retries > 0) {
+      flags.push('-retries', String(params.retries));
     }
-    if (input.wildcardStrict) {
+    if (params.wildcardStrict) {
       flags.push('-sw');
     }
-    if (typeof input.wildcardThreads === 'number' && input.wildcardThreads > 0) {
-      flags.push('-wt', String(input.wildcardThreads));
+    if (typeof params.wildcardThreads === 'number' && params.wildcardThreads > 0) {
+      flags.push('-wt', String(params.wildcardThreads));
     }
-    if (input.massdnsCmd && input.massdnsCmd.trim().length > 0) {
+    if (params.massdnsCmd && params.massdnsCmd.trim().length > 0) {
       // Keep quotes around the value when passing to CLI
-      flags.push('-mcmd', input.massdnsCmd.trim());
+      flags.push('-mcmd', params.massdnsCmd.trim());
     }
 
     // Write lists to an isolated volume and mount into the container
@@ -278,10 +303,10 @@ const definition: ComponentDefinition<Input, Output> = {
     };
 
     const filesToWrite: Record<string, string> = {};
-    const wroteWords = writeIfAny(input.words, WORDS);
-    const wroteSeeds = writeIfAny(input.seeds, SEEDS);
-    const wroteResolvers = writeIfAny(input.resolvers, RESOLVERS);
-    const wroteTrusted = writeIfAny(input.trustedResolvers, TRUSTED);
+    const wroteWords = writeIfAny(words, WORDS);
+    const wroteSeeds = writeIfAny(seeds, SEEDS);
+    const wroteResolvers = writeIfAny(resolvers, RESOLVERS);
+    const wroteTrusted = writeIfAny(trustedResolvers, TRUSTED);
 
     [wroteWords, wroteSeeds, wroteResolvers, wroteTrusted].forEach((file) => {
       if (file) {
@@ -329,10 +354,11 @@ const definition: ComponentDefinition<Input, Output> = {
 
     let resultUnknown: unknown;
     try {
+      const runnerPayload = { ...params, ...inputs };
       resultUnknown = (await runComponentWithRunner(
         runnerConfig,
         async () => ({} as Output),
-        input,
+        runnerPayload,
         context,
       )) as unknown;
     } finally {
@@ -353,7 +379,7 @@ const definition: ComponentDefinition<Input, Output> = {
       return outputSchema.parse({
         subdomains: deduped,
         rawOutput,
-        domainCount: input.domains.length,
+        domainCount: domains.length,
         subdomainCount: deduped.length,
       });
     }
@@ -378,7 +404,7 @@ const definition: ComponentDefinition<Input, Output> = {
       return outputSchema.parse({
         subdomains: Array.from(new Set(subdomainsValue)),
         rawOutput: maybeRaw || subdomainsValue.join('\n'),
-        domainCount: input.domains.length,
+        domainCount: domains.length,
         subdomainCount: subdomainsValue.length,
       });
     }
@@ -387,11 +413,11 @@ const definition: ComponentDefinition<Input, Output> = {
     return outputSchema.parse({
       subdomains: [],
       rawOutput: '',
-      domainCount: input.domains.length,
+      domainCount: domains.length,
       subdomainCount: 0,
     });
   },
-};
+});
 
 componentRegistry.register(definition);
 

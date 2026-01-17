@@ -1,13 +1,17 @@
 import { z } from 'zod';
 import {
   componentRegistry,
-  ComponentDefinition,
   runComponentWithRunner,
-  withPortMeta,
+  defineComponent,
+  inputs,
+  outputs,
+  parameters,
+  port,
+  param,
 } from '@shipsec/component-sdk';
 
-const inputSchema = z.object({
-  targets: withPortMeta(
+const inputSchema = inputs({
+  targets: port(
     z
       .array(z.string().min(1, 'Target cannot be empty'))
       .min(1, 'Provide at least one target')
@@ -18,51 +22,114 @@ const inputSchema = z.object({
       connectionType: { kind: 'list', element: { kind: 'primitive', name: 'text' } },
     },
   ),
-  ports: z
-    .string()
-    .trim()
-    .min(1, 'Port list cannot be empty')
-    .optional()
-    .describe('Specific ports or ranges to scan (e.g. "80,443,1000-2000")'),
-  topPorts: z
-    .number()
-    .int()
-    .positive()
-    .max(65535)
-    .optional()
-    .describe('Scan the top N most common ports'),
-  excludePorts: z
-    .string()
-    .trim()
-    .min(1, 'Exclude ports cannot be empty')
-    .optional()
-    .describe('Comma-separated list of ports to exclude'),
-  rate: z
-    .number()
-    .int()
-    .positive()
-    .max(1_000_000)
-    .optional()
-    .describe('Maximum number of packets per second'),
-  retries: z
-    .number()
-    .int()
-    .min(0)
-    .max(10)
-    .optional()
-    .default(1)
-    .describe('Number of retries per port'),
-  enablePing: z
-    .boolean()
-    .optional()
-    .default(false)
-    .describe('Use ICMP/SYN ping probe to discover live hosts before scanning'),
-  interface: z
-    .string()
-    .trim()
-    .min(1, 'Interface cannot be empty')
-    .optional()
-    .describe('Network interface to use from inside the container'),
+});
+
+const parameterSchema = parameters({
+  ports: param(
+    z
+      .string()
+      .trim()
+      .min(1, 'Port list cannot be empty')
+      .optional()
+      .describe('Specific ports or ranges to scan (e.g. \"80,443,1000-2000\")'),
+    {
+      label: 'Ports',
+      editor: 'text',
+      placeholder: '80,443,1000-2000',
+      description: 'Custom ports or ranges to scan (comma-separated).',
+    },
+  ),
+  topPorts: param(
+    z
+      .number()
+      .int()
+      .positive()
+      .max(65535)
+      .optional()
+      .describe('Scan the top N most common ports'),
+    {
+      label: 'Top Ports',
+      editor: 'number',
+      min: 1,
+      max: 65535,
+      description: 'Scan the top N most common ports.',
+      helpText: 'Leave blank to scan Naabu default port set.',
+    },
+  ),
+  excludePorts: param(
+    z
+      .string()
+      .trim()
+      .min(1, 'Exclude ports cannot be empty')
+      .optional()
+      .describe('Comma-separated list of ports to exclude'),
+    {
+      label: 'Exclude Ports',
+      editor: 'text',
+      placeholder: '21,22,25',
+      description: 'Ports that should be excluded from the scan.',
+    },
+  ),
+  rate: param(
+    z
+      .number()
+      .int()
+      .positive()
+      .max(1_000_000)
+      .optional()
+      .describe('Maximum number of packets per second'),
+    {
+      label: 'Rate (pps)',
+      editor: 'number',
+      min: 1,
+      max: 1000000,
+      description: 'Maximum packets per second to send during scanning.',
+      helpText: 'Tune to match available bandwidth. Defaults to Naabu managed rate.',
+    },
+  ),
+  retries: param(
+    z
+      .number()
+      .int()
+      .min(0)
+      .max(10)
+      .optional()
+      .default(1)
+      .describe('Number of retries per port'),
+    {
+      label: 'Retries',
+      editor: 'number',
+      min: 0,
+      max: 10,
+      description: 'Number of retry attempts per port.',
+    },
+  ),
+  enablePing: param(
+    z
+      .boolean()
+      .optional()
+      .default(false)
+      .describe('Use ICMP/SYN ping probe to discover live hosts before scanning'),
+    {
+      label: 'Ping Probes',
+      editor: 'boolean',
+      description: 'Send ICMP/SYN probes to detect live hosts before scanning.',
+    },
+  ),
+  interface: param(
+    z
+      .string()
+      .trim()
+      .min(1, 'Interface cannot be empty')
+      .optional()
+      .describe('Network interface to use from inside the container'),
+    {
+      label: 'Interface',
+      editor: 'text',
+      description: 'Specific network interface to use inside the container.',
+      placeholder: 'eth0',
+    },
+  ),
 });
 
 const findingSchema = z.object({
@@ -72,25 +139,25 @@ const findingSchema = z.object({
   protocol: z.string(),
 });
 
-const outputSchema = z.object({
-  findings: withPortMeta(z.array(findingSchema), {
+const outputSchema = outputs({
+  findings: port(z.array(findingSchema), {
     label: 'Findings',
     description: 'List of open ports discovered by Naabu.',
     connectionType: { kind: 'list', element: { kind: 'primitive', name: 'json' } },
   }),
-  rawOutput: withPortMeta(z.string(), {
+  rawOutput: port(z.string(), {
     label: 'Raw Output',
     description: 'Raw Naabu console output.',
   }),
-  targetCount: withPortMeta(z.number(), {
+  targetCount: port(z.number(), {
     label: 'Target Count',
     description: 'Number of targets scanned.',
   }),
-  openPortCount: withPortMeta(z.number(), {
+  openPortCount: port(z.number(), {
     label: 'Open Port Count',
     description: 'Total number of open ports discovered.',
   }),
-  options: withPortMeta(z.object({
+  options: port(z.object({
     ports: z.string().nullable(),
     topPorts: z.number().nullable(),
     excludePorts: z.string().nullable(),
@@ -118,7 +185,7 @@ const dockerTimeoutSeconds = (() => {
   return parsed;
 })();
 
-const definition: ComponentDefinition<Input, Output> = {
+const definition = defineComponent({
   id: 'shipsec.naabu.scan',
   label: 'Naabu Port Scan',
   category: 'security',
@@ -222,6 +289,7 @@ eval "$CMD"
   },
   inputs: inputSchema,
   outputs: outputSchema,
+  parameters: parameterSchema,
   docs: 'Run ProjectDiscovery Naabu to identify open TCP ports across a list of targets.',
   ui: {
     slug: 'naabu',
@@ -243,71 +311,15 @@ eval "$CMD"
       'Scan Amass or Subfinder discoveries to identify exposed services.',
       'Target a custom list of IPs with tuned rate and retries for stealth scans.',
     ],
-    parameters: [
-      {
-        id: 'ports',
-        label: 'Ports',
-        type: 'text',
-        placeholder: '80,443,1000-2000',
-        description: 'Custom ports or ranges to scan (comma-separated).',
-      },
-      {
-        id: 'topPorts',
-        label: 'Top Ports',
-        type: 'number',
-        min: 1,
-        max: 65535,
-        description: 'Scan the top N most common ports.',
-        helpText: 'Leave blank to scan Naabu default port set.',
-      },
-      {
-        id: 'excludePorts',
-        label: 'Exclude Ports',
-        type: 'text',
-        placeholder: '21,22,25',
-        description: 'Ports that should be excluded from the scan.',
-      },
-      {
-        id: 'rate',
-        label: 'Rate (pps)',
-        type: 'number',
-        min: 1,
-        max: 1000000,
-        description: 'Maximum packets per second to send during scanning.',
-        helpText: 'Tune to match available bandwidth. Defaults to Naabu managed rate.',
-      },
-      {
-        id: 'retries',
-        label: 'Retries',
-        type: 'number',
-        min: 0,
-        max: 10,
-        default: 1,
-        description: 'Number of retry attempts per port.',
-      },
-      {
-        id: 'enablePing',
-        label: 'Ping Probes',
-        type: 'boolean',
-        default: false,
-        description: 'Send ICMP/SYN probes to detect live hosts before scanning.',
-      },
-      {
-        id: 'interface',
-        label: 'Interface',
-        type: 'text',
-        description: 'Specific network interface to use inside the container.',
-        placeholder: 'eth0',
-      },
-    ],
   },
-  async execute(input, context) {
-    const trimmedPorts = input.ports?.trim();
-    const trimmedExclude = input.excludePorts?.trim();
-    const trimmedInterface = input.interface?.trim();
+  async execute({ inputs, params }, context) {
+    const trimmedPorts = params.ports?.trim();
+    const trimmedExclude = params.excludePorts?.trim();
+    const trimmedInterface = params.interface?.trim();
 
-    const runnerParams: Input = {
-      ...input,
+    const runnerParams = {
+      ...params,
+      targets: inputs.targets,
       ports: trimmedPorts && trimmedPorts.length > 0 ? trimmedPorts : undefined,
       excludePorts: trimmedExclude && trimmedExclude.length > 0 ? trimmedExclude : undefined,
       interface: trimmedInterface && trimmedInterface.length > 0 ? trimmedInterface : undefined,
@@ -373,7 +385,7 @@ eval "$CMD"
       },
     };
   },
-};
+});
 
 function parseNaabuOutput(raw: string): Finding[] {
   if (!raw.trim()) {

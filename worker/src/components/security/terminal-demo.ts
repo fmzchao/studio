@@ -1,43 +1,63 @@
 import { z } from 'zod';
 import {
   componentRegistry,
-  ComponentDefinition,
   runComponentWithRunner,
   type DockerRunnerConfig,
-  withPortMeta,
+  defineComponent,
+  inputs,
+  outputs,
+  parameters,
+  port,
+  param,
 } from '@shipsec/component-sdk';
 
-const inputSchema = z.object({
-  message: z
-    .string()
-    .trim()
-    .min(1)
-    .max(120)
-    .default('Hello from ShipSec Terminal!')
-    .describe('Message to display in the terminal.'),
-  durationSeconds: z
-    .number()
-    .int()
-    .min(5)
-    .max(60)
-    .default(20)
-    .describe('Total duration of the demo in seconds.'),
+const inputSchema = inputs({});
+
+const parameterSchema = parameters({
+  message: param(
+    z
+      .string()
+      .trim()
+      .min(1)
+      .max(120)
+      .default('Hello from ShipSec Terminal!')
+      .describe('Message to display in the terminal.'),
+    {
+      label: 'Message',
+      editor: 'text',
+    },
+  ),
+  durationSeconds: param(
+    z
+      .number()
+      .int()
+      .min(5)
+      .max(60)
+      .default(20)
+      .describe('Total duration of the demo in seconds.'),
+    {
+      label: 'Duration (seconds)',
+      editor: 'number',
+      min: 5,
+      max: 60,
+    },
+  ),
 });
 
-const outputSchema = z.object({
-  message: withPortMeta(z.string(), {
+const outputSchema = outputs({
+  message: port(z.string(), {
     label: 'Message',
     description: 'Message shown during the demo.',
   }),
-  stepsCompleted: withPortMeta(z.number(), {
+  stepsCompleted: port(z.number(), {
     label: 'Steps Completed',
     description: 'Number of progress updates completed.',
   }),
-  durationSeconds: withPortMeta(z.number(), {
+  durationSeconds: port(z.number(), {
     label: 'Duration (seconds)',
     description: 'Total duration of the demo run.',
   }),
-  rawOutput: withPortMeta(z.string(), {
+  rawOutput: port(z.string(), {
     label: 'Raw Output',
     description: 'Captured terminal output from the demo.',
   }),
@@ -124,13 +144,14 @@ const runner: DockerRunnerConfig = {
   timeoutSeconds: 30,
 };
 
-const definition: ComponentDefinition<TerminalDemoInput, TerminalDemoOutput> = {
+const definition = defineComponent({
   id: 'shipsec.security.terminal-demo',
   label: 'Terminal Stream Demo',
   category: 'security',
   runner,
   inputs: inputSchema,
   outputs: outputSchema,
+  parameters: parameterSchema,
   ui: {
     slug: 'terminal-stream-demo',
     version: '2.1.0',
@@ -149,60 +170,44 @@ const definition: ComponentDefinition<TerminalDemoInput, TerminalDemoOutput> = {
     example:
       'Displays a colorful progress bar that updates in real-time, demonstrating PTY terminal streaming with carriage returns and ANSI colors.',
     examples: ['Run this component to see a live progress bar in the terminal viewer.'],
-    parameters: [
-      {
-        id: 'message',
-        label: 'Message',
-        type: 'text',
-        default: 'Hello from ShipSec Terminal!',
-      },
-      {
-        id: 'durationSeconds',
-        label: 'Duration (seconds)',
-        type: 'number',
-        min: 5,
-        max: 60,
-        default: 20,
-      },
-    ],
   },
-  async execute(input, context) {
-    const params = inputSchema.parse(input);
+  async execute({ params }, context) {
+    const parsedParams = parameterSchema.parse(params);
 
     context.emitProgress({
-      message: `Starting terminal demo for ${params.durationSeconds} seconds...`,
+      message: `Starting terminal demo for ${parsedParams.durationSeconds} seconds...`,
       level: 'info',
       data: {
-        message: params.message,
-        durationSeconds: params.durationSeconds,
+        message: parsedParams.message,
+        durationSeconds: parsedParams.durationSeconds,
       },
     });
 
     // Replace template variables in env vars
     const runnerWithEnv = {
-      ...this.runner,
+      ...definition.runner,
       env: {
-        MESSAGE: params.message,
-        DURATION_SECONDS: params.durationSeconds.toString(),
+        MESSAGE: parsedParams.message,
+        DURATION_SECONDS: parsedParams.durationSeconds.toString(),
       },
     };
 
-    const raw = await runComponentWithRunner<typeof params, any>(
+    const raw = await runComponentWithRunner<typeof parsedParams, any>(
       runnerWithEnv,
       async () => ({
-        message: params.message,
+        message: parsedParams.message,
         stepsCompleted: 0,
         rawOutput: 'No output',
       }),
-      params,
+      parsedParams,
       context,
     );
 
     // Parse the JSON output from stderr (script writes result to stderr to avoid PTY pollution)
     let parsedOutput: any = {
-      message: params.message,
-      stepsCompleted: Math.floor(params.durationSeconds * 5), // ~5 updates per second
-      durationSeconds: params.durationSeconds,
+      message: parsedParams.message,
+      stepsCompleted: Math.floor(parsedParams.durationSeconds * 5), // ~5 updates per second
+      durationSeconds: parsedParams.durationSeconds,
       rawOutput: 'Demo completed',
     };
 
@@ -225,9 +230,9 @@ const definition: ComponentDefinition<TerminalDemoInput, TerminalDemoOutput> = {
     }
 
     const result: TerminalDemoOutput = {
-      message: parsedOutput.message || params.message,
-      stepsCompleted: parsedOutput.stepsCompleted ?? Math.floor(params.durationSeconds * 5),
-      durationSeconds: parsedOutput.durationSeconds ?? params.durationSeconds,
+      message: parsedOutput.message || parsedParams.message,
+      stepsCompleted: parsedOutput.stepsCompleted ?? Math.floor(parsedParams.durationSeconds * 5),
+      durationSeconds: parsedOutput.durationSeconds ?? parsedParams.durationSeconds,
       rawOutput: parsedOutput.rawOutput || 'Demo completed',
     };
 
@@ -239,6 +244,6 @@ const definition: ComponentDefinition<TerminalDemoInput, TerminalDemoOutput> = {
 
     return outputSchema.parse(result);
   },
-};
+});
 
 componentRegistry.register(definition);
