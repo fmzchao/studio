@@ -9,6 +9,7 @@
     "worker",
     "packages/backend-client",
     "packages/component-sdk",
+    "packages/contracts",
     "packages/shared"
   ],
   "scripts": {
