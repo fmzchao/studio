@@ -49,7 +49,7 @@ export default [
       "no-case-declarations": "off",
       "no-useless-catch": "off",
       "no-console": "off",
-      "no-prototype-builtins": "off",
+      "no-prototype-builtins": "warn",
       "no-useless-escape": "warn",
 
       // Loose rules for now - gradually make stricter

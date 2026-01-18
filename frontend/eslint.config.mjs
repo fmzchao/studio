@@ -54,8 +54,8 @@ export default [
       ...react.configs.recommended.rules,
       ...reactHooks.configs.recommended.rules,
 
-      // Disable react-refresh for now (will enable in later commit)
-      "react-refresh/only-export-components": "off",
+      // Enable react-refresh to catch fast refresh issues
+      "react-refresh/only-export-components": "warn",
 
       // Disable no-undef since TypeScript handles this better
       "no-undef": "off",
@@ -68,7 +68,7 @@ export default [
       "no-unused-vars": "off",
       "no-empty": "warn",
       "no-control-regex": "off",
-      "no-case-declarations": "off",
+      "no-case-declarations": "warn",
       "no-useless-catch": "off",
       "no-console": "off",
 
