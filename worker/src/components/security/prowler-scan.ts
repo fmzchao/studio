@@ -2,19 +2,23 @@ import { z } from 'zod';
 import { spawn } from 'node:child_process';
 import {
   componentRegistry,
-  ComponentDefinition,
   ComponentRetryPolicy,
   ConfigurationError,
-  port,
   runComponentWithRunner,
   resolveDockerPath,
   ServiceError,
   ValidationError,
+  defineComponent,
+  inputs,
+  outputs,
+  parameters,
+  port,
+  param,
 } from '@shipsec/component-sdk';
 
 import type { DockerRunnerConfig } from '@shipsec/component-sdk';
+import { awsCredentialSchema, awsCredentialContractName } from '@shipsec/contracts';
 import { IsolatedContainerVolume } from '../../utils/isolated-volume';
-import { awsCredentialSchema, awsCredentialContractName } from '../core/credentials/aws-contract';
 
 const recommendedFlagOptions = [
   {
@@ -65,37 +69,91 @@ type NormalisedSeverity = (typeof severityLevels)[number];
 const statusLevels = ['FAILED', 'PASSED', 'WARNING', 'NOT_APPLICABLE', 'NOT_AVAILABLE', 'UNKNOWN'] as const;
 type NormalisedStatus = (typeof statusLevels)[number];
 
-// Using shared awsCredentialSchema from '../core/credentials/aws-contract'
-
-const inputSchema = z.object({
-  accountId: z
-    .string()
-    .min(1, 'Account ID is required')
-    .describe('AWS account to tag findings with (required for AWS scans).'),
-  credentials: awsCredentialSchema
-    .optional()
-    .describe('AWS credentials emitted by the AWS Account component. Required for authenticated AWS scans.'),
-  regions: z
-    .string()
-    .default('us-east-1')
-    .describe('Comma separated AWS regions (AWS mode only).'),
-  scanMode: z
-    .enum(['aws', 'cloud'])
-    .default('aws')
-    .describe('Run `prowler aws` for a specific account or `prowler cloud` for the multi-cloud overview.'),
-  recommendedFlags: z
-    .array(recommendedFlagIdSchema)
-    .default(defaultSelectedFlagIds)
-    .describe('Toggle pre-populated CLI flags to apply to the Prowler command.'),
-  customFlags: z
-    .string()
-    .trim()
-    .max(1024, 'Custom CLI flags cannot exceed 1024 characters.')
-    .optional()
-    .describe('Raw CLI flags to append to the Prowler command.'),
+const inputSchema = inputs({
+  accountId: port(
+    z
+      .string()
+      .min(1, 'Account ID is required')
+      .describe('AWS account to tag findings with (required for AWS scans).'),
+    {
+      label: 'Account ID',
+      description: 'Account identifier forwarded from the AWS Credentials component.',
+      connectionType: { kind: 'primitive', name: 'text' },
+    },
+  ),
+  credentials: port(
+    awsCredentialSchema()
+      .optional()
+      .describe('AWS credentials emitted by the AWS Account component. Required for authenticated AWS scans.'),
+    {
+      label: 'AWS Credentials',
+      description: 'Structured credentials object (`{ accessKeyId, secretAccessKey, sessionToken? }`).',
+      connectionType: { kind: 'contract', name: 'core.credential.aws', credential: true },
+    },
+  ),
+  regions: port(
+    z
+      .string()
+      .default('us-east-1')
+      .describe('Comma separated AWS regions (AWS mode only).'),
+    {
+      label: 'Regions',
+      description: 'Comma separated AWS regions to cover when scan mode is AWS.',
+      connectionType: { kind: 'primitive', name: 'text' },
+    },
+  ),
 });
 
-type Input = z.infer<typeof inputSchema>;
+const parameterSchema = parameters({
+  scanMode: param(
+    z
+      .enum(['aws', 'cloud'])
+      .default('aws')
+      .describe('Run `prowler aws` for a specific account or `prowler cloud` for the multi-cloud overview.'),
+    {
+      label: 'Scan Target',
+      editor: 'select',
+      options: [
+        { label: 'AWS Account (prowler aws)', value: 'aws' },
+        { label: 'Cloud Overview (prowler cloud)', value: 'cloud' },
+      ],
+      description:
+        'Choose between a targeted AWS account scan or the multi-cloud overview. AWS mode honors regions.',
+    },
+  ),
+  recommendedFlags: param(
+    z
+      .array(recommendedFlagIdSchema)
+      .default(defaultSelectedFlagIds)
+      .describe('Toggle pre-populated CLI flags to apply to the Prowler command.'),
+    {
+      label: 'Recommended Flags',
+      editor: 'multi-select',
+      options: recommendedFlagOptions.map((option) => ({
+        label: option.label,
+        value: option.id,
+        description: option.description,
+      })),
+      description: 'Pre-selected CLI flags appended automatically to the Prowler command.',
+    },
+  ),
+  customFlags: param(
+    z
+      .string()
+      .trim()
+      .max(1024, 'Custom CLI flags cannot exceed 1024 characters.')
+      .optional()
+      .describe('Raw CLI flags to append to the Prowler command.'),
+    {
+      label: 'Additional CLI Flags',
+      editor: 'textarea',
+      rows: 3,
+      placeholder: '--exclude-checks extra73,extra74 --severity-filter medium,high,critical',
+      description: 'Any extra CLI flags appended verbatim to the prowler command.',
+    },
+  ),
+});
+
 
 const prowlerFindingSchema = z
   .object({
@@ -170,11 +228,23 @@ const normalisedFindingSchema = z.object({
 
 type NormalisedFinding = z.infer<typeof normalisedFindingSchema>;
 
-const outputSchema = z.object({
-  scanId: z.string(),
-  findings: z.array(normalisedFindingSchema),
-  rawOutput: z.string(),
-  summary: z.object({
+const outputSchema = outputs({
+  scanId: port(z.string(), {
+    label: 'Scan ID',
+    description: 'Deterministic identifier for the scan run.',
+  }),
+  findings: port(z.array(normalisedFindingSchema), {
+    label: 'Findings',
+    description:
+      'Array of normalized findings derived from Prowler ASFF output (includes severity, resource id, remediation).',
+    connectionType: { kind: 'list', element: { kind: 'primitive', name: 'json' } },
+  }),
+  rawOutput: port(z.string(), {
+    label: 'Raw Output',
+    description: 'Raw Prowler output for debugging.',
+  }),
+  summary: port(
+    z.object({
     totalFindings: z.number(),
     failed: z.number(),
     passed: z.number(),
@@ -186,12 +256,26 @@ const outputSchema = z.object({
     selectedFlagIds: z.array(recommendedFlagIdSchema),
     customFlags: z.string().nullable(),
   }),
-  command: z.array(z.string()),
-  stderr: z.string(),
-  errors: z.array(z.string()).optional(),
+    {
+      label: 'Summary',
+      description: 'Aggregate counts, regions, selected flag metadata, and other run statistics.',
+      connectionType: { kind: 'primitive', name: 'json' },
+    },
+  ),
+  command: port(z.array(z.string()), {
+    label: 'Command',
+    description: 'Prowler command-line arguments used during the run.',
+  }),
+  stderr: port(z.string(), {
+    label: 'Stderr',
+    description: 'Standard error output emitted by Prowler.',
+  }),
+  errors: port(z.array(z.string()).optional(), {
+    label: 'Errors',
+    description: 'Errors encountered during the scan.',
+  }),
 });
 
-type Output = z.infer<typeof outputSchema>;
 
 const recommendedFlagMap = new Map<RecommendedFlagId, string[]>(
   recommendedFlagOptions.map((option) => [option.id, [...option.args]]),
@@ -299,7 +383,7 @@ const prowlerRetryPolicy: ComponentRetryPolicy = {
   nonRetryableErrorTypes: ['ConfigurationError', 'ValidationError'],
 };
 
-const definition: ComponentDefinition<Input, Output> = {
+const definition = defineComponent({
   id: 'security.prowler.scan',
   label: 'Prowler Scan',
   category: 'security',
@@ -310,11 +394,12 @@ const definition: ComponentDefinition<Input, Output> = {
     platform: 'linux/amd64',
     command: [], // Placeholder - actual command built dynamically in execute()
   },
-  inputSchema,
-  outputSchema,
+  inputs: inputSchema,
+  outputs: outputSchema,
+  parameters: parameterSchema,
   docs:
     'Execute Prowler inside Docker using `prowlercloud/prowler` (amd64 enforced on ARM hosts). Supports AWS account scans and the multi-cloud `prowler cloud` overview, with optional CLI flag customisation.',
-  metadata: {
+  ui: {
     slug: 'prowler-scan',
     version: '2.0.0',
     type: 'scan',
@@ -329,101 +414,15 @@ const definition: ComponentDefinition<Input, Output> = {
     },
     isLatest: true,
     deprecated: false,
-    inputs: [
-      {
-        id: 'accountId',
-        label: 'Account ID',
-        dataType: port.text(),
-        required: true,
-        description: 'Account identifier forwarded from the AWS Credentials component.',
-      },
-      {
-        id: 'credentials',
-        label: 'AWS Credentials',
-        dataType: port.credential(awsCredentialContractName),
-        required: false,
-        description: 'AWS credentials bundle from the AWS Credentials component.',
-      },
-      {
-        id: 'regions',
-        label: 'Regions',
-        dataType: port.text(),
-        required: false,
-        description: 'Comma separated AWS regions to cover when scan mode is AWS.',
-      },
-    ],
-    outputs: [
-      {
-        id: 'scanId',
-        label: 'Scan ID',
-        dataType: port.text(),
-        description: 'Deterministic identifier for the scan run.',
-      },
-      {
-        id: 'findings',
-        label: 'Findings',
-        dataType: port.list(port.json()),
-        description:
-          'Array of normalized findings derived from Prowler ASFF output (includes severity, resource id, remediation).',
-      },
-      {
-        id: 'summary',
-        label: 'Summary',
-        dataType: port.json(),
-        description: 'Aggregate counts, regions, selected flag metadata, and other run statistics.',
-      },
-    ],
-    parameters: [
-      {
-        id: 'scanMode',
-        label: 'Scan Target',
-        type: 'select',
-        required: false,
-        default: 'aws',
-        options: [
-          { label: 'AWS Account (prowler aws)', value: 'aws' },
-          { label: 'Cloud Overview (prowler cloud)', value: 'cloud' },
-        ],
-        description:
-          'Choose between a targeted AWS account scan or the multi-cloud overview. AWS mode honours the regions field.',
-      },
-      {
-        id: 'regions',
-        label: 'Regions',
-        type: 'text',
-        required: false,
-        default: 'us-east-1',
-        description: 'Comma separated AWS regions passed to `--region`. Ignored in Cloud mode.',
-      },
-      {
-        id: 'recommendedFlags',
-        label: 'Recommended Flags',
-        type: 'multi-select',
-        required: false,
-        default: defaultSelectedFlagIds,
-        options: recommendedFlagOptions.map((option) => ({
-          label: option.label,
-          value: option.id,
-          description: option.description,
-        })),
-        description: 'Pre-selected CLI flags appended automatically to the Prowler command.',
-      },
-      {
-        id: 'customFlags',
-        label: 'Additional CLI Flags',
-        type: 'textarea',
-        required: false,
-        rows: 3,
-        placeholder: '--exclude-checks extra73,extra74 --severity-filter medium,high,critical',
-        description: 'Any extra CLI flags appended verbatim to the prowler command.',
-      },
-    ],
     examples: [
       'Run nightly `prowler aws --quick --severity-filter high,critical` scans on production accounts and forward findings into ELK.',
       'Use `prowler cloud` with custom flags to generate a multi-cloud compliance snapshot.',
     ],
   },
-  async execute(params, context) {
+  async execute({ inputs, params }, context) {
+    const parsedInputs = inputSchema.parse(inputs);
+    const parsedParams = parameterSchema.parse(params);
+
     // Helper: split custom CLI flags honoring simple quotes
     const splitArgs = (input: string): string[] => {
       const args: string[] = [];
@@ -464,17 +463,17 @@ const definition: ComponentDefinition<Input, Output> = {
       if (current.length > 0) args.push(current);
       return args;
     };
-    const parsedRegions = params.regions
+    const parsedRegions = parsedInputs.regions
       .split(',')
       .map((region) => region.trim())
       .filter((region) => region.length > 0);
     const regions = parsedRegions.length > 0 ? parsedRegions : ['us-east-1'];
 
-    const selectedFlags = new Set<RecommendedFlagId>(params.recommendedFlags ?? defaultSelectedFlagIds);
+    const selectedFlags = new Set<RecommendedFlagId>(parsedParams.recommendedFlags ?? defaultSelectedFlagIds);
     const resolvedFlagArgs = Array.from(selectedFlags).flatMap((flagId) => recommendedFlagMap.get(flagId) ?? []);
 
     // Validate creds when running AWS scans
-    if (params.scanMode === 'aws' && !params.credentials) {
+    if (parsedParams.scanMode === 'aws' && !parsedInputs.credentials) {
       throw new ConfigurationError(
         'AWS scan requires credentials input. Ensure the previous step outputs { accessKeyId, secretAccessKey, sessionToken? } into the "credentials" input.',
         { configKey: 'credentials' },
@@ -484,15 +483,15 @@ const definition: ComponentDefinition<Input, Output> = {
     // Prepare AWS environment and optional shared credentials/config files
     const awsEnv: Record<string, string> = {};
     const tenantId = (context as any).tenantId ?? 'default-tenant';
-    const awsCredsVolume = params.credentials
+    const awsCredsVolume = parsedInputs.credentials
       ? new IsolatedContainerVolume(tenantId, `${context.runId}-prowler-aws`)
       : null;
 
-    if (params.credentials) {
-      awsEnv.AWS_ACCESS_KEY_ID = params.credentials.accessKeyId;
-      awsEnv.AWS_SECRET_ACCESS_KEY = params.credentials.secretAccessKey;
-      if (params.credentials.sessionToken) {
-        awsEnv.AWS_SESSION_TOKEN = params.credentials.sessionToken;
+    if (parsedInputs.credentials) {
+      awsEnv.AWS_ACCESS_KEY_ID = parsedInputs.credentials.accessKeyId;
+      awsEnv.AWS_SECRET_ACCESS_KEY = parsedInputs.credentials.secretAccessKey;
+      if (parsedInputs.credentials.sessionToken) {
+        awsEnv.AWS_SESSION_TOKEN = parsedInputs.credentials.sessionToken;
       }
 
       // Hint to SDKs where to find the shared files
@@ -501,22 +500,22 @@ const definition: ComponentDefinition<Input, Output> = {
       awsEnv.AWS_PROFILE = 'default';
     }
 
-    if (params.scanMode === 'aws' && regions.length > 0) {
+    if (parsedParams.scanMode === 'aws' && regions.length > 0) {
       awsEnv.AWS_REGION = awsEnv.AWS_REGION ?? regions[0];
       awsEnv.AWS_DEFAULT_REGION = awsEnv.AWS_DEFAULT_REGION ?? regions[0];
     }
 
     context.logger.info(
-      `[ProwlerScan] Running prowler ${params.scanMode} for ${params.accountId} with regions: ${regions.join(', ')}`,
+      `[ProwlerScan] Running prowler ${parsedParams.scanMode} for ${parsedInputs.accountId} with regions: ${regions.join(', ')}`,
     );
     context.emitProgress(
-      `Executing prowler ${params.scanMode} scan across ${regions.length} region${regions.length === 1 ? '' : 's'}`,
+      `Executing prowler ${parsedParams.scanMode} scan across ${regions.length} region${regions.length === 1 ? '' : 's'}`,
     );
     // Build the prowler command entirely in TypeScript.
     // Note: prowler image entrypoint already invokes `prowler`,
     // so only pass the provider subcommand (aws/cloud) and flags.
-    const cmd: string[] = [params.scanMode];
-    if (params.scanMode === 'aws') {
+    const cmd: string[] = [parsedParams.scanMode];
+    if (parsedParams.scanMode === 'aws') {
       for (const region of regions) {
         cmd.push('--region', region);
       }
@@ -527,9 +526,9 @@ const definition: ComponentDefinition<Input, Output> = {
       resolvedFlagArgs.push('--ignore-exit-code-3');
     }
     cmd.push(...resolvedFlagArgs);
-    if (params.customFlags && params.customFlags.trim().length > 0) {
+    if (parsedParams.customFlags && parsedParams.customFlags.trim().length > 0) {
       try {
-        cmd.push(...splitArgs(params.customFlags));
+        cmd.push(...splitArgs(parsedParams.customFlags));
       } catch (err) {
         throw new ValidationError(`Failed to parse custom CLI flags: ${(err as Error).message}`, {
           cause: err as Error,
@@ -566,14 +565,14 @@ const definition: ComponentDefinition<Input, Output> = {
     try {
       try {
       // Initialize AWS credentials volume if provided
-      if (awsCredsVolume && params.credentials) {
+      if (awsCredsVolume && parsedInputs.credentials) {
         const credsLines = [
           '[default]',
-          `aws_access_key_id = ${params.credentials.accessKeyId}`,
-          `aws_secret_access_key = ${params.credentials.secretAccessKey}`,
+          `aws_access_key_id = ${parsedInputs.credentials?.accessKeyId ?? ''}`,
+          `aws_secret_access_key = ${parsedInputs.credentials?.secretAccessKey ?? ''}`,
         ];
-        if (params.credentials.sessionToken) {
-          credsLines.push(`aws_session_token = ${params.credentials.sessionToken}`);
+        if (parsedInputs.credentials?.sessionToken) {
+          credsLines.push(`aws_session_token = ${parsedInputs.credentials.sessionToken}`);
         }
 
         const cfgRegion = regions[0] ?? 'us-east-1';
@@ -697,7 +696,7 @@ const definition: ComponentDefinition<Input, Output> = {
       }
     });
 
-    const scanId = buildScanId(params.accountId, params.scanMode);
+    const scanId = buildScanId(parsedInputs.accountId, parsedParams.scanMode);
 
     const output: Output = {
       scanId,
@@ -711,9 +710,9 @@ const definition: ComponentDefinition<Input, Output> = {
         severityCounts,
         generatedAt,
         regions,
-        scanMode: params.scanMode,
+        scanMode: parsedParams.scanMode,
         selectedFlagIds: Array.from(selectedFlags),
-        customFlags: params.customFlags?.trim() || null,
+        customFlags: parsedParams.customFlags?.trim() || null,
       },
       command: commandForOutput,
       stderr: stderrCombined,
@@ -732,7 +731,7 @@ const definition: ComponentDefinition<Input, Output> = {
       }
     }
   },
-};
+});
 
 function buildScanId(accountId: string, scanMode: 'aws' | 'cloud'): string {
   const timestamp = new Date().toISOString().replace(/[^0-9]/g, '').slice(0, 14);
@@ -900,5 +899,9 @@ function extractRegionFromArn(resourceId?: string): string | null {
 }
 
 componentRegistry.register(definition);
+
+// Create local type aliases for backward compatibility
+type Input = typeof inputSchema['__inferred'];
+type Output = typeof outputSchema['__inferred'];
 
 export type { Input as ProwlerScanInput, Output as ProwlerScanOutput };

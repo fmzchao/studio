@@ -18,9 +18,12 @@ describe('compileWorkflowGraph', () => {
           data: {
             label: 'Trigger',
             config: {
-              runtimeInputs: [
-                { id: 'fileId', label: 'File ID', type: 'text', required: true },
-              ],
+              params: {
+                runtimeInputs: [
+                  { id: 'fileId', label: 'File ID', type: 'file', required: true },
+                ],
+              },
+              inputOverrides: {},
             },
           },
         },
@@ -31,7 +34,10 @@ describe('compileWorkflowGraph', () => {
           data: {
             label: 'File loader',
             config: {
-              fileId: '11111111-1111-4111-8111-111111111111',
+              params: {},
+              inputOverrides: {
+                fileId: '11111111-1111-4111-8111-111111111111',
+              },
             },
           },
         },
@@ -42,16 +48,20 @@ describe('compileWorkflowGraph', () => {
           data: {
             label: 'Webhook',
             config: {
-              url: 'https://example.com/webhook',
-              method: 'POST',
-              body: JSON.stringify({ from: 'loader' }),
+              params: {
+                method: 'POST',
+              },
+              inputOverrides: {
+                url: 'https://example.com/webhook',
+                body: JSON.stringify({ from: 'loader' }),
+              },
             },
           },
         },
       ],
       edges: [
         { id: 'e1', source: 'trigger', target: 'loader', sourceHandle: 'fileId', targetHandle: 'fileId' },
-        { id: 'e2', source: 'loader', target: 'webhook' },
+        { id: 'e2', source: 'loader', target: 'webhook', sourceHandle: 'textContent', targetHandle: 'body' },
       ],
       viewport: { x: 0, y: 0, zoom: 1 },
     };
@@ -88,8 +98,8 @@ describe('compileWorkflowGraph', () => {
         id: 'e2',
         sourceRef: 'loader',
         targetRef: 'webhook',
-        sourceHandle: undefined,
-        targetHandle: undefined,
+        sourceHandle: 'textContent',
+        targetHandle: 'body',
         kind: 'success',
       },
     ]);
@@ -105,7 +115,10 @@ describe('compileWorkflowGraph', () => {
           position: { x: 0, y: 0 },
           data: {
             label: 'Missing',
-            config: {},
+            config: {
+              params: {},
+              inputOverrides: {},
+            },
           },
         },
       ],
@@ -134,9 +147,12 @@ describe('compileWorkflowGraph', () => {
           data: {
             label: 'A',
             config: {
-              runtimeInputs: [
-                { id: 'inputA', label: 'Input A', type: 'text', required: false },
-              ],
+              params: {
+                runtimeInputs: [
+                  { id: 'inputA', label: 'Input A', type: 'text', required: false },
+                ],
+              },
+              inputOverrides: {},
             },
           },
         },
@@ -147,9 +163,12 @@ describe('compileWorkflowGraph', () => {
           data: {
             label: 'B',
             config: {
-              runtimeInputs: [
-                { id: 'inputB', label: 'Input B', type: 'text', required: false },
-              ],
+              params: {
+                runtimeInputs: [
+                  { id: 'inputB', label: 'Input B', type: 'text', required: false },
+                ],
+              },
+              inputOverrides: {},
             },
           },
         },
@@ -177,9 +196,11 @@ describe('compileWorkflowGraph', () => {
           data: {
             label: 'Console',
             config: {
-              label: 'Log',
-              data: 'hello',
-              level: 'info',
+              params: {},
+              inputOverrides: {
+                label: 'Log',
+                data: 'hello',
+              },
             },
           },
         },
@@ -190,9 +211,12 @@ describe('compileWorkflowGraph', () => {
           data: {
             label: 'Entry Point',
             config: {
-              runtimeInputs: [
-                { id: 'inputA', label: 'Input A', type: 'text', required: true },
-              ],
+              params: {
+                runtimeInputs: [
+                  { id: 'inputA', label: 'Input A', type: 'text', required: true },
+                ],
+              },
+              inputOverrides: {},
             },
           },
         },
@@ -217,9 +241,12 @@ describe('compileWorkflowGraph', () => {
           data: {
             label: 'Start',
             config: {
-              runtimeInputs: [
-                { id: 'branchSeed', label: 'Seed', type: 'text', required: false },
-              ],
+              params: {
+                runtimeInputs: [
+                  { id: 'branchSeed', label: 'Seed', type: 'text', required: false },
+                ],
+              },
+              inputOverrides: {},
             },
           },
         },
@@ -230,8 +257,12 @@ describe('compileWorkflowGraph', () => {
           data: {
             label: 'Branch A',
             config: {
-              text: 'Branch A payload',
-              separator: '\n',
+              params: {
+                separator: '\n',
+              },
+              inputOverrides: {
+                text: 'Branch A payload',
+              },
             },
           },
         },
@@ -242,8 +273,12 @@ describe('compileWorkflowGraph', () => {
           data: {
             label: 'Branch B',
             config: {
-              text: 'Branch B payload',
-              separator: '\n',
+              params: {
+                separator: '\n',
+              },
+              inputOverrides: {
+                text: 'Branch B payload',
+              },
             },
           },
         },
@@ -254,8 +289,12 @@ describe('compileWorkflowGraph', () => {
           data: {
             label: 'Merge',
             config: {
-              text: 'Merge payload',
-              separator: '\n',
+              params: {
+                separator: '\n',
+              },
+              inputOverrides: {
+                text: 'Merge payload',
+              },
             },
           },
         },

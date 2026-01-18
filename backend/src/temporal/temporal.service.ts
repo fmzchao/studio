@@ -71,7 +71,7 @@ export interface ScheduleTriggerWorkflowArgs {
   scheduleId?: string;
   scheduleName?: string | null;
   runtimeInputs?: Record<string, unknown>;
-  nodeOverrides?: Record<string, Record<string, unknown>>;
+  nodeOverrides?: Record<string, { params?: Record<string, unknown>; inputOverrides?: Record<string, unknown> }>;
   trigger?: ExecutionTriggerMetadata;
 }
 

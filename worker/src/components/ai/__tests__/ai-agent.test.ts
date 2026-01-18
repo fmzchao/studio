@@ -151,29 +151,33 @@ describe('core.ai.agent component', () => {
 
     nextAgentResult = makeAgentResult();
 
-    const params = {
-      userInput: 'Summarise the status update.',
-      conversationState: {
-        sessionId: 'session-1',
-        messages: [],
-        toolInvocations: [],
+    const executePayload = {
+      inputs: {
+        userInput: 'Summarise the status update.',
+        conversationState: {
+          sessionId: 'session-1',
+          messages: [],
+          toolInvocations: [],
+        },
+        chatModel: {
+          provider: 'openai' as const,
+          modelId: 'gpt-4o-mini',
+        },
+        modelApiKey: 'sk-openai-from-secret',
       },
-      chatModel: {
-        provider: 'openai',
-        modelId: 'gpt-4o-mini',
-      },
-      modelApiKey: 'sk-openai-from-secret',
-      systemPrompt: 'You are a concise assistant.',
-      temperature: 0.2,
-      maxTokens: 256,
-      memorySize: 8,
-      stepLimit: 2,
+      params: {
+        systemPrompt: 'You are a concise assistant.',
+        temperature: 0.2,
+        maxTokens: 256,
+        memorySize: 8,
+        stepLimit: 2,
+      }
     };
 
     const result = (await runComponentWithRunner(
       component!.runner,
-      (params: any, context: any) => 
-        (component!.execute as any)(params, context, {
+      (payload: any, context: any) => 
+        (component!.execute as any)(payload, context, {
           ToolLoopAgent: MockToolLoopAgent as unknown as ToolLoopAgentClass,
           stepCountIs: stepCountIsMock as unknown as StepCountIsFn,
           tool: ((definition: any) => {
@@ -183,7 +187,7 @@ describe('core.ai.agent component', () => {
           createOpenAI: openAiFactoryMock as unknown as CreateOpenAIFn,
           createGoogleGenerativeAI: googleFactoryMock as unknown as CreateGoogleGenerativeAIFn,
         }),
-      params,
+      executePayload,
       workflowContext,
     )) as any;
 
@@ -244,52 +248,55 @@ describe('core.ai.agent component', () => {
         arguments: { question: 'Lookup reference' },
       });
 
-      return makeAgentResult({
-        text: 'Final resolved answer',
-        usage: {
-          promptTokens: 20,
-          completionTokens: 30,
-          totalTokens: 50,
-        },
-        totalUsage: {
-          promptTokens: 20,
-          completionTokens: 30,
-          totalTokens: 50,
-        },
-        toolResults: [
-          {
-            toolCallId: 'call-1',
-            toolName: 'call_mcp_tool',
-            args: { question: 'Lookup reference' },
-            result: toolResult,
-          },
-        ],
-        steps: [
-          {
-            text: 'Consulting MCP',
-            finishReason: 'tool',
-            toolCalls: [
-              {
-                toolCallId: 'call-1',
-                toolName: 'call_mcp_tool',
-                args: { question: 'Lookup reference' },
-              },
-            ],
-            toolResults: [
-              {
-                toolCallId: 'call-1',
-                toolName: 'call_mcp_tool',
-                args: { question: 'Lookup reference' },
-                result: toolResult,
-              },
-            ],
-          },
-        ],
-      });
-    };
+      const component = componentRegistry.get('core.ai.agent');
+      expect(component).toBeDefined();
 
-    const component = componentRegistry.get('core.ai.agent');
-    expect(component).toBeDefined();
+      const executePayload = {
+        inputs: {
+          userInput: 'What does the MCP tool return?',
+          conversationState: undefined,
+          chatModel: {
+            provider: 'gemini' as const,
+            modelId: 'gemini-2.5-flash',
+            baseUrl: 'https://generativelanguage.googleapis.com/v1beta',
+          },
+          modelApiKey: 'gm-gemini-from-secret',
+          mcpTools: [
+            {
+              id: 'call-mcp',
+              title: 'Lookup',
+              endpoint: 'https://mcp.test/api',
+              metadata: {
+                toolName: 'call_mcp_tool',
+              },
+            },
+          ],
+        },
+        params: {
+          systemPrompt: '',
+          temperature: 0.6,
+          maxTokens: 512,
+          memorySize: 6,
+          stepLimit: 3,
+        }
+      };
+
+      const result = (await runComponentWithRunner(
+        component!.runner,
+        (payload: any, context: any) => 
+          (component!.execute as any)(payload, context, {
+            ToolLoopAgent: MockToolLoopAgent as unknown as ToolLoopAgentClass,
+            stepCountIs: stepCountIsMock as unknown as StepCountIsFn,
+            tool: ((definition: any) => {
+              createdTools.push(definition);
+              return definition;
+            }) as unknown as ToolFn,
+            createOpenAI: openAiFactoryMock as unknown as CreateOpenAIFn,
+            createGoogleGenerativeAI: googleFactoryMock as unknown as CreateGoogleGenerativeAIFn,
+          }),
+        executePayload,
+        workflowContext,
+      )) as any;
 
     const params = {
       userInput: 'What does the MCP tool return?',
@@ -317,47 +324,46 @@ describe('core.ai.agent component', () => {
       stepLimit: 3,
     };
 
-    const result = (await runComponentWithRunner(
-      component!.runner,
-      (params: any, context: any) => 
-        (component!.execute as any)(params, context, {
-          ToolLoopAgent: MockToolLoopAgent as unknown as ToolLoopAgentClass,
-          stepCountIs: stepCountIsMock as unknown as StepCountIsFn,
-          tool: ((definition: any) => {
-            createdTools.push(definition);
-            return definition;
-          }) as unknown as ToolFn,
-          createOpenAI: openAiFactoryMock as unknown as CreateOpenAIFn,
-          createGoogleGenerativeAI: googleFactoryMock as unknown as CreateGoogleGenerativeAIFn,
-        }),
-      params,
-      contextWithMockFetch,
-    )) as any;
-
-    expect(createdTools).toHaveLength(1);
-    expect(stepCountIsMock).toHaveBeenCalledWith(3);
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(result.toolInvocations).toHaveLength(1);
-    expect(result.toolInvocations[0]).toMatchObject({
-      toolName: 'call_mcp_tool',
-      result: { answer: 'Evidence' },
-    });
-    expect(result.reasoningTrace[0]).toMatchObject({
-      thought: 'Consulting MCP',
-    });
-    const toolMessage = result.conversationState.messages.find((msg: any) => msg.role === 'tool');
-    expect(toolMessage?.content).toMatchObject({
-      toolName: 'call_mcp_tool',
-      result: { answer: 'Evidence' },
-    });
-    const agentSettings = toolLoopAgentConstructorMock.mock.calls[0][0];
-    expect(agentSettings.model).toMatchObject({
-      provider: 'gemini',
-      modelId: 'gemini-2.5-flash',
-    });
-    expect(result.responseText).toBe('Final resolved answer');
-    expect(result.agentRunId).toBeTruthy();
-  });
+          const result2 = (await runComponentWithRunner(
+          component!.runner,
+          (params: any, context: any) => 
+            (component!.execute as any)(params, context, {
+              ToolLoopAgent: MockToolLoopAgent as unknown as ToolLoopAgentClass,
+              stepCountIs: stepCountIsMock as unknown as StepCountIsFn,
+              tool: ((definition: any) => {
+                createdTools.push(definition);
+                return definition;
+              }) as unknown as ToolFn,
+              createOpenAI: openAiFactoryMock as unknown as CreateOpenAIFn,
+              createGoogleGenerativeAI: googleFactoryMock as unknown as CreateGoogleGenerativeAIFn,
+            }),
+          params,
+          contextWithMockFetch,
+        )) as any;
+    
+        expect(createdTools).toHaveLength(1);
+        expect(stepCountIsMock).toHaveBeenCalledWith(3);
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        expect(result2.toolInvocations).toHaveLength(1);
+        expect(result2.toolInvocations[0]).toMatchObject({
+          toolName: 'call_mcp_tool',
+          result: { answer: 'Evidence' },
+        });
+        expect(result2.reasoningTrace[0]).toMatchObject({
+          thought: 'Consulting MCP',
+        });
+        const toolMessage = result2.conversationState.messages.find((msg: any) => msg.role === 'tool');
+        expect(toolMessage?.content).toMatchObject({
+          toolName: 'call_mcp_tool',
+          result: { answer: 'Evidence' },
+        });
+        const agentSettings = toolLoopAgentConstructorMock.mock.calls[0][0];
+        expect(agentSettings.model).toMatchObject({
+          provider: 'gemini',
+          modelId: 'gemini-2.5-flash',
+        });
+        expect(result2.responseText).toBe('Final resolved answer');
+        expect(result2.agentRunId).toBeTruthy();  }});
 
   test('emits agent trace events via publisher and fallback progress stream', async () => {
     const component = componentRegistry.get('core.ai.agent');
@@ -387,19 +393,23 @@ describe('core.ai.agent component', () => {
       ],
     });
 
-    const params = {
-      userInput: 'Explain zebra stripes',
-      conversationState: undefined,
-      chatModel: {
-        provider: 'openai',
-        modelId: 'gpt-4o-mini',
+    const executePayload = {
+      inputs: {
+        userInput: 'Explain zebra stripes',
+        conversationState: undefined,
+        chatModel: {
+          provider: 'openai' as const,
+          modelId: 'gpt-4o-mini',
+        },
+        modelApiKey: 'sk-openai-from-secret',
       },
-      modelApiKey: 'sk-openai-from-secret',
-      systemPrompt: 'You are a biologist.',
-      temperature: 0.2,
-      maxTokens: 256,
-      memorySize: 5,
-      stepLimit: 3,
+      params: {
+        systemPrompt: 'You are a biologist.',
+        temperature: 0.2,
+        maxTokens: 256,
+        memorySize: 5,
+        stepLimit: 3,
+      }
     };
 
     const publishMock = vi.fn().mockResolvedValue(undefined);
@@ -412,15 +422,15 @@ describe('core.ai.agent component', () => {
 
     await runComponentWithRunner(
       component!.runner,
-      (componentParams: any, ctx: any) =>
-        (component!.execute as any)(componentParams, ctx, {
+      (payload: any, ctx: any) =>
+        (component!.execute as any)(payload, ctx, {
           ToolLoopAgent: MockToolLoopAgent as unknown as ToolLoopAgentClass,
           stepCountIs: stepCountIsMock as unknown as StepCountIsFn,
           tool: ((definition: any) => definition) as unknown as ToolFn,
           createOpenAI: openAiFactoryMock as unknown as CreateOpenAIFn,
           createGoogleGenerativeAI: googleFactoryMock as unknown as CreateGoogleGenerativeAIFn,
         }),
-      params,
+      executePayload,
       contextWithPublisher,
     );
 
@@ -447,15 +457,15 @@ describe('core.ai.agent component', () => {
 
     await runComponentWithRunner(
       component!.runner,
-      (componentParams: any, ctx: any) =>
-        (component!.execute as any)(componentParams, ctx, {
+      (payload: any, ctx: any) =>
+        (component!.execute as any)(payload, ctx, {
           ToolLoopAgent: MockToolLoopAgent as unknown as ToolLoopAgentClass,
           stepCountIs: stepCountIsMock as unknown as StepCountIsFn,
           tool: ((definition: any) => definition) as unknown as ToolFn,
           createOpenAI: openAiFactoryMock as unknown as CreateOpenAIFn,
           createGoogleGenerativeAI: googleFactoryMock as unknown as CreateGoogleGenerativeAIFn,
         }),
-      params,
+      executePayload,
       contextWithoutPublisher,
     );
 
@@ -489,29 +499,33 @@ describe('core.ai.agent component', () => {
         usage: { promptTokens: 10, completionTokens: 20, totalTokens: 30 },
       });
 
-      const params = {
-        userInput: 'Generate user data',
-        conversationState: undefined,
-        chatModel: {
-          provider: 'openai',
-          modelId: 'gpt-4o-mini',
+      const executePayload = {
+        inputs: {
+          userInput: 'Generate user data',
+          conversationState: undefined,
+          chatModel: {
+            provider: 'openai' as const,
+            modelId: 'gpt-4o-mini',
+          },
+          modelApiKey: 'sk-openai-from-secret',
         },
-        modelApiKey: 'sk-openai-from-secret',
-        systemPrompt: '',
-        temperature: 0.7,
-        maxTokens: 256,
-        memorySize: 8,
-        stepLimit: 4,
-        structuredOutputEnabled: true,
-        schemaType: 'json-example',
-        jsonExample: '{"name": "example", "age": 0}',
-        autoFixFormat: false,
+        params: {
+          systemPrompt: '',
+          temperature: 0.7,
+          maxTokens: 256,
+          memorySize: 8,
+          stepLimit: 4,
+          structuredOutputEnabled: true,
+          schemaType: 'json-example' as const,
+          jsonExample: '{"name": "example", "age": 0}',
+          autoFixFormat: false,
+        }
       };
 
       const result = (await runComponentWithRunner(
         component!.runner,
-        (p: any, ctx: any) =>
-          (component!.execute as any)(p, ctx, {
+        (payload: any, ctx: any) =>
+          (component!.execute as any)(payload, ctx, {
             ToolLoopAgent: MockToolLoopAgent as unknown as ToolLoopAgentClass,
             stepCountIs: stepCountIsMock as unknown as StepCountIsFn,
             tool: ((definition: any) => definition) as unknown as ToolFn,
@@ -520,7 +534,7 @@ describe('core.ai.agent component', () => {
             generateObject: generateObjectMock as unknown as GenerateObjectFn,
             generateText: generateTextMock as unknown as GenerateTextFn,
           }),
-        params,
+        executePayload,
         workflowContext,
       )) as any;
 
@@ -540,36 +554,40 @@ describe('core.ai.agent component', () => {
         usage: { promptTokens: 15, completionTokens: 25, totalTokens: 40 },
       });
 
-      const params = {
-        userInput: 'Generate article data',
-        conversationState: undefined,
-        chatModel: {
-          provider: 'gemini',
-          modelId: 'gemini-2.5-flash',
-        },
-        modelApiKey: 'gm-gemini-from-secret',
-        systemPrompt: '',
-        temperature: 0.5,
-        maxTokens: 512,
-        memorySize: 8,
-        stepLimit: 4,
-        structuredOutputEnabled: true,
-        schemaType: 'json-schema',
-        jsonSchema: JSON.stringify({
-          type: 'object',
-          properties: {
-            title: { type: 'string' },
-            count: { type: 'integer' },
+      const executePayload = {
+        inputs: {
+          userInput: 'Generate article data',
+          conversationState: undefined,
+          chatModel: {
+            provider: 'gemini' as const,
+            modelId: 'gemini-2.5-flash',
           },
-          required: ['title', 'count'],
-        }),
-        autoFixFormat: false,
+          modelApiKey: 'gm-gemini-from-secret',
+        },
+        params: {
+          systemPrompt: '',
+          temperature: 0.5,
+          maxTokens: 512,
+          memorySize: 8,
+          stepLimit: 4,
+          structuredOutputEnabled: true,
+          schemaType: 'json-schema' as const,
+          jsonSchema: JSON.stringify({
+            type: 'object',
+            properties: {
+              title: { type: 'string' },
+              count: { type: 'integer' },
+            },
+            required: ['title', 'count'],
+          }),
+          autoFixFormat: false,
+        }
       };
 
       const result = (await runComponentWithRunner(
         component!.runner,
-        (p: any, ctx: any) =>
-          (component!.execute as any)(p, ctx, {
+        (payload: any, ctx: any) =>
+          (component!.execute as any)(payload, ctx, {
             ToolLoopAgent: MockToolLoopAgent as unknown as ToolLoopAgentClass,
             stepCountIs: stepCountIsMock as unknown as StepCountIsFn,
             tool: ((definition: any) => definition) as unknown as ToolFn,
@@ -578,7 +596,7 @@ describe('core.ai.agent component', () => {
             generateObject: generateObjectMock as unknown as GenerateObjectFn,
             generateText: generateTextMock as unknown as GenerateTextFn,
           }),
-        params,
+        executePayload,
         workflowContext,
       )) as any;
 
@@ -596,29 +614,33 @@ describe('core.ai.agent component', () => {
         usage: { promptTokens: 20, completionTokens: 30, totalTokens: 50 },
       });
 
-      const params = {
-        userInput: 'Generate user data',
-        conversationState: undefined,
-        chatModel: {
-          provider: 'openai',
-          modelId: 'gpt-4o-mini',
+      const executePayload = {
+        inputs: {
+          userInput: 'Generate user data',
+          conversationState: undefined,
+          chatModel: {
+            provider: 'openai' as const,
+            modelId: 'gpt-4o-mini',
+          },
+          modelApiKey: 'sk-openai-from-secret',
         },
-        modelApiKey: 'sk-openai-from-secret',
-        systemPrompt: '',
-        temperature: 0.7,
-        maxTokens: 256,
-        memorySize: 8,
-        stepLimit: 4,
-        structuredOutputEnabled: true,
-        schemaType: 'json-example',
-        jsonExample: '{"name": "example", "age": 0}',
-        autoFixFormat: true,
+        params: {
+          systemPrompt: '',
+          temperature: 0.7,
+          maxTokens: 256,
+          memorySize: 8,
+          stepLimit: 4,
+          structuredOutputEnabled: true,
+          schemaType: 'json-example' as const,
+          jsonExample: '{"name": "example", "age": 0}',
+          autoFixFormat: true,
+        }
       };
 
       const result = (await runComponentWithRunner(
         component!.runner,
-        (p: any, ctx: any) =>
-          (component!.execute as any)(p, ctx, {
+        (payload: any, ctx: any) =>
+          (component!.execute as any)(payload, ctx, {
             ToolLoopAgent: MockToolLoopAgent as unknown as ToolLoopAgentClass,
             stepCountIs: stepCountIsMock as unknown as StepCountIsFn,
             tool: ((definition: any) => definition) as unknown as ToolFn,
@@ -627,7 +649,7 @@ describe('core.ai.agent component', () => {
             generateObject: generateObjectMock as unknown as GenerateObjectFn,
             generateText: generateTextMock as unknown as GenerateTextFn,
           }),
-        params,
+        executePayload,
         workflowContext,
       )) as any;
 
@@ -642,26 +664,30 @@ describe('core.ai.agent component', () => {
 
       nextAgentResult = makeAgentResult();
 
-      const params = {
-        userInput: 'Regular text query',
-        conversationState: undefined,
-        chatModel: {
-          provider: 'openai',
-          modelId: 'gpt-4o-mini',
+      const executePayload = {
+        inputs: {
+          userInput: 'Regular text query',
+          conversationState: undefined,
+          chatModel: {
+            provider: 'openai' as const,
+            modelId: 'gpt-4o-mini',
+          },
+          modelApiKey: 'sk-openai-from-secret',
         },
-        modelApiKey: 'sk-openai-from-secret',
-        systemPrompt: '',
-        temperature: 0.7,
-        maxTokens: 256,
-        memorySize: 8,
-        stepLimit: 4,
-        structuredOutputEnabled: false,
+        params: {
+          systemPrompt: '',
+          temperature: 0.7,
+          maxTokens: 256,
+          memorySize: 8,
+          stepLimit: 4,
+          structuredOutputEnabled: false,
+        }
       };
 
       const result = (await runComponentWithRunner(
         component!.runner,
-        (p: any, ctx: any) =>
-          (component!.execute as any)(p, ctx, {
+        (payload: any, ctx: any) =>
+          (component!.execute as any)(payload, ctx, {
             ToolLoopAgent: MockToolLoopAgent as unknown as ToolLoopAgentClass,
             stepCountIs: stepCountIsMock as unknown as StepCountIsFn,
             tool: ((definition: any) => definition) as unknown as ToolFn,
@@ -670,7 +696,7 @@ describe('core.ai.agent component', () => {
             generateObject: generateObjectMock as unknown as GenerateObjectFn,
             generateText: generateTextMock as unknown as GenerateTextFn,
           }),
-        params,
+        executePayload,
         workflowContext,
       )) as any;
 
@@ -690,30 +716,34 @@ describe('core.ai.agent component', () => {
         usage: { promptTokens: 20, completionTokens: 30, totalTokens: 50 },
       });
 
-      const params = {
-        userInput: 'Generate user data',
-        conversationState: undefined,
-        chatModel: {
-          provider: 'openai',
-          modelId: 'gpt-4o-mini',
+      const executePayload = {
+        inputs: {
+          userInput: 'Generate user data',
+          conversationState: undefined,
+          chatModel: {
+            provider: 'openai' as const,
+            modelId: 'gpt-4o-mini',
+          },
+          modelApiKey: 'sk-openai-from-secret',
         },
-        modelApiKey: 'sk-openai-from-secret',
-        systemPrompt: '',
-        temperature: 0.7,
-        maxTokens: 256,
-        memorySize: 8,
-        stepLimit: 4,
-        structuredOutputEnabled: true,
-        schemaType: 'json-example',
-        jsonExample: '{"name": "example", "age": 0}',
-        autoFixFormat: true,
+        params: {
+          systemPrompt: '',
+          temperature: 0.7,
+          maxTokens: 256,
+          memorySize: 8,
+          stepLimit: 4,
+          structuredOutputEnabled: true,
+          schemaType: 'json-example' as const,
+          jsonExample: '{"name": "example", "age": 0}',
+          autoFixFormat: true,
+        }
       };
 
       await expect(
         runComponentWithRunner(
           component!.runner,
-          (p: any, ctx: any) =>
-            (component!.execute as any)(p, ctx, {
+          (payload: any, ctx: any) =>
+            (component!.execute as any)(payload, ctx, {
               ToolLoopAgent: MockToolLoopAgent as unknown as ToolLoopAgentClass,
               stepCountIs: stepCountIsMock as unknown as StepCountIsFn,
               tool: ((definition: any) => definition) as unknown as ToolFn,
@@ -722,7 +752,7 @@ describe('core.ai.agent component', () => {
               generateObject: generateObjectMock as unknown as GenerateObjectFn,
               generateText: generateTextMock as unknown as GenerateTextFn,
             }),
-          params,
+          executePayload,
           workflowContext,
         ),
       ).rejects.toThrow('auto-fix could not parse');

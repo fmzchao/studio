@@ -13,7 +13,7 @@ const mockRunComponentWithRunner = mock(async () => ({
 }));
 
 // Mock IsolatedContainerVolume
-const mockVolumeCleanup = mock(async () => {});
+const mockVolumeCleanup = mock(async () => { });
 const mockVolumeInitialize = mock(async () => 'test-volume-123');
 const mockVolumeGetVolumeConfig = mock(() => ({
   source: 'test-volume',
@@ -25,14 +25,14 @@ class MockIsolatedContainerVolume {
   constructor(
     public tenantId: string,
     public runId: string,
-  ) {}
+  ) { }
 
   async initialize(files: Record<string, string | Buffer>) {
-    return mockVolumeInitialize(files);
+    return mockVolumeInitialize();
   }
 
   getVolumeConfig(path: string, readOnly: boolean) {
-    return mockVolumeGetVolumeConfig(path, readOnly);
+    return mockVolumeGetVolumeConfig();
   }
 
   getVolumeName() {
@@ -55,11 +55,11 @@ describe('Nuclei Integration Tests', () => {
       runId: 'test-run-123',
       componentRef: 'node-nuclei-1',
       logger: {
-        info: mock(() => {}),
-        error: mock(() => {}),
-        warn: mock(() => {}),
+        info: mock(() => { }),
+        error: mock(() => { }),
+        warn: mock(() => { }),
       },
-      emitProgress: mock((msg: any) => {}),
+      emitProgress: mock((msg: any) => { }),
       metadata: {
         runId: 'test-run-123',
         componentRef: 'node-nuclei-1',
@@ -78,8 +78,6 @@ describe('Nuclei Integration Tests', () => {
       const input: NucleiInput = {
         targets: ['https://example.com'],
         templateIds: ['CVE-2024-1234', 'http-missing-security-headers'],
-        rateLimit: 100,
-        concurrency: 10,
       };
 
       // Mock successful nuclei output
@@ -95,11 +93,12 @@ describe('Nuclei Integration Tests', () => {
             timestamp: '2024-12-04T10:00:00Z',
           },
         ],
+        raw: '',
         stderr: '[INF] 2 templates loaded, 1 requests sent, finished in 2.5s',
         exitCode: 0,
       };
 
-      mockRunComponentWithRunner.mockResolvedValueOnce(mockNucleiOutput);
+      mockRunComponentWithRunner.mockResolvedValueOnce(mockNucleiOutput as any);
 
       // Note: This test validates the schema but doesn't run actual Docker
       // In a real integration test, you'd use a test container
@@ -110,10 +109,9 @@ describe('Nuclei Integration Tests', () => {
       const input: NucleiInput = {
         targets: ['https://example.com', 'https://test.com'],
         templateIds: ['CVE-2024-1234', 'CVE-2024-5678'],
-        rateLimit: 50,
       };
 
-      const parsed = nucleiComponent.inputSchema.parse(input);
+      const parsed = nucleiComponent.inputs.parse(input);
       expect(parsed.templateIds).toEqual(['CVE-2024-1234', 'CVE-2024-5678']);
       expect(parsed.targets).toHaveLength(2);
     });
@@ -140,7 +138,7 @@ http:
         customTemplateYaml: validTemplate,
       };
 
-      const parsed = nucleiComponent.inputSchema.parse(input);
+      const parsed = nucleiComponent.inputs.parse(input);
       expect(parsed.customTemplateYaml).toBe(validTemplate);
     });
 
@@ -172,7 +170,7 @@ exec:
         customTemplateArchive: zipBase64,
       };
 
-      const parsed = nucleiComponent.inputSchema.parse(input);
+      const parsed = nucleiComponent.inputs.parse(input);
       expect(parsed.customTemplateArchive).toBe(zipBase64);
     });
 
@@ -202,78 +200,96 @@ exec:
         templatePaths: ['cves/2024/', 'http/exposures/'],
       };
 
-      const parsed = nucleiComponent.inputSchema.parse(input);
+      const parsed = nucleiComponent.inputs.parse(input);
       expect(parsed.templatePaths).toEqual(['cves/2024/', 'http/exposures/']);
     });
   });
 
   describe('Scan Configuration', () => {
     test('should respect rate limiting', async () => {
-      const input: NucleiInput = {
+      const input = {
         targets: ['https://example.com'],
         templateIds: ['CVE-2024-1234'],
+      };
+      const params = {
         rateLimit: 50, // Low rate
       };
 
-      const parsed = nucleiComponent.inputSchema.parse(input);
-      expect(parsed.rateLimit).toBe(50);
+      const parsedInputs = nucleiComponent.inputs.parse(input);
+      const parsedParams = nucleiComponent.parameters.parse(params);
+      expect(parsedParams.rateLimit).toBe(50);
     });
 
     test('should respect concurrency settings', async () => {
-      const input: NucleiInput = {
+      const input = {
         targets: ['https://example.com'],
         templateIds: ['CVE-2024-1234'],
+      };
+      const params = {
         concurrency: 5,
       };
 
-      const parsed = nucleiComponent.inputSchema.parse(input);
-      expect(parsed.concurrency).toBe(5);
+      const parsedInputs = nucleiComponent.inputs.parse(input);
+      const parsedParams = nucleiComponent.parameters.parse(params);
+      expect(parsedParams.concurrency).toBe(5);
     });
 
     test('should configure timeout and retries', async () => {
-      const input: NucleiInput = {
+      const input = {
         targets: ['https://example.com'],
         templateIds: ['CVE-2024-1234'],
+      };
+      const params = {
         timeout: 30,
         retries: 3,
       };
 
-      const parsed = nucleiComponent.inputSchema.parse(input);
-      expect(parsed.timeout).toBe(30);
-      expect(parsed.retries).toBe(3);
+      const parsedInputs = nucleiComponent.inputs.parse(input);
+      const parsedParams = nucleiComponent.parameters.parse(params);
+      expect(parsedParams.timeout).toBe(30);
+      expect(parsedParams.retries).toBe(3);
     });
 
     test('should enable raw HTTP output', async () => {
-      const input: NucleiInput = {
+      const input = {
         targets: ['https://example.com'],
         templateIds: ['CVE-2024-1234'],
+      };
+      const params = {
         includeRaw: true,
       };
 
-      const parsed = nucleiComponent.inputSchema.parse(input);
-      expect(parsed.includeRaw).toBe(true);
+      const parsedInputs = nucleiComponent.inputs.parse(input);
+      const parsedParams = nucleiComponent.parameters.parse(params);
+      expect(parsedParams.includeRaw).toBe(true);
     });
 
     test('should enable redirect following', async () => {
-      const input: NucleiInput = {
+      const input = {
         targets: ['https://example.com'],
         templateIds: ['CVE-2024-1234'],
+      };
+      const params = {
         followRedirects: true,
       };
 
-      const parsed = nucleiComponent.inputSchema.parse(input);
-      expect(parsed.followRedirects).toBe(true);
+      const parsedInputs = nucleiComponent.inputs.parse(input);
+      const parsedParams = nucleiComponent.parameters.parse(params);
+      expect(parsedParams.followRedirects).toBe(true);
     });
 
     test('should disable template updates', async () => {
-      const input: NucleiInput = {
+      const input = {
         targets: ['https://example.com'],
         templateIds: ['CVE-2024-1234'],
+      };
+      const params = {
         updateTemplates: false,
       };
 
-      const parsed = nucleiComponent.inputSchema.parse(input);
-      expect(parsed.updateTemplates).toBe(false);
+      const parsedInputs = nucleiComponent.inputs.parse(input);
+      const parsedParams = nucleiComponent.parameters.parse(params);
+      expect(parsedParams.updateTemplates).toBe(false);
     });
   });
 
@@ -361,7 +377,7 @@ this is not json
         templateIds: ['CVE-2024-1234'],
       };
 
-      const parsed = nucleiComponent.inputSchema.parse(input);
+      const parsed = nucleiComponent.inputs.parse(input);
       expect(parsed.targets).toHaveLength(3);
     });
 
@@ -376,7 +392,7 @@ this is not json
       };
 
       // Nuclei handles deduplication internally
-      const parsed = nucleiComponent.inputSchema.parse(input);
+      const parsed = nucleiComponent.inputs.parse(input);
       expect(parsed.targets).toHaveLength(3); // Input keeps duplicates
     });
   });
@@ -400,7 +416,7 @@ this is not json
         templateIds: ['CVE-2024-1234'],
       };
 
-      const parsed = nucleiComponent.inputSchema.parse(nucleiInput);
+      const parsed = nucleiComponent.inputs.parse(nucleiInput);
       expect(parsed.targets).toHaveLength(2);
     });
 
@@ -426,7 +442,7 @@ this is not json
         customTemplateArchive: fileLoaderOutput.file.content,
       };
 
-      const parsed = nucleiComponent.inputSchema.parse(nucleiInput);
+      const parsed = nucleiComponent.inputs.parse(nucleiInput);
       expect(parsed.customTemplateArchive).toBeTruthy();
     });
   });

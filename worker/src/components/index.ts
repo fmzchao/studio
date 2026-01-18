@@ -36,7 +36,6 @@ import './ai/gemini-provider';
 import './ai/openrouter-provider';
 import './ai/ai-agent';
 import './ai/llm-generate-text';
-import './ai/mcp-tool-contract';
 import './ai/mcp-http-provider';
 import './ai/mcp-tool-merge';
 
@@ -51,7 +50,7 @@ import './security/supabase-scanner';
 import './security/notify';
 import './security/prowler-scan';
 import './security/shuffledns-massdns';
-import './security/atlassian-offboarding';
+import './it-automation/atlassian-offboarding';
 import './security/trufflehog';
 import './security/terminal-demo';
 import './security/virustotal';

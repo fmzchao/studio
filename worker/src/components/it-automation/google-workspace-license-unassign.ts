@@ -1,22 +1,44 @@
 import { z } from 'zod';
 import {
   componentRegistry,
-  ComponentDefinition,
   ComponentRetryPolicy,
-  port,
   ConfigurationError,
   NotFoundError,
   ServiceError,
+  defineComponent,
+  inputs,
+  outputs,
+  parameters,
+  port,
+  param,
 } from '@shipsec/component-sdk';
 import { admin, auth as googleAdminAuth } from '@googleapis/admin';
 
-const inputSchema = z.object({
-  primary_email: z.string().email(),
-  dry_run: z.boolean().default(false),
-  service_account_secret: z.string().describe('Google Workspace service account JSON key from Secret Fetch component'),
+const inputSchema = inputs({
+  primary_email: port(z.string().email(), {
+    label: 'User Email',
+    description: 'Email address of the user to delete.',
+  }),
+  service_account_secret: port(
+    z.string().describe('Google Workspace service account JSON key from Secret Fetch component'),
+    {
+      label: 'Service Account Secret',
+      description:
+        'Google Workspace service account JSON key (can be provided directly or via Secret Fetch component).',
+      editor: 'secret',
+      connectionType: { kind: 'primitive', name: 'secret' },
+    },
+  ),
 });
 
-type Input = z.infer<typeof inputSchema>;
+const parameterSchema = parameters({
+  dry_run: param(z.boolean().default(false), {
+    label: 'Dry Run Mode',
+    editor: 'boolean',
+    description: 'Preview what would happen without making actual changes.',
+    helpText: 'Safety setting - enable to test operations without affecting users.',
+  }),
+});
 
 interface UserState {
   email: string;
@@ -39,7 +61,7 @@ interface AuditLog {
   };
 }
 
-export type GoogleWorkspaceUserDeleteOutput = {
+type GoogleWorkspaceUserDeleteResult = {
   success: boolean;
   audit: AuditLog;
   error?: string;
@@ -47,13 +69,16 @@ export type GoogleWorkspaceUserDeleteOutput = {
   message: string;
 };
 
-const outputSchema = z.object({
-  success: z.boolean(),
-  audit: z.object({
-    timestamp: z.string(),
-    action: z.string(),
-    userEmail: z.string(),
-    before: z.object({
+export type GoogleWorkspaceUserDeleteOutput = GoogleWorkspaceUserDeleteResult & {
+  result: GoogleWorkspaceUserDeleteResult;
+};
+
+const auditSchema = z.object({
+  timestamp: z.string(),
+  action: z.string(),
+  userEmail: z.string(),
+  before: z
+    .object({
       email: z.string(),
       orgUnitPath: z.string(),
       suspended: z.boolean(),
@@ -61,15 +86,49 @@ const outputSchema = z.object({
       lastLoginTime: z.string().optional(),
       customerId: z.string(),
       id: z.string(),
-    }).optional(),
-    dryRun: z.boolean(),
-    changes: z.object({
-      userDeleted: z.boolean(),
-    }),
+    })
+    .optional(),
+  dryRun: z.boolean(),
+  changes: z.object({
+    userDeleted: z.boolean(),
   }),
+});
+
+const resultSchema = z.object({
+  success: z.boolean(),
+  audit: auditSchema,
   error: z.string().optional(),
   userDeleted: z.boolean(),
   message: z.string(),
+});
+
+const outputSchema = outputs({
+  success: port(z.boolean(), {
+    label: 'Success',
+    description: 'Whether the deletion completed successfully.',
+  }),
+  audit: port(auditSchema, {
+    label: 'Audit',
+    description: 'Audit log describing the deletion attempt.',
+    connectionType: { kind: 'primitive', name: 'json' },
+  }),
+  error: port(z.string().optional(), {
+    label: 'Error',
+    description: 'Error message when the deletion fails.',
+  }),
+  userDeleted: port(z.boolean(), {
+    label: 'User Deleted',
+    description: 'Whether the user account was deleted.',
+  }),
+  message: port(z.string(), {
+    label: 'Message',
+    description: 'Summary message for the deletion attempt.',
+  }),
+  result: port(resultSchema, {
+    label: 'User Deletion Result',
+    description: 'Results of the user deletion operation including audit logs.',
+    connectionType: { kind: 'primitive', name: 'json' },
+  }),
 });
 
 /**
@@ -185,7 +244,7 @@ const componentDocumentation = [
   '- Progress updates stream via context.emitProgress so downstream workflow consumers can display live status.',
 ].join('\n');
 
-const definition: ComponentDefinition<Input, GoogleWorkspaceUserDeleteOutput> = {
+const definition = defineComponent({
   id: 'it-automation.google-workspace.user-delete',
   label: 'Google Workspace User Delete',
   category: 'it_ops',
@@ -197,10 +256,11 @@ const definition: ComponentDefinition<Input, GoogleWorkspaceUserDeleteOutput> = 
     backoffCoefficient: 2,
     nonRetryableErrorTypes: ['ConfigurationError', 'NotFoundError', 'ValidationError'],
   } satisfies ComponentRetryPolicy,
-  inputSchema,
-  outputSchema,
+  inputs: inputSchema,
+  outputs: outputSchema,
+  parameters: parameterSchema,
   docs: componentDocumentation,
-  metadata: {
+  ui: {
     slug: 'google-workspace-user-delete',
     version: '2.0.0',
     type: 'output',
@@ -214,52 +274,18 @@ const definition: ComponentDefinition<Input, GoogleWorkspaceUserDeleteOutput> = 
     },
     isLatest: true,
     deprecated: false,
-    inputs: [
-      {
-        id: 'primary_email',
-        label: 'User Email',
-        dataType: port.text({ coerceFrom: [] }),
-        required: true,
-        description: 'Email address of the user to delete.',
-      },
-      {
-        id: 'service_account_secret',
-        label: 'Service Account Secret',
-        dataType: port.secret(),  // Changed from text to secret for proper masking
-        required: true,
-        description: 'Google Workspace service account JSON key (can be provided directly or via Secret Fetch component).',
-      },
-    ],
-    outputs: [
-      {
-        id: 'result',
-        label: 'User Deletion Result',
-        dataType: port.json(),
-        description: 'Results of the user deletion operation including audit logs.',
-      },
-    ],
     examples: [
       'Offboard employees by deleting their Google Workspace accounts.',
       'Automatically release all licenses when users leave the company.',
       'Complete IT offboarding workflows with comprehensive audit trails.',
     ],
-    parameters: [
-      {
-        id: 'dry_run',
-        label: 'Dry Run Mode',
-        type: 'boolean',
-        default: false,
-        description: 'Preview what would happen without making actual changes.',
-        helpText: 'Safety setting - enable to test operations without affecting users.',
-      },
-    ],
   },
-  async execute(params, context) {
+  async execute({ inputs, params }, context) {
     const {
       primary_email,
-      dry_run = false,
       service_account_secret,
-    } = params;
+    } = inputs;
+    const { dry_run = false } = params;
 
     context.logger.info(`[GoogleWorkspace] Starting user deletion for ${primary_email}`);
     context.emitProgress(`Initializing user deletion process`);
@@ -337,18 +363,23 @@ const definition: ComponentDefinition<Input, GoogleWorkspaceUserDeleteOutput> = 
       context.logger.info(`[GoogleWorkspace] ${message}`);
       context.emitProgress(`User deletion completed successfully`);
 
-      return {
+      const result = {
         success: true,
         audit: auditLog,
         userDeleted: true,
         message,
       };
 
+      return {
+        ...result,
+        result,
+      };
+
     } catch (error: any) {
       context.logger.error(`[GoogleWorkspace] User deletion failed: ${error.message}`);
       context.emitProgress('User deletion failed');
 
-      return {
+      const result = {
         success: false,
         audit: {
           timestamp: new Date().toISOString(),
@@ -364,8 +395,13 @@ const definition: ComponentDefinition<Input, GoogleWorkspaceUserDeleteOutput> = 
         userDeleted: false,
         message: `Failed to delete user: ${error.message}`,
       };
+
+      return {
+        ...result,
+        result,
+      };
     }
   },
-};
+});
 
 componentRegistry.register(definition);

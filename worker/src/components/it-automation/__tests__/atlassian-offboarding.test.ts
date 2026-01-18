@@ -1,6 +1,8 @@
 import { beforeAll, afterEach, describe, expect, it, vi } from 'bun:test';
 import { createExecutionContext } from '@shipsec/component-sdk';
 import { componentRegistry } from '../../index';
+import { AtlassianOffboardingInput, AtlassianOffboardingOutput } from '../atlassian-offboarding';
+
 
 describe('atlassian offboarding component', () => {
   const originalFetch = globalThis.fetch;
@@ -16,7 +18,7 @@ describe('atlassian offboarding component', () => {
   });
 
   const getComponent = () => {
-    const component = componentRegistry.get('shipsec.atlassian.offboarding');
+    const component = componentRegistry.get<AtlassianOffboardingInput, AtlassianOffboardingOutput>('shipsec.atlassian.offboarding');
     if (!component) {
       throw new Error('Component not registered');
     }
@@ -94,13 +96,16 @@ describe('atlassian offboarding component', () => {
       componentRef: 'atlassian-offboarding-success',
     });
 
-    const params = component.inputSchema.parse({
-      orgId,
-      accessToken: 'direct-token',
-      emailUsernames: ' Alice@example.com , alias@example.com\nBOB ',
-    });
+    const executePayload = {
+      inputs: {
+        orgId,
+        accessToken: 'direct-token',
+        emailUsernames: ['Alice@example.com', 'alias@example.com', 'bob'],
+      },
+      params: {}
+    };
 
-    const result = await component.execute(params, context);
+    const result = await component.execute(executePayload, context);
 
     expect(fetchMock).toHaveBeenCalledTimes(3);
     expect(result.orgId).toBe(orgId);
@@ -133,7 +138,7 @@ describe('atlassian offboarding component', () => {
   it('rejects inputs that omit accessToken', () => {
     const component = getComponent();
     expect(() =>
-      component.inputSchema.parse({
+      component.inputs.parse({
         orgId: 'org-123',
         emailUsernames: ['alice'],
       }),
@@ -142,36 +147,36 @@ describe('atlassian offboarding component', () => {
 
   it('throws when provided access token trims to an empty string', async () => {
     const component = getComponent();
-    const params = component.inputSchema.parse({
+    const inputValues = {
       orgId: 'org-123',
       emailUsernames: ['alice'],
       accessToken: '   ',
-    });
+    };
 
     const context = createExecutionContext({
       runId: 'test-run',
       componentRef: 'atlassian-offboarding-empty-token',
     });
 
-    await expect(component.execute(params, context)).rejects.toThrow(
+    await expect(component.execute({ inputs: inputValues, params: {} }, context)).rejects.toThrow(
       /Access token is required to call the Atlassian Admin API/,
     );
   });
 
   it('throws when no valid usernames remain after trimming', async () => {
     const component = getComponent();
-    const params = component.inputSchema.parse({
+    const inputValues = {
       orgId: 'org-123',
       accessToken: 'token',
       emailUsernames: ['   ', '\n'],
-    });
+    };
 
     const context = createExecutionContext({
       runId: 'test-run',
       componentRef: 'atlassian-offboarding-empty-input',
     });
 
-    await expect(component.execute(params, context)).rejects.toThrow(
+    await expect(component.execute({ inputs: inputValues, params: {} }, context)).rejects.toThrow(
       'No valid email usernames provided after trimming input.',
     );
   });
@@ -185,18 +190,18 @@ describe('atlassian offboarding component', () => {
 
     globalThis.fetch = fetchMock as unknown as typeof fetch;
 
-    const params = component.inputSchema.parse({
+    const inputValues = {
       orgId: 'org-123',
       accessToken: 'token',
       emailUsernames: ['alice'],
-    });
+    };
 
     const context = createExecutionContext({
       runId: 'test-run',
       componentRef: 'atlassian-offboarding-network-search',
     });
 
-    await expect(component.execute(params, context)).rejects.toThrow(
+    await expect(component.execute({ inputs: inputValues, params: {} }, context)).rejects.toThrow(
       'Failed to call Atlassian search API: network down',
     );
   });
@@ -205,27 +210,27 @@ describe('atlassian offboarding component', () => {
     const component = getComponent();
 
     const fetchMock = vi.fn<(url: unknown, init?: any) => Promise<Response>>().mockResolvedValueOnce(
-        new Response('{"error":"bad request"}', {
-          status: 400,
-          statusText: 'Bad Request',
-          headers: { 'Content-Type': 'application/json' },
-        }),
-      );
+      new Response('{"error":"bad request"}', {
+        status: 400,
+        statusText: 'Bad Request',
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
 
     globalThis.fetch = fetchMock as unknown as typeof fetch;
 
-    const params = component.inputSchema.parse({
+    const inputValues = {
       orgId: 'org-123',
       accessToken: 'token',
       emailUsernames: ['alice'],
-    });
+    };
 
     const context = createExecutionContext({
       runId: 'test-run',
       componentRef: 'atlassian-offboarding-search-non-ok',
     });
 
-    await expect(component.execute(params, context)).rejects.toThrow(
+    await expect(component.execute({ inputs: inputValues, params: {} }, context)).rejects.toThrow(
       /{"error":"bad request"}/,
     );
   });
@@ -240,18 +245,18 @@ describe('atlassian offboarding component', () => {
 
     globalThis.fetch = fetchMock as unknown as typeof fetch;
 
-    const params = component.inputSchema.parse({
+    const inputValues = {
       orgId: 'org-123',
       accessToken: 'token',
       emailUsernames: ['alice'],
-    });
+    };
 
     const context = createExecutionContext({
       runId: 'test-run',
       componentRef: 'atlassian-offboarding-json-fail',
     });
 
-    await expect(component.execute(params, context)).rejects.toThrow(
+    await expect(component.execute({ inputs: inputValues, params: {} }, context)).rejects.toThrow(
       /Unable to parse Atlassian search response JSON/,
     );
   });
@@ -265,18 +270,18 @@ describe('atlassian offboarding component', () => {
 
     globalThis.fetch = fetchMock as unknown as typeof fetch;
 
-    const params = component.inputSchema.parse({
+    const inputValues = {
       orgId: 'org-123',
       accessToken: 'token',
       emailUsernames: ['missing-user'],
-    });
+    };
 
     const context = createExecutionContext({
       runId: 'test-run',
       componentRef: 'atlassian-offboarding-not-found',
     });
 
-    const result = await component.execute(params, context);
+    const result = await component.execute({ inputs: inputValues, params: {} }, context);
 
     expect(result.results).toEqual([
       {
@@ -312,18 +317,18 @@ describe('atlassian offboarding component', () => {
 
     globalThis.fetch = fetchMock as unknown as typeof fetch;
 
-    const params = component.inputSchema.parse({
+    const inputValues = {
       orgId: 'org-123',
       accessToken: 'token',
       emailUsernames: ['err-user'],
-    });
+    };
 
     const context = createExecutionContext({
       runId: 'test-run',
       componentRef: 'atlassian-offboarding-delete-fail',
     });
 
-    const result = await component.execute(params, context);
+    const result = await component.execute({ inputs: inputValues, params: {} }, context);
 
     expect(result.results).toEqual([
       expect.objectContaining({
@@ -347,18 +352,18 @@ describe('atlassian offboarding component', () => {
 
     globalThis.fetch = fetchMock as unknown as typeof fetch;
 
-    const params = component.inputSchema.parse({
+    const inputValues = {
       orgId: 'org-123',
       accessToken: 'token',
       emailUsernames: ['network'],
-    });
+    };
 
     const context = createExecutionContext({
       runId: 'test-run',
       componentRef: 'atlassian-offboarding-delete-network',
     });
 
-    const result = await component.execute(params, context);
+    const result = await component.execute({ inputs: inputValues, params: {} }, context);
 
     expect(result.results).toEqual([
       {

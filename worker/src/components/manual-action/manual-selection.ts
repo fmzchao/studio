@@ -1,11 +1,15 @@
 import { z } from 'zod';
 import {
   componentRegistry,
-  ComponentDefinition,
   ComponentRetryPolicy,
-  port,
-  registerContract,
   ValidationError,
+  defineComponent,
+  inputs,
+  outputs,
+  parameters,
+  port,
+  param,
+  type PortMeta,
 } from '@shipsec/component-sdk';
 
 /**
@@ -15,31 +19,87 @@ import {
  * Supports dynamic templates for title and description.
  */
 
-const inputSchema = z.object({
+const inputSchema = inputs({
   // Dynamic variables will be injected here by resolvePorts
-}).catchall(z.any());
-
-type Input = z.infer<typeof inputSchema>;
-
-const outputSchema = z.object({
-  selection: z.any().describe('The selected option(s)'),
-  approved: z.boolean().describe('Whether the request was approved'),
-  respondedBy: z.string().describe('Who responded to the request'),
-  responseNote: z.string().optional().describe('Note provided by the responder'),
-  respondedAt: z.string().describe('When the request was resolved'),
-  requestId: z.string().describe('The ID of the human input request'),
 });
 
-type Output = z.infer<typeof outputSchema>;
+const outputSchema = outputs({
+  selection: port(z.unknown().describe('The selected option(s)'), {
+    label: 'Selection',
+    description: 'The selected option(s).',
+    allowAny: true,
+    reason: 'Selection shape depends on whether multiple selections are enabled.',
+    connectionType: { kind: 'any' },
+  }),
+  approved: port(z.boolean().describe('Whether the request was approved'), {
+    label: 'Approved',
+    description: 'True when the selection is accepted.',
+    isBranching: true,
+    branchColor: 'green',
+  }),
+  rejected: port(z.boolean().describe('Whether the request was rejected'), {
+    label: 'Rejected',
+    description: 'True when the selection is rejected.',
+    isBranching: true,
+    branchColor: 'red',
+  }),
+  respondedBy: port(z.string().describe('Who responded to the request'), {
+    label: 'Responded By',
+    description: 'The user who resolved this request.',
+  }),
+  responseNote: port(z.string().optional().describe('Note provided by the responder'), {
+    label: 'Response Note',
+    description: 'Optional comment left by the responder.',
+  }),
+  respondedAt: port(z.string().describe('When the request was resolved'), {
+    label: 'Responded At',
+    description: 'Timestamp when the request was resolved.',
+  }),
+  requestId: port(z.string().describe('The ID of the human input request'), {
+    label: 'Request ID',
+    description: 'Unique identifier for the manual selection request.',
+  }),
+});
 
-type Params = {
-  title?: string;
-  description?: string;
-  variables?: { name: string; type: string }[];
-  options?: { label: string; value: string }[] | string[];
-  multiple?: boolean;
-  timeout?: string;
-};
+const parameterSchema = parameters({
+  title: param(z.string().optional(), {
+    label: 'Title',
+    editor: 'text',
+    placeholder: 'Select an option',
+    description: 'Title for the request',
+  }),
+  description: param(z.string().optional(), {
+    label: 'Description',
+    editor: 'textarea',
+    placeholder: 'Please choose one... You can use {{variable}} here.',
+    description: 'Instructions (Markdown supported)',
+    helpText: 'Provide context for the selection. Supports interpolation.',
+  }),
+  variables: param(z.array(z.object({ name: z.string(), type: z.string().optional() })).default([]), {
+    label: 'Context Variables',
+    editor: 'variable-list',
+    description: 'Define variables to use as {{name}} in your description and options.',
+  }),
+  options: param(
+    z.array(z.union([z.string(), z.object({ label: z.string(), value: z.string() })])).default([]),
+    {
+      label: 'Option Designer',
+      editor: 'selection-options',
+      description: 'Design the list of options interactively.',
+    },
+  ),
+  multiple: param(z.boolean().default(false), {
+    label: 'Allow Multiple',
+    editor: 'boolean',
+    description: 'Allow selecting multiple options',
+  }),
+  timeout: param(z.string().optional(), {
+    label: 'Timeout',
+    editor: 'text',
+    placeholder: '24h',
+    description: 'Time to wait (e.g. 1h, 24h)',
+  }),
+});
 
 /**
  * Simple helper to replace {{var}} placeholders in a string
@@ -51,27 +111,41 @@ function interpolate(template: string, vars: Record<string, any>): string {
   });
 }
 
-const mapTypeToPort = (type: string, id: string, label: string) => {
+const mapTypeToSchema = (
+  type: string,
+): { schema: z.ZodTypeAny; meta?: PortMeta } => {
   switch (type) {
-    case 'string': return { id, label, dataType: port.text(), required: false };
-    case 'number': return { id, label, dataType: port.number(), required: false };
-    case 'boolean': return { id, label, dataType: port.boolean(), required: false };
-    case 'secret': return { id, label, dataType: port.secret(), required: false };
-    case 'list': return { id, label, dataType: port.list(port.text()), required: false };
-    default: return { id, label, dataType: port.any(), required: false };
+    case 'string':
+      return { schema: z.string() };
+    case 'number':
+      return { schema: z.number() };
+    case 'boolean':
+      return { schema: z.boolean() };
+    case 'secret':
+      return {
+        schema: z.unknown(),
+        meta: {
+          editor: 'secret',
+          allowAny: true,
+          reason: 'Manual selection inputs can include secrets.',
+          connectionType: { kind: 'primitive', name: 'secret' } as const,
+        },
+      };
+    case 'list':
+      return { schema: z.array(z.string()) };
+    default:
+      return {
+        schema: z.unknown(),
+        meta: {
+          allowAny: true,
+          reason: 'Manual selection inputs can include arbitrary JSON.',
+          connectionType: { kind: 'primitive', name: 'json' } as const,
+        },
+      };
   }
 };
 
-const HUMAN_INPUT_PENDING_CONTRACT = 'core.manual-selection.pending.v1';
-
-registerContract({
-  name: HUMAN_INPUT_PENDING_CONTRACT,
-  schema: outputSchema,
-  summary: 'Manual selection pending response',
-  description: 'Indicates that a workflow is waiting for manual selection input.',
-});
-
-const definition: ComponentDefinition<Input, Output, Params> = {
+const definition = defineComponent({
   id: 'core.manual_action.selection',
   label: 'Manual Selection',
   category: 'manual_action',
@@ -80,10 +154,11 @@ const definition: ComponentDefinition<Input, Output, Params> = {
     maxAttempts: 1,
     nonRetryableErrorTypes: ['ValidationError'],
   } satisfies ComponentRetryPolicy,
-  inputSchema,
-  outputSchema,
+  inputs: inputSchema,
+  outputs: outputSchema,
+  parameters: parameterSchema,
   docs: 'Pauses workflow execution until a user selects an option. Supports Markdown and dynamic context variables.',
-  metadata: {
+  ui: {
     slug: 'manual-selection',
     version: '1.3.0',
     type: 'process',
@@ -96,93 +171,41 @@ const definition: ComponentDefinition<Input, Output, Params> = {
     },
     isLatest: true,
     deprecated: false,
-    inputs: [],
-    outputs: [
-      {
-        id: 'selection',
-        label: 'Selection',
-        dataType: port.any(),
-        description: 'The selected value(s)',
-      },
-      {
-        id: 'approved',
-        label: 'Approved',
-        dataType: port.boolean(),
-        description: 'True if approved, false if rejected',
-      },
-      {
-        id: 'respondedBy',
-        label: 'Responded By',
-        dataType: port.text(),
-        description: 'The user who resolved this request',
-      }
-    ],
-    parameters: [
-      {
-        id: 'title',
-        label: 'Title',
-        type: 'text',
-        required: true,
-        placeholder: 'Select an option',
-        description: 'Title for the request',
-      },
-      {
-        id: 'description',
-        label: 'Description',
-        type: 'textarea',
-        required: false,
-        placeholder: 'Please choose one... You can use {{variable}} here.',
-        description: 'Instructions (Markdown supported)',
-        helpText: 'Provide context for the selection. Supports interpolation.',
-      },
-      {
-          id: 'variables',
-          label: 'Context Variables',
-          type: 'variable-list',
-          default: [],
-          description: 'Define variables to use as {{name}} in your description and options.',
-      },
-      {
-        id: 'options',
-        label: 'Option Designer',
-        type: 'selection-options',
-        required: true,
-        default: [],
-        description: 'Design the list of options interactively.',
-      },
-      {
-        id: 'multiple',
-        label: 'Allow Multiple',
-        type: 'boolean',
-        required: false,
-        description: 'Allow selecting multiple options',
-        default: false,
-      },
-      {
-        id: 'timeout',
-        label: 'Timeout',
-        type: 'text',
-        required: false,
-        placeholder: '24h',
-        description: 'Time to wait (e.g. 1h, 24h)',
-      },
-    ],
   },
-  resolvePorts(params: any) {
-    const inputs: any[] = [];
+  resolvePorts(params: z.infer<typeof parameterSchema>) {
+    const inputShape: Record<string, z.ZodTypeAny> = {};
     if (params.variables && Array.isArray(params.variables)) {
         for (const v of params.variables) {
             if (!v || !v.name) continue;
-            inputs.push(mapTypeToPort(v.type || 'json', v.name, v.name));
+            const { schema, meta } = mapTypeToSchema(v.type || 'json');
+            inputShape[v.name] = port(schema.optional(), {
+              ...(meta ?? {}),
+              label: v.name,
+            });
         }
     }
     
     // Output port for the selection itself
-    const outputs: any[] = [
-        { id: 'selection', label: 'Selection', dataType: params.multiple ? port.list(port.text()) : port.text() },
-        { id: 'approved', label: 'Approved', dataType: port.boolean() },
-        { id: 'respondedBy', label: 'Responded By', dataType: port.text() },
-    ];
+    const outputShape: Record<string, z.ZodTypeAny> = {
+      selection: port(
+        params.multiple ? z.array(z.string()) : z.string(),
+        {
+          label: 'Selection',
+          description: 'The selected value(s)',
+          connectionType: params.multiple
+            ? { kind: 'list', element: { kind: 'primitive', name: 'text' } }
+            : { kind: 'primitive', name: 'text' },
+        },
+      ),
+      approved: port(z.boolean(), {
+        label: 'Approved',
+        description: 'True if approved, false if rejected',
+      }),
+      respondedBy: port(z.string(), {
+        label: 'Responded By',
+        description: 'The user who resolved this request',
+      }),
+    };
 
     // Add dynamic ports for each option
     if (params.options && Array.isArray(params.options)) {
@@ -194,20 +217,18 @@ const definition: ComponentDefinition<Input, Output, Params> = {
                 // We use the value as the ID suffix. 
                 // Note: Values must be safe for port IDs (alphanumeric, -, _)
                 // We might want to sanitize it.
-                outputs.push({
-                    id: `option:${val}`, 
-                    label: `Option: ${label}`,
-                    dataType: port.boolean(),
-                    description: `Active when '${label}' is selected`,
-                    isBranching: true,
+                outputShape[`option:${val}`] = port(z.boolean(), {
+                  label: `Option: ${label}`,
+                  description: `Active when '${label}' is selected`,
+                  isBranching: true,
                 });
             }
         }
     }
     
-    return { inputs, outputs };
+    return { inputs: inputs(inputShape), outputs: outputs(outputShape) };
   },
-  async execute(params, context) {
+  async execute({ inputs, params }, context) {
     const titleTemplate = params.title || 'Input Required';
     const descriptionTemplate = params.description || '';
     const timeoutStr = params.timeout;
@@ -215,19 +236,20 @@ const definition: ComponentDefinition<Input, Output, Params> = {
     const multiple = params.multiple === true;
 
     // Interpolate
-    const title = interpolate(titleTemplate, params);
-    const description = interpolate(descriptionTemplate, params);
+    const contextData = { ...params, ...inputs };
+    const title = interpolate(titleTemplate, contextData);
+    const description = interpolate(descriptionTemplate, contextData);
 
     // Parse and interpolate options
     let options: Array<{ label: string; value: string }> = [];
     if (Array.isArray(optionsRaw)) {
         options = optionsRaw.map(opt => {
             if (typeof opt === 'string') {
-                const val = interpolate(opt, params);
+                const val = interpolate(opt, contextData);
                 return { label: val, value: val };
             }
             return {
-                label: interpolate(opt.label || opt.value, params),
+                label: interpolate(opt.label || opt.value, contextData),
                 value: opt.value,
             };
         });
@@ -260,10 +282,10 @@ const definition: ComponentDefinition<Input, Output, Params> = {
       description,
       inputSchema: { options, multiple },
       timeoutAt,
-      contextData: params,
+      contextData,
     } as any;
   },
-};
+});
 
 function parseTimeout(timeout: string): number | null {
   const match = timeout.match(/^(\d+)(m|h|d)$/);

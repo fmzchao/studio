@@ -1,8 +1,6 @@
 import { describe, it, expect, vi, beforeEach, mock } from 'bun:test';
 import '../../index';
 import { ExecutionContext } from '@shipsec/component-sdk';
-import { admin } from '@googleapis/admin';
-import { google } from 'googleapis';
 import { createMockExecutionContext } from '../../../testing/test-utils';
 
 // Mock the dependencies
@@ -63,9 +61,11 @@ describe('google-workspace-user-delete', () => {
     mockAdminClient.users.delete.mockResolvedValue({});
 
     // 2. Define input parameters
-    const params = {
+    const inputValues = {
       primary_email: 'test@example.com',
       service_account_secret: JSON.stringify({ private_key: 'test-key' }),
+    };
+    const paramValues = {
       dry_run: false,
     };
 
@@ -73,7 +73,7 @@ describe('google-workspace-user-delete', () => {
     const context = createMockExecutionContext();
 
     // 4. Execute the component
-    const result: GoogleWorkspaceUserDeleteOutput = await execute(params, context);
+    const result: GoogleWorkspaceUserDeleteOutput = await execute({ inputs: inputValues, params: paramValues }, context);
 
     // 5. Assert the results
     expect(result.success).toBe(true);
@@ -90,9 +90,11 @@ describe('google-workspace-user-delete', () => {
     mockAdminClient.users.get.mockResolvedValue(mockUser);
 
     // 2. Define input parameters
-    const params = {
+    const inputValues = {
       primary_email: 'test@example.com',
       service_account_secret: JSON.stringify({ private_key: 'test-key' }),
+    };
+    const paramValues = {
       dry_run: true,
     };
 
@@ -100,7 +102,7 @@ describe('google-workspace-user-delete', () => {
     const context = createMockExecutionContext();
 
     // 4. Execute the component
-    const result: GoogleWorkspaceUserDeleteOutput = await execute(params, context);
+    const result: GoogleWorkspaceUserDeleteOutput = await execute({ inputs: inputValues, params: paramValues }, context);
 
     // 5. Assert the results
     expect(result.success).toBe(true);
@@ -115,7 +117,7 @@ describe('google-workspace-user-delete', () => {
     mockAdminClient.users.get.mockRejectedValue({ code: 404 });
 
     // 2. Define input parameters
-    const params = {
+    const inputValues = {
       primary_email: 'notfound@example.com',
       service_account_secret: JSON.stringify({ private_key: 'test-key' }),
     };
@@ -124,7 +126,7 @@ describe('google-workspace-user-delete', () => {
     const context = createMockExecutionContext();
 
     // 4. Execute the component
-    const result: GoogleWorkspaceUserDeleteOutput = await execute(params, context);
+    const result: GoogleWorkspaceUserDeleteOutput = await execute({ inputs: inputValues, params: {} }, context);
 
     // 5. Assert the results
     expect(result.success).toBe(false);
@@ -136,7 +138,7 @@ describe('google-workspace-user-delete', () => {
   it('should fail if secret is not found', async () => {
     // 1. Set up mocks
     // 2. Define input parameters
-    const params = {
+    const inputValues = {
       primary_email: 'test@example.com',
       service_account_secret: '',
     };
@@ -145,7 +147,7 @@ describe('google-workspace-user-delete', () => {
     const context = createMockExecutionContext();
 
     // 4. Execute the component
-    const result: GoogleWorkspaceUserDeleteOutput = await execute(params, context);
+    const result: GoogleWorkspaceUserDeleteOutput = await execute({ inputs: inputValues, params: {} }, context);
 
     // 5. Assert the results
     expect(result.success).toBe(false);

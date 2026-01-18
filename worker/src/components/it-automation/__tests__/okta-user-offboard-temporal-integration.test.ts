@@ -85,16 +85,26 @@ describe('Okta User Offboard - Temporal Activity Integration', () => {
         ref: 'okta-offboard',
         componentId: 'it-automation.okta.user-offboard',
       },
-      params: baseParams,
+      inputs: {
+        user_email: baseParams.user_email,
+        okta_domain: baseParams.okta_domain,
+        apiToken: baseParams.apiToken,
+      },
+      params: {
+        action: baseParams.action,
+        dry_run: baseParams.dry_run,
+      },
       metadata: {
         streamId: 'test-stream',
       },
     });
 
-    expect(result.output.success).toBe(true);
-    expect(result.output.userDeactivated).toBe(true);
-    expect(result.output.userDeleted).toBe(false);
-    expect(result.output.message).toContain('Successfully deactivated user');
+    const output = result.output as any;
+
+    expect(output.success).toBe(true);
+    expect(output.userDeactivated).toBe(true);
+    expect(output.userDeleted).toBe(false);
+    expect(output.message).toContain('Successfully deactivated user');
     expect(mockUserApi.getUser).toHaveBeenCalledTimes(1);
     expect(mockUserApi.deactivateUser).toHaveBeenCalledTimes(1);
     expect(mockUserApi.deleteUser).not.toHaveBeenCalled();
@@ -115,9 +125,14 @@ describe('Okta User Offboard - Temporal Activity Integration', () => {
         ref: 'okta-offboard',
         componentId: 'it-automation.okta.user-offboard',
       },
-      params: {
-        ...baseParams,
+      inputs: {
         user_email: 'missing@example.com',
+        okta_domain: baseParams.okta_domain,
+        apiToken: baseParams.apiToken,
+      },
+      params: {
+        action: baseParams.action,
+        dry_run: baseParams.dry_run,
       },
       metadata: {
         streamId: 'test-stream',
@@ -125,8 +140,10 @@ describe('Okta User Offboard - Temporal Activity Integration', () => {
     });
     const executionTime = Date.now() - startTime;
 
-    expect(result.output.success).toBe(false);
-    expect(result.output.error).toContain('User missing@example.com not found');
+    const output = result.output as any;
+
+    expect(output.success).toBe(false);
+    expect(output.error).toContain('User missing@example.com not found');
     expect(mockUserApi.getUser).toHaveBeenCalledTimes(1);
     expect(mockUserApi.deactivateUser).not.toHaveBeenCalled();
     expect(executionTime).toBeLessThan(2000);
@@ -146,14 +163,24 @@ describe('Okta User Offboard - Temporal Activity Integration', () => {
         ref: 'okta-offboard',
         componentId: 'it-automation.okta.user-offboard',
       },
-      params: baseParams,
+      inputs: {
+        user_email: baseParams.user_email,
+        okta_domain: baseParams.okta_domain,
+        apiToken: baseParams.apiToken,
+      },
+      params: {
+        action: baseParams.action,
+        dry_run: baseParams.dry_run,
+      },
       metadata: {
         streamId: 'test-stream',
       },
     });
 
-    expect(result.output.success).toBe(false);
-    expect(result.output.error).toContain('Failed to get user details');
+    const output = result.output as any;
+
+    expect(output.success).toBe(false);
+    expect(output.error).toContain('Failed to get user details');
     expect(mockUserApi.getUser).toHaveBeenCalledTimes(1);
     expect(mockUserApi.deactivateUser).not.toHaveBeenCalled();
   });
@@ -180,6 +207,11 @@ describe('Okta User Offboard - Temporal Activity Integration', () => {
         ref: 'okta-offboard',
         componentId: 'it-automation.okta.user-offboard',
       },
+      inputs: {
+        user_email: baseParams.user_email,
+        okta_domain: baseParams.okta_domain,
+        apiToken: baseParams.apiToken,
+      },
       params: {
         ...baseParams,
         dry_run: true,
@@ -189,10 +221,12 @@ describe('Okta User Offboard - Temporal Activity Integration', () => {
       },
     });
 
-    expect(result.output.success).toBe(true);
-    expect(result.output.userDeactivated).toBe(true);
-    expect(result.output.userDeleted).toBe(false);
-    expect(result.output.message).toContain('DRY RUN');
+    const output = result.output as any;
+
+    expect(output.success).toBe(true);
+    expect(output.userDeactivated).toBe(true);
+    expect(output.userDeleted).toBe(false);
+    expect(output.message).toContain('DRY RUN');
     expect(mockUserApi.deactivateUser).not.toHaveBeenCalled();
   });
 
@@ -220,6 +254,11 @@ describe('Okta User Offboard - Temporal Activity Integration', () => {
         ref: 'okta-offboard',
         componentId: 'it-automation.okta.user-offboard',
       },
+      inputs: {
+        user_email: baseParams.user_email,
+        okta_domain: baseParams.okta_domain,
+        apiToken: baseParams.apiToken,
+      },
       params: {
         ...baseParams,
         action: 'delete',
@@ -229,9 +268,11 @@ describe('Okta User Offboard - Temporal Activity Integration', () => {
       },
     });
 
-    expect(result.output.success).toBe(true);
-    expect(result.output.userDeactivated).toBe(true);
-    expect(result.output.userDeleted).toBe(true);
+    const output = result.output as any;
+
+    expect(output.success).toBe(true);
+    expect(output.userDeactivated).toBe(true);
+    expect(output.userDeleted).toBe(true);
     expect(mockUserApi.deactivateUser).toHaveBeenCalledTimes(1);
     expect(mockUserApi.deleteUser).toHaveBeenCalledTimes(1);
   });
@@ -258,16 +299,23 @@ describe('Okta User Offboard - Temporal Activity Integration', () => {
         ref: 'okta-offboard',
         componentId: 'it-automation.okta.user-offboard',
       },
+      inputs: {
+        user_email: baseParams.user_email,
+        okta_domain: baseParams.okta_domain,
+        apiToken: baseParams.apiToken,
+      },
       params: baseParams,
       metadata: {
         streamId: 'test-stream',
       },
     });
 
-    expect(result.output.success).toBe(true);
-    expect(result.output.userDeactivated).toBe(false);
-    expect(result.output.userDeleted).toBe(false);
-    expect(result.output.message).toContain('already deactivated');
+    const output = result.output as any;
+
+    expect(output.success).toBe(true);
+    expect(output.userDeactivated).toBe(false);
+    expect(output.userDeleted).toBe(false);
+    expect(output.message).toContain('already deactivated');
     expect(mockUserApi.deactivateUser).not.toHaveBeenCalled();
   });
 });

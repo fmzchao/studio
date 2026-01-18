@@ -1,15 +1,24 @@
 import { ZodError, ZodIssue } from 'zod';
 
-import { componentRegistry, type ComponentPortMetadata } from '@shipsec/component-sdk';
+import {
+  componentRegistry,
+  type ComponentPortMetadata,
+  type ConnectionType,
+} from '@shipsec/component-sdk';
+import {
+  extractPorts,
+  canConnect,
+  describeConnectionType,
+  createPlaceholderForConnectionType,
+} from '@shipsec/component-sdk/zod-ports';
 
 import type { WorkflowGraphDto } from '../workflows/dto/workflow-graph.dto';
 import type { WorkflowAction, WorkflowDefinition } from './types';
-import {
-  ActionPortSnapshot,
-  arePortDataTypesCompatible,
-  createPlaceholderForPort,
-  describePortDataType,
-} from './port-utils';
+
+type ActionPortSnapshot = {
+  inputs: ComponentPortMetadata[];
+  outputs: ComponentPortMetadata[];
+};
 
 export interface ValidationError {
   node: string;
@@ -64,21 +73,40 @@ export function validateWorkflowGraph(
     actionPorts.set(action.ref, portSnapshot);
 
     const paramsForValidation = { ...(action.params ?? {}) } as Record<string, unknown>;
+    const inputOverrides = { ...(action.inputOverrides ?? {}) } as Record<string, unknown>;
     const placeholderFields = new Set<string>();
 
     for (const inputPort of portSnapshot.inputs) {
       const hasStaticValue =
-        Object.prototype.hasOwnProperty.call(paramsForValidation, inputPort.id) &&
-        paramsForValidation[inputPort.id] !== undefined;
+        Object.prototype.hasOwnProperty.call(inputOverrides, inputPort.id) &&
+        inputOverrides[inputPort.id] !== undefined;
       const hasMapping = Object.prototype.hasOwnProperty.call(action.inputMappings ?? {}, inputPort.id);
 
       if (!hasStaticValue && hasMapping) {
-        paramsForValidation[inputPort.id] = createPlaceholderForPort(inputPort.dataType);
+        const connectionType = getPortConnectionType(inputPort);
+        inputOverrides[inputPort.id] = createPlaceholderForConnectionType(connectionType);
         placeholderFields.add(inputPort.id);
       }
     }
 
-    const validation = component.inputSchema.safeParse(paramsForValidation);
+    const paramValidation = component.parameters
+      ? component.parameters.safeParse(paramsForValidation)
+      : {
+          success: Object.keys(paramsForValidation).length === 0,
+          error: new Error('Component does not accept parameters'),
+        };
+
+    if (!paramValidation.success) {
+      errors.push({
+        node: action.ref,
+        field: 'params',
+        message: `Component parameter validation failed: ${paramValidation.error?.message ?? 'Invalid parameters'}`,
+        severity: 'error',
+        suggestion: 'Check component parameter schema for required fields and correct types',
+      });
+    }
+
+    const validation = component.inputs.safeParse(inputOverrides);
     if (!validation.success) {
       const relevantIssues = validation.error.issues.filter(
         (issue) => !isPlaceholderIssue(issue, placeholderFields),
@@ -92,10 +120,10 @@ export function validateWorkflowGraph(
 
         errors.push({
           node: action.ref,
-          field: 'params',
-          message: `Component parameter validation failed: ${filteredError.message}`,
+          field: 'inputOverrides',
+          message: `Component input validation failed: ${filteredError.message}`,
           severity: 'error',
-          suggestion: 'Check component schema for required parameters and correct types',
+          suggestion: 'Check component input schema for required ports and correct types',
         });
       }
     }
@@ -165,7 +193,9 @@ function validateSecretParameters(
   errors: ValidationError[],
   warnings: ValidationError[],
 ) {
-  const secretParams = component.metadata?.parameters?.filter((p: any) => p.type === 'secret') || [];
+  const secretParams = componentRegistry
+    .getMetadata(action.componentId)
+    ?.parameters?.filter((p) => p.type === 'secret') ?? [];
 
   for (const secretParam of secretParams) {
     const paramValue = action.params?.[secretParam.id];
@@ -229,8 +259,8 @@ function validateInputMappings(
 
     // Check if all required inputs have mappings or static values
     for (const input of componentInputs) {
-      const hasStaticValue = action.params?.hasOwnProperty(input.id);
-      const hasMapping = action.inputMappings?.hasOwnProperty(input.id);
+    const hasStaticValue = action.inputOverrides?.hasOwnProperty(input.id);
+    const hasMapping = action.inputMappings?.hasOwnProperty(input.id);
 
       if (input.required && !hasStaticValue && !hasMapping) {
         errors.push({
@@ -380,22 +410,25 @@ function validateEdgeCompatibility(
       continue;
     }
 
-    if (!sourcePort.dataType || !targetPort.dataType) {
+    const sourceType = getPortConnectionType(sourcePort);
+    const targetType = getPortConnectionType(targetPort);
+
+    if (!sourceType || !targetType) {
       errors.push({
         node: targetAction.ref,
         field: 'inputMappings',
         message: `Missing port type metadata for ${edge.sourceRef}.${sourceHandle} -> ${edge.targetRef}.${targetHandle}`,
         severity: 'error',
-        suggestion: 'Ensure both ports declare a data type',
+        suggestion: 'Ensure both ports declare a connection type or have derivable schemas',
       });
       continue;
     }
 
-    if (!arePortDataTypesCompatible(sourcePort.dataType, targetPort.dataType)) {
+    if (!canConnect(sourceType, targetType)) {
       errors.push({
         node: targetAction.ref,
         field: 'inputMappings',
-        message: `Type mismatch: ${describePortDataType(sourcePort.dataType)} cannot connect to ${describePortDataType(targetPort.dataType)}`,
+        message: `Type mismatch: ${describeConnectionType(sourceType)} cannot connect to ${describeConnectionType(targetType)}`,
         severity: 'error',
         suggestion: 'Use matching port types or add a transformer component',
       });
@@ -435,7 +468,7 @@ function validateEntryPointConfiguration(
   }
 
   for (const action of entryPointActions) {
-    const runtimeInputs = action.params?.runtimeInputs;
+      const runtimeInputs = action.params?.runtimeInputs;
 
     if (!Array.isArray(runtimeInputs)) {
       errors.push({
@@ -505,23 +538,25 @@ function resolveActionPortSnapshot(
   action: WorkflowAction,
   component: any,
 ): ActionPortSnapshot {
-  let inputs: ComponentPortMetadata[] = Array.isArray(component.metadata?.inputs)
-    ? component.metadata.inputs.map((port: ComponentPortMetadata) => ({ ...port }))
-    : [];
-
-  let outputs: ComponentPortMetadata[] = Array.isArray(component.metadata?.outputs)
-    ? component.metadata.outputs.map((port: ComponentPortMetadata) => ({ ...port }))
-    : [];
+  let inputs: ComponentPortMetadata[] = [];
+  let outputs: ComponentPortMetadata[] = [];
 
   if (typeof component.resolvePorts === 'function') {
     const resolved = component.resolvePorts(action.params ?? {});
-    if (Array.isArray(resolved?.inputs)) {
-      inputs = resolved.inputs.map((port: ComponentPortMetadata) => ({ ...port }));
+    if (resolved?.inputs) {
+      inputs = extractPorts(resolved.inputs);
     }
-    if (Array.isArray(resolved?.outputs)) {
-      outputs = resolved.outputs.map((port: ComponentPortMetadata) => ({ ...port }));
+    if (resolved?.outputs) {
+      outputs = extractPorts(resolved.outputs);
     }
+  } else {
+    inputs = extractPorts(component.inputs);
+    outputs = extractPorts(component.outputs);
   }
 
   return { inputs, outputs };
+}
+
+function getPortConnectionType(port: ComponentPortMetadata): ConnectionType | undefined {
+  return port.connectionType;
 }

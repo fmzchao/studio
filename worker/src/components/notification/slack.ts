@@ -1,45 +1,50 @@
 import { z } from 'zod';
 import {
   componentRegistry,
-  ComponentDefinition,
-  port,
   ConfigurationError,
   fromHttpResponse,
   AuthenticationError,
   ComponentRetryPolicy,
+  defineComponent,
+  inputs,
+  outputs,
+  parameters,
+  port,
+  param,
+  type PortMeta,
 } from '@shipsec/component-sdk';
 
-const inputSchema = z.object({
-  // Content
-  text: z.string().describe('The plain text message or template.'),
-  blocks: z.union([z.string(), z.array(z.record(z.string(), z.any()))]).optional().describe('Slack Block Kit template (JSON string) or object.'),
-  
-  // Addressing
-  channel: z.string().optional().describe('Channel ID or name.'),
-  thread_ts: z.string().optional().describe('Thread timestamp for replies.'),
-  
-  // Auth
-  authType: z.enum(['bot_token', 'webhook']).default('bot_token'),
-  slackToken: z.string().optional(),
-  webhookUrl: z.string().optional(),
-
+const inputSchema = inputs({
   // Dynamic values will be injected here by resolvePorts
-}).catchall(z.any());
-
-type Input = z.infer<typeof inputSchema>;
-
-const outputSchema = z.object({
-  ok: z.boolean(),
-  ts: z.string().optional(),
-  error: z.string().optional(),
 });
 
-type Output = z.infer<typeof outputSchema>;
+const parameterSchema = parameters({
+  authType: param(z.enum(['bot_token', 'webhook']).default('bot_token'), {
+    label: 'Connection Method',
+    editor: 'select',
+    options: [
+      { label: 'Slack App (Bot Token)', value: 'bot_token' },
+      { label: 'Incoming Webhook', value: 'webhook' },
+    ],
+  }),
+  variables: param(z.array(z.object({ name: z.string(), type: z.string().optional() })).default([]), {
+    label: 'Template Variables',
+    editor: 'variable-list',
+    description: 'Define variables to use as {{name}} in your message.',
+  }),
+});
 
-type Params = {
-  authType?: 'bot_token' | 'webhook';
-  variables?: { name: string; type: string }[];
-};
+const outputSchema = outputs({
+  ok: port(z.boolean(), {
+    label: 'OK',
+  }),
+  ts: port(z.string().optional(), {
+    label: 'Timestamp',
+  }),
+  error: port(z.string().optional(), {
+    label: 'Error',
+  }),
+});
 
 /**
  * Simple helper to replace {{var}} placeholders in a string
@@ -50,16 +55,39 @@ function interpolate(template: string, vars: Record<string, any>): string {
   });
 }
 
-const mapTypeToPort = (type: string, id: string, label: string) => {
-    switch (type) {
-      case 'string': return { id, label, dataType: port.text(), required: false };
-      case 'number': return { id, label, dataType: port.number(), required: false };
-      case 'boolean': return { id, label, dataType: port.boolean(), required: false };
-      case 'secret': return { id, label, dataType: port.secret(), required: false };
-      case 'list': return { id, label, dataType: port.list(port.text()), required: false };
-      default: return { id, label, dataType: port.any(), required: false };
-    }
-  };
+const mapTypeToSchema = (type: string, label: string): { schema: z.ZodTypeAny; meta?: PortMeta } => {
+  switch (type) {
+    case 'string':
+      return { schema: z.string().optional(), meta: { label } };
+    case 'number':
+      return { schema: z.number().optional(), meta: { label } };
+    case 'boolean':
+      return { schema: z.boolean().optional(), meta: { label } };
+    case 'secret':
+      return {
+        schema: z.unknown().optional(),
+        meta: {
+          label,
+          editor: 'secret',
+          allowAny: true,
+          reason: 'Slack templates can include secret values.',
+          connectionType: { kind: 'primitive', name: 'secret' },
+        },
+      };
+    case 'list':
+      return { schema: z.array(z.string()).optional(), meta: { label } };
+    default:
+      return {
+        schema: z.unknown().optional(),
+        meta: {
+          label,
+          allowAny: true,
+          reason: 'Slack templates can include arbitrary JSON values.',
+          connectionType: { kind: 'primitive', name: 'json' },
+        },
+      };
+  }
+};
 
 // Retry policy optimized for Slack API rate limits
 const slackRetryPolicy: ComponentRetryPolicy = {
@@ -74,16 +102,17 @@ const slackRetryPolicy: ComponentRetryPolicy = {
   ],
 };
 
-const definition: ComponentDefinition<Input, Output, Params> = {
+const definition = defineComponent({
   id: 'core.notification.slack',
   label: 'Slack Message',
   category: 'notification',
   runner: { kind: 'inline' },
   retryPolicy: slackRetryPolicy,
-  inputSchema,
-  outputSchema,
+  inputs: inputSchema,
+  outputs: outputSchema,
+  parameters: parameterSchema,
   docs: 'Send dynamic Slack messages with {{variable}} support in both text and Block Kit JSON.',
-  metadata: {
+  ui: {
     slug: 'slack-message',
     version: '1.2.0',
     type: 'output',
@@ -93,87 +122,81 @@ const definition: ComponentDefinition<Input, Output, Params> = {
     author: { name: 'ShipSecAI', type: 'shipsecai' },
     isLatest: true,
     deprecated: false,
-    inputs: [
-      { id: 'text', label: 'Message Text', dataType: port.text(), required: true },
-    ],
-    parameters: [
-      {
-        id: 'authType',
-        label: 'Connection Method',
-        type: 'select',
-        default: 'bot_token',
-        options: [
-          { label: 'Slack App (Bot Token)', value: 'bot_token' },
-          { label: 'Incoming Webhook', value: 'webhook' },
-        ],
-      },
-      {
-        id: 'variables',
-        label: 'Template Variables',
-        type: 'variable-list',
-        default: [],
-        description: 'Define variables to use as {{name}} in your message.',
-      }
-    ],
   },
-  resolvePorts(params) {
-    const inputs: any[] = [
-      { id: 'text', label: 'Message Text', dataType: port.text(), required: true },
-      { id: 'blocks', label: 'Blocks (JSON)', dataType: port.json(), required: false },
-    ];
+  resolvePorts(params: z.infer<typeof parameterSchema>) {
+    const inputShape: Record<string, z.ZodTypeAny> = {
+      text: port(z.string(), { label: 'Message Text' }),
+      blocks: port(z.unknown().optional(), {
+        label: 'Blocks (JSON)',
+        allowAny: true,
+        reason: 'Slack blocks can be raw JSON or string templates.',
+        connectionType: { kind: 'primitive', name: 'json' },
+      }),
+    };
 
     // Auth specific inputs
     if (params.authType === 'webhook') {
-        inputs.push({ id: 'webhookUrl', label: 'Webhook URL', dataType: port.secret(), required: true });
+      inputShape.webhookUrl = port(z.unknown(), {
+        label: 'Webhook URL',
+        editor: 'secret',
+        allowAny: true,
+        reason: 'Webhook URLs are secrets.',
+        connectionType: { kind: 'primitive', name: 'secret' },
+      });
     } else {
-        inputs.push(
-            { id: 'slackToken', label: 'Bot Token', dataType: port.secret(), required: true },
-            { id: 'channel', label: 'Channel', dataType: port.text(), required: true },
-            { id: 'thread_ts', label: 'Thread TS', dataType: port.text(), required: false }
-        );
+      inputShape.slackToken = port(z.unknown(), {
+        label: 'Bot Token',
+        editor: 'secret',
+        allowAny: true,
+        reason: 'Slack bot tokens are secrets.',
+        connectionType: { kind: 'primitive', name: 'secret' },
+      });
+      inputShape.channel = port(z.string(), { label: 'Channel' });
+      inputShape.thread_ts = port(z.string().optional(), { label: 'Thread TS' });
     }
 
     // Dynamic variable inputs
     if (params.variables && Array.isArray(params.variables)) {
       for (const v of params.variables) {
         if (!v || !v.name) continue;
-        inputs.push(mapTypeToPort(v.type || 'json', v.name, v.name));
+        const { schema, meta } = mapTypeToSchema(v.type || 'json', v.name);
+        inputShape[v.name] = port(schema, meta ?? { label: v.name });
       }
     }
 
-    return { inputs };
+    return { inputs: inputs(inputShape) };
   },
-  async execute(params, context) {
-    const { 
-        text, 
-        blocks, 
-        channel, 
-        thread_ts, 
-        authType, 
-        slackToken, 
+  async execute({ inputs, params }, context) {
+    const {
+        text,
+        blocks,
+        channel,
+        thread_ts,
+        slackToken,
         webhookUrl,
-        ...rest 
-    } = params;
+    } = inputs as Record<string, unknown>;
+    const { authType } = params;
+    const contextData = { ...params, ...inputs };
 
     // 1. Interpolate text
-    const finalText = interpolate(text, rest);
+    const finalText = interpolate(text as string, contextData);
 
     // 2. Interpolate and parse blocks if it's a template string
     let finalBlocks = blocks;
     if (typeof blocks === 'string') {
         try {
-            const interpolated = interpolate(blocks, rest);
+            const interpolated = interpolate(blocks, contextData);
             finalBlocks = JSON.parse(interpolated);
         } catch (e) {
             context.logger.warn('[Slack] Failed to parse blocks JSON after interpolation, sending as raw string');
             finalBlocks = undefined;
         }
     } else if (Array.isArray(blocks)) {
-        // If it's already an object, we'd need a deep interpolation, 
+        // If it's already an object, we'd need a deep interpolation,
         // but typically users will pass a JSON string template for simplicity.
         // For now, let's stringify and interpolate to support variables in objects too!
         const str = JSON.stringify(blocks);
-        const interpolated = interpolate(str, rest);
+        const interpolated = interpolate(str, contextData);
         finalBlocks = JSON.parse(interpolated);
     }
 
@@ -190,7 +213,8 @@ const definition: ComponentDefinition<Input, Output, Params> = {
           configKey: 'webhookUrl',
         });
       }
-      const response = await context.http.fetch(webhookUrl, {
+      const url = typeof webhookUrl === 'string' ? webhookUrl : String(webhookUrl);
+      const response = await context.http.fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -199,7 +223,7 @@ const definition: ComponentDefinition<Input, Output, Params> = {
         const responseBody = await response.text();
         throw fromHttpResponse(response, responseBody);
       }
-      return { ok: true };
+      return outputSchema.parse({ ok: true });
     } else {
       if (!slackToken) {
         throw new ConfigurationError('Slack token missing.', {
@@ -209,11 +233,12 @@ const definition: ComponentDefinition<Input, Output, Params> = {
       body.channel = channel;
       body.thread_ts = thread_ts;
 
+      const token = typeof slackToken === 'string' ? slackToken : String(slackToken);
       const response = await context.http.fetch('https://slack.com/api/chat.postMessage', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${slackToken}`,
+          'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify(body),
       });
@@ -225,12 +250,12 @@ const definition: ComponentDefinition<Input, Output, Params> = {
         if (result.error === 'invalid_auth' || result.error === 'token_revoked') {
           throw new AuthenticationError(`Slack authentication failed: ${result.error}`);
         }
-        return { ok: false, error: result.error };
+        return outputSchema.parse({ ok: false, error: result.error });
       }
-      return { ok: true, ts: result.ts };
+      return outputSchema.parse({ ok: true, ts: result.ts });
     }
   },
-};
+});
 
 componentRegistry.register(definition);
 

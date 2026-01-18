@@ -22,9 +22,10 @@ import type { Node } from 'reactflow'
 import type { FrontendNodeData } from '@/schemas/node'
 import type { ComponentType, KeyboardEvent } from 'react'
 import {
-  describePortDataType,
+  describePortType,
   inputSupportsManualValue,
-  isListOfTextPortDataType,
+  isListOfTextPort,
+  resolvePortType,
 } from '@/utils/portUtils'
 import { API_BASE_URL, api } from '@/services/api'
 import { useWorkflowStore } from '@/store/workflowStore'
@@ -366,23 +367,51 @@ export function ConfigPanel({
     }
   }, [onWidthChange])
 
-  const handleParameterChange = (paramId: string, value: any) => {
+  const handleParamValueChange = (paramId: string, value: any) => {
     if (!selectedNode || !onUpdateNode) return
 
     const nodeData: FrontendNodeData = selectedNode.data
+    const config = nodeData.config || { params: {}, inputOverrides: {} }
 
-    const updatedParameters = {
-      ...(nodeData.parameters ?? {}),
+    const updatedParams = {
+      ...(config.params ?? {}),
     }
 
     if (value === undefined) {
-      delete updatedParameters[paramId]
+      delete updatedParams[paramId]
     } else {
-      updatedParameters[paramId] = value
+      updatedParams[paramId] = value
     }
 
     onUpdateNode(selectedNode.id, {
-      parameters: updatedParameters,
+      config: {
+        ...config,
+        params: updatedParams,
+      },
+    })
+  }
+
+  const handleInputOverrideChange = (inputId: string, value: any) => {
+    if (!selectedNode || !onUpdateNode) return
+
+    const nodeData: FrontendNodeData = selectedNode.data
+    const config = nodeData.config || { params: {}, inputOverrides: {} }
+
+    const updatedOverrides = {
+      ...(config.inputOverrides ?? {}),
+    }
+
+    if (value === undefined) {
+      delete updatedOverrides[inputId]
+    } else {
+      updatedOverrides[inputId] = value
+    }
+
+    onUpdateNode(selectedNode.id, {
+      config: {
+        ...config,
+        inputOverrides: updatedOverrides,
+      },
     })
   }
 
@@ -448,7 +477,8 @@ export function ConfigPanel({
   const iconName = component.icon && component.icon in LucideIcons ? component.icon : 'Box'
   const IconComponent = LucideIcons[iconName as keyof typeof LucideIcons] as ComponentType<{ className?: string }>
 
-  const manualParameters = (nodeData.parameters ?? {}) as Record<string, unknown>
+  const manualParameters = (nodeData.config?.params ?? {}) as Record<string, unknown>
+  const inputOverrides = (nodeData.config?.inputOverrides ?? {}) as Record<string, unknown>
 
   // Dynamic Ports Resolution
   const [dynamicInputs, setDynamicInputs] = useState<any[] | null>(null)
@@ -484,7 +514,8 @@ export function ConfigPanel({
     assertPortResolution.current = setTimeout(async () => {
       try {
         // Only call if we have parameters
-        const result = await api.components.resolvePorts(component.id, manualParameters)
+        // combine params and overrides for resolvePorts as it might need both
+        const result = await api.components.resolvePorts(component.id, { ...manualParameters, ...inputOverrides })
         if (result) {
           if (result.inputs) {
             setDynamicInputs(result.inputs)
@@ -511,7 +542,7 @@ export function ConfigPanel({
         clearTimeout(assertPortResolution.current)
       }
     }
-  }, [component?.id, JSON.stringify(manualParameters)]) // Deep compare parameters
+  }, [component?.id, JSON.stringify(manualParameters), JSON.stringify(inputOverrides)]) // Deep compare parameters and overrides
 
   const componentInputs = dynamicInputs ?? component.inputs ?? []
   const componentOutputs = dynamicOutputs ?? component.outputs ?? []
@@ -741,7 +772,7 @@ export function ConfigPanel({
                 {componentInputs.map((input, index) => {
                   const connection = nodeData.inputs?.[input.id]
                   const hasConnection = Boolean(connection)
-                  const manualValue = manualParameters[input.id]
+                  const manualValue = inputOverrides[input.id]
                   const manualOverridesPort = input.valuePriority === 'manual-first'
                   const allowsManualInput = inputSupportsManualValue(input) || manualOverridesPort
                   const manualValueProvided =
@@ -753,20 +784,21 @@ export function ConfigPanel({
                       ? manualValue.trim().length > 0
                       : true)
                   const manualLocked = hasConnection && !manualOverridesPort
+                  const portType = resolvePortType(input)
                   const primitiveName =
-                    input.dataType?.kind === 'primitive' ? input.dataType.name : null
+                    portType?.kind === 'primitive' ? portType.name : null
                   const isNumberInput = primitiveName === 'number'
                   const isBooleanInput = primitiveName === 'boolean'
-                  const isListOfTextInput = isListOfTextPortDataType(input.dataType)
+                  const isListOfTextInput = isListOfTextPort(portType)
                   const manualInputValue =
                     manualValue === undefined || manualValue === null
                       ? ''
                       : typeof manualValue === 'string'
                         ? manualValue
                         : String(manualValue)
-                  const useSecretSelect =
-                    component.id === 'core.secret.fetch' &&
-                    input.id === 'secretId'
+                  const isSecretInput =
+                    input.editor === 'secret' || primitiveName === 'secret'
+                  const useSecretSelect = isSecretInput
                   const manualPlaceholder = useSecretSelect
                     ? 'Select a secret...'
                     : input.id === 'supabaseUrl'
@@ -776,7 +808,7 @@ export function ConfigPanel({
                         : isListOfTextInput
                           ? 'Add entries or press Add to provide a list'
                           : 'Enter text to use without a connection'
-                  const typeLabel = describePortDataType(input.dataType)
+                  const typeLabel = describePortType(portType)
 
                   return (
                     <div
@@ -803,7 +835,7 @@ export function ConfigPanel({
                         </p>
                       )}
 
-                      {inputSupportsManualValue(input) && (
+                      {allowsManualInput && (
                         <div className="mt-2 space-y-1.5">
                           <label
                             htmlFor={`manual-${input.id}`}
@@ -816,9 +848,9 @@ export function ConfigPanel({
                               value={typeof manualValue === 'string' ? manualValue : ''}
                               onChange={(value) => {
                                 if (value === '') {
-                                  handleParameterChange(input.id, undefined)
+                                  handleInputOverrideChange(input.id, undefined)
                                 } else {
-                                  handleParameterChange(input.id, value)
+                                  handleInputOverrideChange(input.id, value)
                                 }
                               }}
                               placeholder={manualPlaceholder}
@@ -838,9 +870,9 @@ export function ConfigPanel({
                                 }
                                 onValueChange={(value) => {
                                   if (value === 'true') {
-                                    handleParameterChange(input.id, true)
+                                    handleInputOverrideChange(input.id, true)
                                   } else if (value === 'false') {
-                                    handleParameterChange(input.id, false)
+                                    handleInputOverrideChange(input.id, false)
                                   }
                                 }}
                                 disabled={manualLocked}
@@ -859,7 +891,7 @@ export function ConfigPanel({
                                   variant="ghost"
                                   size="sm"
                                   className="h-7 w-fit text-xs px-2"
-                                  onClick={() => handleParameterChange(input.id, undefined)}
+                                  onClick={() => handleInputOverrideChange(input.id, undefined)}
                                 >
                                   Clear manual value
                                 </Button>
@@ -871,7 +903,7 @@ export function ConfigPanel({
                               manualValue={manualValue}
                               disabled={manualLocked}
                               placeholder={manualPlaceholder}
-                              onChange={(value) => handleParameterChange(input.id, value)}
+                              onChange={(value) => handleInputOverrideChange(input.id, value)}
                             />
                           ) : (
                             <Input
@@ -881,7 +913,7 @@ export function ConfigPanel({
                               onChange={(e) => {
                                 const nextValue = e.target.value
                                 if (nextValue === '') {
-                                  handleParameterChange(input.id, undefined)
+                                  handleInputOverrideChange(input.id, undefined)
                                   return
                                 }
                                 if (isNumberInput) {
@@ -889,9 +921,9 @@ export function ConfigPanel({
                                   if (Number.isNaN(parsed)) {
                                     return
                                   }
-                                  handleParameterChange(input.id, parsed)
+                                  handleInputOverrideChange(input.id, parsed)
                                 } else {
-                                  handleParameterChange(input.id, nextValue)
+                                  handleInputOverrideChange(input.id, nextValue)
                                 }
                               }}
                               placeholder={manualPlaceholder}
@@ -958,7 +990,7 @@ export function ConfigPanel({
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-sm font-medium">{output.label}</span>
                       <Badge variant="outline" className="text-[10px] font-mono px-1.5">
-                        {describePortDataType(output.dataType)}
+                        {describePortType(resolvePortType(output))}
                       </Badge>
                     </div>
                     {output.description && (
@@ -997,12 +1029,12 @@ export function ConfigPanel({
                     >
                       <ParameterFieldWrapper
                         parameter={param}
-                        value={nodeData.parameters?.[param.id]}
-                        onChange={(value) => handleParameterChange(param.id, value)}
+                        value={manualParameters[param.id]}
+                        onChange={(value) => handleParamValueChange(param.id, value)}
                         connectedInput={nodeData.inputs?.[param.id]}
                         componentId={component.id}
-                        parameters={nodeData.parameters}
-                        onUpdateParameter={handleParameterChange}
+                        parameters={manualParameters}
+                        onUpdateParameter={handleParamValueChange}
                         allComponentParameters={componentParameters}
                       />
                     </div>

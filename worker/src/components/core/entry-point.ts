@@ -1,5 +1,17 @@
 import { z } from 'zod';
-import { componentRegistry, ComponentDefinition, port, ValidationError } from '@shipsec/component-sdk';
+import {
+  componentRegistry,
+  defineComponent,
+  ValidationError,
+  inputs,
+  outputs,
+  parameters,
+  port,
+  param,
+  withPortMeta,
+} from '@shipsec/component-sdk';
+import type { PortMeta } from '@shipsec/component-sdk/port-meta';
+import type { ComponentDefinition } from '@shipsec/component-sdk';
 
 // Runtime input definition schema
 const runtimeInputDefinitionSchema = z.preprocess((value) => {
@@ -21,28 +33,42 @@ const runtimeInputDefinitionSchema = z.preprocess((value) => {
   description: z.string().optional().describe('Help text for the input'),
 }));
 
-const inputSchema = z.object({
-  runtimeInputs: z.array(runtimeInputDefinitionSchema).default([]).describe('Define inputs to collect when workflow is triggered'),
-  // Runtime data will be merged with this at execution time
-  __runtimeData: z.record(z.string(), z.unknown()).optional(),
+const inputSchema = inputs({
+  // Runtime data will be injected at execution time.
+  __runtimeData: port(z.record(z.string(), z.unknown()).optional(), {
+    label: 'Runtime Data',
+    editor: 'json',
+    valuePriority: 'manual-first',
+  }),
 });
 
-type Input = z.infer<typeof inputSchema>;
+// EntryPoint has dynamic outputs based on runtimeInputs parameter
+// We use an empty base schema and resolvePorts adds the actual outputs
+const outputSchema = outputs({});
 
-// Output is dynamic based on runtimeInputs configuration
-type Output = Record<string, unknown>;
+const parameterSchema = parameters({
+  runtimeInputs: param(
+    z.array(runtimeInputDefinitionSchema).default([]).describe('Define inputs to collect when workflow is triggered'),
+    {
+      label: 'Runtime Inputs',
+      editor: 'json',
+      description: 'Define what data to collect when the workflow is triggered',
+      placeholder: '[{\"id\":\"myInput\",\"label\":\"My Input\",\"type\":\"text\",\"required\":true}]',
+      helpText: 'Each input creates a corresponding output.',
+    },
+  ),
+});
 
-const outputSchema = z.record(z.string(), z.unknown());
-
-const definition: ComponentDefinition<Input, Output> = {
+const definition = defineComponent({
   id: 'core.workflow.entrypoint',
   label: 'Entry Point',
   category: 'input',
   runner: { kind: 'inline' },
-  inputSchema,
-  outputSchema,
+  inputs: inputSchema,
+  outputs: outputSchema,
+  parameters: parameterSchema,
   docs: 'Defines the workflow entry point. Configure runtime inputs to collect data (files, text, etc.) when the workflow is triggered.',
-  metadata: {
+  ui: {
     slug: 'entry-point',
     version: '2.0.0',
     type: 'trigger',
@@ -55,56 +81,47 @@ const definition: ComponentDefinition<Input, Output> = {
     },
     isLatest: true,
     deprecated: false,
-    inputs: [],
     // Outputs are dynamic and determined by runtimeInputs parameter
-    outputs: [],
     examples: [
       'Collect uploaded scope files or credentials before running security scans.',
       'Prompt operators for runtime parameters such as target domains or API keys.',
     ],
-    parameters: [
-      {
-        id: 'runtimeInputs',
-        label: 'Runtime Inputs',
-        type: 'json',
-        required: false,
-        default: [],
-        description: 'Define what data to collect when the workflow is triggered',
-        helpText: 'Each input creates a corresponding output. Example: [{"id":"uploadedFile","label":"Input File","type":"file","required":true}]',
-        placeholder: '[{"id":"myInput","label":"My Input","type":"text","required":true}]',
-      },
-    ],
   },
-  resolvePorts(params) {
+  resolvePorts(params: z.infer<typeof parameterSchema>) {
     const runtimeInputs = Array.isArray(params.runtimeInputs)
       ? params.runtimeInputs
       : [];
 
-    const outputs = runtimeInputs
-      .map((input: any) => {
-        const id = typeof input?.id === 'string' ? input.id.trim() : '';
-        if (!id) {
-          return null;
-        }
+    const outputShape: Record<string, z.ZodTypeAny> = {};
+    for (const input of runtimeInputs) {
+      const id = typeof input?.id === 'string' ? input.id.trim() : '';
+      if (!id) {
+        continue;
+      }
 
-        const type = typeof input?.type === 'string' ? input.type.toLowerCase() : 'text';
-        return {
-          id,
-          label: typeof input?.label === 'string' ? input.label : id,
-          required: input?.required !== undefined ? Boolean(input.required) : true,
-          description: typeof input?.description === 'string' ? input.description : undefined,
-          dataType: runtimeInputTypeToPort(type),
-        };
-      })
-      .filter((portMeta): portMeta is NonNullable<typeof portMeta> => portMeta !== null);
+      const type = typeof input?.type === 'string' ? input.type.toLowerCase() : 'text';
+      const required = input?.required !== undefined ? Boolean(input.required) : true;
+      const label = typeof input?.label === 'string' ? input.label : id;
+      const description = typeof input?.description === 'string' ? input.description : undefined;
+      const { schema, meta } = runtimeInputTypeToSchema(type);
+      const schemaWithRequirement = required ? schema : schema.optional();
+      outputShape[id] = withPortMeta(schemaWithRequirement, {
+        ...(meta ?? {}),
+        label,
+        description,
+      });
+    }
 
     return {
-      inputs: [],
-      outputs,
+      inputs: inputSchema,
+      outputs: outputs(outputShape),
     };
   },
-  async execute(params, context) {
-    const { runtimeInputs, __runtimeData } = params;
+  async execute({ inputs, params }, context) {
+    // Type params properly from the parameter schema
+    const runtimeInputs = params.runtimeInputs ?? [];
+    const __runtimeData = inputs.__runtimeData;
+
     context.logger.info(`[EntryPoint] Executing with runtime inputs: ${JSON.stringify(runtimeInputs)}`);
     
     // If no runtime inputs defined, return empty object
@@ -133,28 +150,46 @@ const definition: ComponentDefinition<Input, Output> = {
     context.emitProgress(`Collected ${Object.keys(outputs).length} runtime inputs`);
     return outputs;
   },
-};
+});
 
 componentRegistry.register(definition);
 
-export type { Input as EntryPointInput, Output as EntryPointOutput };
+// Export types - Output is dynamic so we use a record type
+type EntryPointInput = typeof inputSchema;
+type EntryPointParams = typeof parameterSchema;
+type EntryPointOutput = typeof outputSchema;
 
-function runtimeInputTypeToPort(type: string) {
+export type { EntryPointInput, EntryPointParams, EntryPointOutput };
+
+function runtimeInputTypeToSchema(type: string): { schema: z.ZodTypeAny; meta?: PortMeta } {
   switch (type) {
     case 'number':
-      return port.number({ coerceFrom: ['text'] });
+      return { schema: z.number() };
     case 'boolean':
-      return port.boolean({ coerceFrom: ['text'] });
+      return { schema: z.boolean() };
     case 'file':
-      return port.file();
+      return {
+        schema: z.string(),
+        meta: { connectionType: { kind: 'primitive', name: 'file' } },
+      };
     case 'json':
-      return port.json();
+      return {
+        schema: z.unknown(),
+        meta: {
+          allowAny: true,
+          reason: 'Runtime JSON inputs can be arbitrary structures.',
+          connectionType: { kind: 'primitive', name: 'json' },
+        },
+      };
     case 'array':
-      return port.list(port.text());
+      return { schema: z.array(z.string()) };
     case 'secret':
-      return port.secret();
+      return {
+        schema: z.string(),
+        meta: { connectionType: { kind: 'primitive', name: 'secret' } },
+      };
     case 'text':
     default:
-      return port.text();
+      return { schema: z.string() };
   }
 }

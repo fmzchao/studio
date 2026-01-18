@@ -1,27 +1,60 @@
 import { z } from 'zod';
 import {
   componentRegistry,
-  ComponentDefinition,
   ComponentRetryPolicy,
-  port,
   ConfigurationError,
   NotFoundError,
   ServiceError,
+  defineComponent,
+  inputs,
+  outputs,
+  parameters,
+  port,
+  param,
 } from '@shipsec/component-sdk';
 import * as Okta from '@okta/okta-sdk-nodejs';
 
-const inputSchema = z.object({
-  user_email: z.string().email(),
-  dry_run: z.boolean().default(false),
-  action: z.enum(['deactivate', 'delete']).default('deactivate'),
-  okta_domain: z.string(),
-  apiToken: z
-    .string()
-    .min(1, 'API token is required')
-    .describe('Resolved Okta API token'),
+const inputSchema = inputs({
+  user_email: port(z.string().email(), {
+    label: 'User Email',
+    description: 'Email address of the user to offboard.',
+  }),
+  okta_domain: port(z.string(), {
+    label: 'Okta Domain',
+    description: 'Your Okta organization domain.',
+  }),
+  apiToken: port(
+    z
+      .string()
+      .min(1, 'API token is required')
+      .describe('Resolved Okta API token'),
+    {
+      label: 'API Token',
+      description: 'Connect the Secret Loader output containing the Okta API token.',
+      editor: 'secret',
+      connectionType: { kind: 'primitive', name: 'secret' },
+    },
+  ),
 });
 
-type Input = z.infer<typeof inputSchema>;
+const parameterSchema = parameters({
+  action: param(z.enum(['deactivate', 'delete']).default('deactivate'), {
+    label: 'Action',
+    editor: 'select',
+    options: [
+      { label: 'Deactivate Only', value: 'deactivate' },
+      { label: 'Delete Permanently', value: 'delete' },
+    ],
+    description: 'Choose to deactivate (recommended) or delete the user account.',
+    helpText: 'Business logic choice - use sidebar for operational decisions.',
+  }),
+  dry_run: param(z.boolean().default(false), {
+    label: 'Dry Run Mode',
+    editor: 'boolean',
+    description: 'Preview what would happen without making actual changes.',
+    helpText: 'Safety setting - enable to test operations without affecting users.',
+  }),
+});
 
 interface UserState {
   id: string;
@@ -46,7 +79,7 @@ interface AuditLog {
   };
 }
 
-export type OktaUserOffboardOutput = {
+type OktaUserOffboardResult = {
   success: boolean;
   audit: AuditLog;
   error?: string;
@@ -55,13 +88,13 @@ export type OktaUserOffboardOutput = {
   message: string;
 };
 
-const outputSchema = z.object({
-  success: z.boolean(),
-  audit: z.object({
-    timestamp: z.string(),
-    action: z.string(),
-    userEmail: z.string(),
-    before: z.object({
+
+const auditSchema = z.object({
+  timestamp: z.string(),
+  action: z.string(),
+  userEmail: z.string(),
+  before: z
+    .object({
       id: z.string(),
       email: z.string(),
       login: z.string(),
@@ -70,17 +103,55 @@ const outputSchema = z.object({
       activated: z.string(),
       lastLogin: z.string().optional(),
       updated: z.string(),
-    }).optional(),
-    dryRun: z.boolean(),
-    changes: z.object({
-      userDeactivated: z.boolean(),
-      userDeleted: z.boolean(),
-    }),
+    })
+    .optional(),
+  dryRun: z.boolean(),
+  changes: z.object({
+    userDeactivated: z.boolean(),
+    userDeleted: z.boolean(),
   }),
+});
+
+const resultSchema = z.object({
+  success: z.boolean(),
+  audit: auditSchema,
   error: z.string().optional(),
   userDeactivated: z.boolean(),
   userDeleted: z.boolean(),
   message: z.string(),
+});
+
+const outputSchema = outputs({
+  success: port(z.boolean(), {
+    label: 'Success',
+    description: 'Whether the offboarding completed successfully.',
+  }),
+  audit: port(auditSchema, {
+    label: 'Audit',
+    description: 'Audit log describing the offboarding attempt.',
+    connectionType: { kind: 'primitive', name: 'json' },
+  }),
+  error: port(z.string().optional(), {
+    label: 'Error',
+    description: 'Error message when the operation fails.',
+  }),
+  userDeactivated: port(z.boolean(), {
+    label: 'User Deactivated',
+    description: 'Whether the user was deactivated.',
+  }),
+  userDeleted: port(z.boolean(), {
+    label: 'User Deleted',
+    description: 'Whether the user was deleted.',
+  }),
+  message: port(z.string(), {
+    label: 'Message',
+    description: 'Summary message for the offboarding attempt.',
+  }),
+  result: port(resultSchema, {
+    label: 'User Offboard Result',
+    description: 'Results of the user offboarding operation including audit logs.',
+    connectionType: { kind: 'primitive', name: 'json' },
+  }),
 });
 
 /**
@@ -173,7 +244,7 @@ async function deleteUser(
   }
 }
 
-const definition: ComponentDefinition<Input, OktaUserOffboardOutput> = {
+const definition = defineComponent({
   id: 'it-automation.okta.user-offboard',
   label: 'Okta User Offboard',
   category: 'it_ops',
@@ -185,10 +256,11 @@ const definition: ComponentDefinition<Input, OktaUserOffboardOutput> = {
     backoffCoefficient: 2,
     nonRetryableErrorTypes: ['ConfigurationError', 'NotFoundError', 'ValidationError'],
   } satisfies ComponentRetryPolicy,
-  inputSchema,
-  outputSchema,
+  inputs: inputSchema,
+  outputs: outputSchema,
+  parameters: parameterSchema,
   docs: 'Offboard a user from Okta by deactivating or deleting their account to revoke access and complete the offboarding process.',
-  metadata: {
+  ui: {
     slug: 'okta-user-offboard',
     version: '1.0.0',
     type: 'output',
@@ -201,74 +273,19 @@ const definition: ComponentDefinition<Input, OktaUserOffboardOutput> = {
     },
     isLatest: true,
     deprecated: false,
-    inputs: [
-      {
-        id: 'user_email',
-        label: 'User Email',
-        dataType: port.text({ coerceFrom: [] }),
-        required: true,
-        description: 'Email address of the user to offboard.',
-      },
-      {
-        id: 'okta_domain',
-        label: 'Okta Domain',
-        dataType: port.text({ coerceFrom: [] }),
-        required: true,
-        description: 'Your Okta organization domain.',
-      },
-      {
-        id: 'apiToken',
-        label: 'API Token',
-        dataType: port.secret(),
-        required: true,
-        description: 'Connect the Secret Loader output containing the Okta API token.',
-      },
-    ],
-    outputs: [
-      {
-        id: 'result',
-        label: 'User Offboard Result',
-        dataType: port.json(),
-        description: 'Results of the user offboarding operation including audit logs.',
-      },
-    ],
     examples: [
       'Offboard employees by deactivating their Okta accounts.',
       'Automatically revoke all Okta access when users leave the company.',
       'Complete IT offboarding workflows with comprehensive audit trails.',
     ],
-    parameters: [
-      {
-        id: 'action',
-        label: 'Action',
-        type: 'select',
-        required: true,
-        default: 'deactivate',
-        options: [
-          { label: 'Deactivate Only', value: 'deactivate' },
-          { label: 'Delete Permanently', value: 'delete' },
-        ],
-        description: 'Choose to deactivate (recommended) or delete the user account.',
-        helpText: 'Business logic choice - use sidebar for operational decisions.',
-      },
-      {
-        id: 'dry_run',
-        label: 'Dry Run Mode',
-        type: 'boolean',
-        default: false,
-        description: 'Preview what would happen without making actual changes.',
-        helpText: 'Safety setting - enable to test operations without affecting users.',
-      },
-    ],
   },
-  async execute(params, context) {
+  async execute({ inputs, params }, context) {
     const {
       user_email,
       okta_domain,
-      action = 'deactivate',
-      dry_run = false,
       apiToken,
-    } = params;
+    } = inputs;
+    const { action = 'deactivate', dry_run = false } = params;
 
     context.logger.info(`[Okta] Starting user offboarding for ${user_email}`);
     context.emitProgress(`Initializing user offboarding process`);
@@ -307,7 +324,7 @@ const definition: ComponentDefinition<Input, OktaUserOffboardOutput> = {
         const message = `User ${user_email} is already deactivated`;
         context.logger.info(`[Okta] ${message}`);
 
-        return {
+        const result = {
           success: true,
           audit: {
             timestamp: new Date().toISOString(),
@@ -323,6 +340,11 @@ const definition: ComponentDefinition<Input, OktaUserOffboardOutput> = {
           userDeactivated: false,
           userDeleted: false,
           message,
+        };
+
+        return {
+          ...result,
+          result,
         };
       }
 
@@ -383,7 +405,7 @@ const definition: ComponentDefinition<Input, OktaUserOffboardOutput> = {
       context.logger.info(`[Okta] ${message}`);
       context.emitProgress(`User offboarding completed successfully`);
 
-      return {
+      const result = {
         success: true,
         audit: auditLog,
         userDeactivated,
@@ -391,11 +413,16 @@ const definition: ComponentDefinition<Input, OktaUserOffboardOutput> = {
         message,
       };
 
+      return {
+        ...result,
+        result,
+      };
+
     } catch (error: any) {
       context.logger.error(`[Okta] User offboarding failed: ${error.message}`);
       context.emitProgress('User offboarding failed');
 
-      return {
+      const result = {
         success: false,
         audit: {
           timestamp: new Date().toISOString(),
@@ -413,8 +440,17 @@ const definition: ComponentDefinition<Input, OktaUserOffboardOutput> = {
         userDeleted: false,
         message: `Failed to offboard user: ${error.message}`,
       };
+
+      return {
+        ...result,
+        result,
+      };
     }
   },
-};
+});
 
 componentRegistry.register(definition);
+
+type OktaUserOffboardInput = typeof inputSchema;
+type OktaUserOffboardOutput = typeof outputSchema;
+export { definition, OktaUserOffboardInput, OktaUserOffboardOutput };

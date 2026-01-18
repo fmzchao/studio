@@ -31,7 +31,13 @@ export const ExecutionInputPreviewSchema = z
   .object({
     runtimeInputs: z.record(z.string(), z.unknown()).default({}),
     nodeOverrides: z
-      .record(z.string(), z.record(z.string(), z.unknown()))
+      .record(
+        z.string(),
+        z.object({
+          params: z.record(z.string(), z.unknown()).default({}),
+          inputOverrides: z.record(z.string(), z.unknown()).default({}),
+        }),
+      )
       .default({}),
   })
   .strip();

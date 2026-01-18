@@ -6,7 +6,7 @@ import { status as grpcStatus, type ServiceError } from '@grpc/grpc-js';
 import { compileWorkflowGraph } from '../dsl/compiler';
 // Ensure all worker components are registered before accessing the registry
 import '@shipsec/studio-worker/components';
-import { componentRegistry } from '@shipsec/component-sdk';
+import { componentRegistry, extractPorts } from '@shipsec/component-sdk';
 import { WorkflowDefinition } from '../dsl/types';
 import {
   TemporalService,
@@ -603,7 +603,7 @@ export class WorkflowsService {
     auth?: AuthContext | null,
     options: {
       trigger?: ExecutionTriggerMetadata;
-      nodeOverrides?: Record<string, Record<string, unknown>>;
+      nodeOverrides?: Record<string, { params?: Record<string, unknown>; inputOverrides?: Record<string, unknown> }>;
       runId?: string;
       idempotencyKey?: string;
     } = {},
@@ -752,7 +752,7 @@ export class WorkflowsService {
     auth?: AuthContext | null,
     options: {
       trigger?: ExecutionTriggerMetadata;
-      nodeOverrides?: Record<string, Record<string, unknown>>;
+      nodeOverrides?: Record<string, { params?: Record<string, unknown>; inputOverrides?: Record<string, unknown> }>;
       runId?: string;
       idempotencyKey?: string;
       parentRunId?: string;
@@ -1245,10 +1245,13 @@ export class WorkflowsService {
       }
       
       try {
-        const component = componentRegistry.get(componentId);
-        if (!component) {
+        const entry = componentRegistry.getMetadata(componentId);
+        if (!entry) {
           return node;
         }
+        const component = entry.definition;
+        const baseInputs = entry.inputs ?? extractPorts(component.inputs);
+        const baseOutputs = entry.outputs ?? extractPorts(component.outputs);
         
         // Get parameters from node data (they may be stored in config, parameters, or at data level)
         const params = nodeData.parameters || nodeData.config || {};
@@ -1261,8 +1264,8 @@ export class WorkflowsService {
               ...node,
               data: {
                 ...nodeData,
-                dynamicInputs: resolved.inputs ?? component.metadata?.inputs ?? [],
-                dynamicOutputs: resolved.outputs ?? component.metadata?.outputs ?? [],
+                dynamicInputs: resolved.inputs ? extractPorts(resolved.inputs) : baseInputs,
+                dynamicOutputs: resolved.outputs ? extractPorts(resolved.outputs) : baseOutputs,
               },
             };
           } catch (resolveError) {
@@ -1272,8 +1275,8 @@ export class WorkflowsService {
               ...node,
               data: {
                 ...nodeData,
-                dynamicInputs: component.metadata?.inputs ?? [],
-                dynamicOutputs: component.metadata?.outputs ?? [],
+                dynamicInputs: baseInputs,
+                dynamicOutputs: baseOutputs,
               },
             };
           }
@@ -1283,8 +1286,8 @@ export class WorkflowsService {
             ...node,
             data: {
               ...nodeData,
-              dynamicInputs: component.metadata?.inputs ?? [],
-              dynamicOutputs: component.metadata?.outputs ?? [],
+              dynamicInputs: baseInputs,
+              dynamicOutputs: baseOutputs,
             },
           };
         }
@@ -1312,7 +1315,7 @@ export class WorkflowsService {
 
   private applyNodeOverrides(
     definition: WorkflowDefinition,
-    overrides?: Record<string, Record<string, unknown>>,
+    overrides?: Record<string, { params?: Record<string, unknown>; inputOverrides?: Record<string, unknown> }>,
   ): WorkflowDefinition {
     if (!overrides || Object.keys(overrides).length === 0) {
       return definition;
@@ -1320,7 +1323,7 @@ export class WorkflowsService {
 
     const updatedActions = definition.actions.map((action) => {
       const override = overrides[action.ref];
-      if (!override || Object.keys(override).length === 0) {
+      if (!override || (Object.keys(override.params ?? {}).length === 0 && Object.keys(override.inputOverrides ?? {}).length === 0)) {
         return action;
       }
 
@@ -1328,7 +1331,11 @@ export class WorkflowsService {
         ...action,
         params: {
           ...(action.params ?? {}),
-          ...override,
+          ...(override.params ?? {}),
+        },
+        inputOverrides: {
+          ...(action.inputOverrides ?? {}),
+          ...(override.inputOverrides ?? {}),
         },
       };
     });
@@ -1355,10 +1362,20 @@ export class WorkflowsService {
 
   private buildInputPreview(
     inputs?: Record<string, unknown>,
-    nodeOverrides?: Record<string, Record<string, unknown>>,
+    nodeOverrides?: Record<string, { params?: Record<string, unknown>; inputOverrides?: Record<string, unknown> }>,
   ): ExecutionInputPreview {
     const runtimeInputs = inputs ? { ...inputs } : {};
-    const overrides = nodeOverrides ? { ...nodeOverrides } : {};
+    const overrides: Record<string, { params: Record<string, unknown>; inputOverrides: Record<string, unknown> }> = {};
+
+    if (nodeOverrides) {
+      for (const [key, value] of Object.entries(nodeOverrides)) {
+        overrides[key] = {
+          params: value.params ?? {},
+          inputOverrides: value.inputOverrides ?? {},
+        };
+      }
+    }
+
     return {
       runtimeInputs,
       nodeOverrides: overrides,

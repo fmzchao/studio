@@ -23,22 +23,26 @@ describe('amass component', () => {
     const component = componentRegistry.get<AmassInput, AmassOutput>('shipsec.amass.enum');
     if (!component) throw new Error('Component not registered');
 
-    const params = component.inputSchema.parse({
+    const inputValues = {
       domains: ['example.com'],
-    });
+    };
+    const paramValues = {};
 
-    expect(params.active).toBe(false);
-    expect(params.bruteForce).toBe(false);
-    expect(params.includeIps).toBe(false);
-    expect(params.enableAlterations).toBe(false);
-    expect(params.recursive).toBe(true);
-    expect(params.verbose).toBe(false);
-    expect(params.demoMode).toBe(false);
-    expect(params.timeoutMinutes).toBeUndefined();
-    expect(params.minForRecursive).toBeUndefined();
-    expect(params.maxDepth).toBeUndefined();
-    expect(params.dnsQueryRate).toBeUndefined();
-    expect(params.customFlags).toBeUndefined();
+    const parsedInputs = component.inputs.parse(inputValues);
+    const parsedParams = component.parameters!.parse(paramValues);
+
+    expect(parsedParams.active).toBe(false);
+    expect(parsedParams.bruteForce).toBe(false);
+    expect(parsedParams.includeIps).toBe(false);
+    expect(parsedParams.enableAlterations).toBe(false);
+    expect(parsedParams.recursive).toBe(true);
+    expect(parsedParams.verbose).toBe(false);
+    expect(parsedParams.demoMode).toBe(false);
+    expect(parsedParams.timeoutMinutes).toBeUndefined();
+    expect(parsedParams.minForRecursive).toBeUndefined();
+    expect(parsedParams.maxDepth).toBeUndefined();
+    expect(parsedParams.dnsQueryRate).toBeUndefined();
+    expect(parsedParams.customFlags).toBeUndefined();
   });
 
   it('should parse raw JSON response returned as string', async () => {
@@ -50,10 +54,14 @@ describe('amass component', () => {
       componentRef: 'amass-test',
     });
 
-    const params = component.inputSchema.parse({
-      domains: ['example.com'],
-      active: true,
-    });
+    const executePayload = {
+      inputs: {
+        domains: ['example.com'],
+      },
+      params: {
+        active: true,
+      }
+    };
 
     const payload = JSON.stringify({
       subdomains: ['api.example.com'],
@@ -78,9 +86,9 @@ describe('amass component', () => {
 
     vi.spyOn(sdk, 'runComponentWithRunner').mockResolvedValue(payload);
 
-    const result = await component.execute(params, context);
+    const result = await component.execute(executePayload, context);
 
-    expect(result).toEqual(component.outputSchema.parse(JSON.parse(payload)));
+    expect(result).toEqual(component.outputs.parse(JSON.parse(payload)));
   });
 
   it('should propagate structured output when docker returns JSON', async () => {
@@ -92,14 +100,18 @@ describe('amass component', () => {
       componentRef: 'amass-test',
     });
 
-    const params = component.inputSchema.parse({
-      domains: ['example.com', 'example.org'],
-      bruteForce: true,
-      includeIps: true,
-      timeoutMinutes: 2,
-    });
+    const executePayload = {
+      inputs: {
+        domains: ['example.com', 'example.org'],
+      },
+      params: {
+        bruteForce: true,
+        includeIps: true,
+        timeoutMinutes: 2,
+      }
+    };
 
-    const payload = component.outputSchema.parse({
+    const payload = component.outputs.parse({
       subdomains: ['login.example.com', 'dev.example.org'],
       rawOutput: 'login.example.com\nlogin.example.com 93.184.216.34\ndev.example.org',
       domainCount: 2,
@@ -122,7 +134,7 @@ describe('amass component', () => {
 
     vi.spyOn(sdk, 'runComponentWithRunner').mockResolvedValue(payload);
 
-    const result = await component.execute(params, context);
+    const result = await component.execute(executePayload, context);
     expect(result).toEqual(payload);
   });
 

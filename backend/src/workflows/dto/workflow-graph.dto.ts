@@ -13,7 +13,14 @@ export const WorkflowViewportSchema = z.object({
 
 export const WorkflowNodeDataSchema = z.object({
   label: z.string(),
-  config: z.record(z.string(), z.unknown()).default({}),
+  config: z.object({
+    params: z.record(z.string(), z.unknown()).default({}),
+    inputOverrides: z.record(z.string(), z.unknown()).default({}),
+    joinStrategy: z.enum(['all', 'any', 'first']).optional(),
+    streamId: z.string().optional(),
+    groupId: z.string().optional(),
+    maxConcurrency: z.number().int().positive().optional(),
+  }).default({ params: {}, inputOverrides: {} }),
   // Dynamic ports resolved from component's resolvePorts function
   dynamicInputs: z.array(z.record(z.string(), z.unknown())).optional(),
   dynamicOutputs: z.array(z.record(z.string(), z.unknown())).optional(),
@@ -97,7 +104,13 @@ export const RunWorkflowRequestSchema = BaseRunWorkflowRequestSchema.refine(
 
 export class RunWorkflowRequestDto extends createZodDto(RunWorkflowRequestSchema) {}
 export const NodeOverridesSchema = z
-  .record(z.string(), z.record(z.string(), z.unknown()))
+  .record(
+    z.string(),
+    z.object({
+      params: z.record(z.string(), z.unknown()).default({}),
+      inputOverrides: z.record(z.string(), z.unknown()).default({}),
+    }),
+  )
   .optional();
 
 export const PrepareRunRequestSchema = BaseRunWorkflowRequestSchema.extend({
@@ -262,4 +275,3 @@ export const ENTRY_POINT_COMPONENT_IDS = [
   'core.workflow.entrypoint',
   'entry-point',
 ] as const;
-

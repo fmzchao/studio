@@ -4,10 +4,13 @@ import {
   createExecutionContext,
   NotFoundError,
   ValidationError,
+  isSpilledDataMarker,
+  TEMPORAL_SPILL_THRESHOLD_BYTES,
   type IFileStorageService,
   type ISecretsService,
   type ITraceService,
   type INodeIOService,
+  type ComponentPortMetadata,
   type LogEventInput,
 } from '@shipsec/component-sdk';
 import type {
@@ -21,11 +24,10 @@ import {
   type WorkflowSchedulerRunContext,
   WorkflowSchedulerError,
 } from './workflow-scheduler';
-import { maskSecretOutputs, createLightweightSummary } from './utils/component-output';
-import { buildActionParams } from './input-resolver';
+import { createLightweightSummary } from './utils/component-output';
+import { buildActionPayload } from './input-resolver';
 import type { ArtifactServiceFactory } from './artifact-factory';
 
-type RegisteredComponent = NonNullable<ReturnType<typeof componentRegistry.get>>;
 
 export interface ExecuteWorkflowOptions {
   runId?: string;
@@ -96,14 +98,17 @@ export async function executeWorkflow(
 
       const { triggeredBy, failure } = schedulerContext;
 
-      const component = componentRegistry.get(action.componentId);
-      if (!component) {
+      const entry = componentRegistry.getMetadata(action.componentId);
+      if (!entry) {
         throw new NotFoundError(`Component not registered: ${action.componentId}`, {
           resourceType: 'component',
           resourceId: action.componentId,
           details: { actionRef, runId },
         });
       }
+      const component = entry.definition;
+      const inputPorts = entry.inputs ?? [];
+      const outputPorts = entry.outputs ?? [];
 
       const nodeMetadata = definition.nodes?.[action.ref];
       const streamId = nodeMetadata?.streamId ?? nodeMetadata?.groupId ?? action.ref;
@@ -126,8 +131,8 @@ export async function executeWorkflow(
         },
       });
 
-      const { params, warnings, manualOverrides } = buildActionParams(action, results, {
-        componentMetadata: component.metadata,
+      const { inputs, params, warnings, manualOverrides } = buildActionPayload(action, results, {
+        componentMetadata: { inputs: inputPorts },
       });
 
       for (const override of manualOverrides) {
@@ -170,6 +175,52 @@ export async function executeWorkflow(
         });
       }
 
+      // Resolve spilled inputs if necessary
+      const resolvedParams = { ...params };
+      const spilledObjectsCache = new Map<string, any>();
+
+      for (const [key, value] of Object.entries(resolvedParams)) {
+        if (isSpilledDataMarker(value)) {
+          if (!options.storage) {
+            console.warn(`[WorkflowRunner] Parameter '${key}' is spilled but no storage service is available`);
+            continue;
+          }
+
+          try {
+            let fullData: any;
+            if (spilledObjectsCache.has(value.storageRef)) {
+              fullData = spilledObjectsCache.get(value.storageRef);
+            } else {
+              const content = await options.storage.downloadFile(value.storageRef);
+              fullData = JSON.parse(content.buffer.toString('utf8'));
+              spilledObjectsCache.set(value.storageRef, fullData);
+            }
+
+            const handle = (value as any).__spilled_handle__;
+            if (handle && handle !== '__self__') {
+              if (fullData && typeof fullData === 'object' && Object.prototype.hasOwnProperty.call(fullData, handle)) {
+                resolvedParams[key] = fullData[handle];
+              } else {
+                console.warn(`[WorkflowRunner] Spilled handle '${handle}' not found in downloaded data for parameter '${key}'`);
+                resolvedParams[key] = undefined;
+                warnings.push({
+                  target: key,
+                  sourceRef: 'spilled-storage',
+                  sourceHandle: handle,
+                });
+              }
+            } else {
+              resolvedParams[key] = fullData;
+            }
+          } catch (err) {
+            console.error(`[WorkflowRunner] Failed to resolve spilled parameter '${key}':`, err);
+            throw new WorkflowSchedulerError(
+              `Failed to resolve spilled input parameter '${key}': ${err instanceof Error ? err.message : String(err)}`
+            );
+          }
+        }
+      }
+
       if (warnings.length > 0) {
         const missing = warnings.map((warning) => `'${warning.target}'`).join(', ');
         throw new WorkflowSchedulerError(
@@ -186,7 +237,7 @@ export async function executeWorkflow(
           console.log(
             `[WorkflowRunner] Applying inputs to entrypoint component '${action.ref}' (${action.componentId})`
           );
-          params.__runtimeData = request.inputs;
+          inputs.__runtimeData = request.inputs;
         } else {
           // Entrypoint ref points to a non-entrypoint component - this is a configuration error
           // Log warning but don't apply inputs to wrong component
@@ -211,10 +262,13 @@ export async function executeWorkflow(
         workflowId: options.workflowId,
         organizationId: options.organizationId,
         componentId: action.componentId,
-        inputs: maskSecretOutputs(component, params) as Record<string, unknown>,
+        inputs: maskSecretOutputs(inputPorts, inputs) as Record<string, unknown>,
       });
 
-      const parsedParams = component.inputSchema.parse(params);
+      const parsedInputs = component.inputs.parse(inputs);
+      const parsedParams = component.parameters
+        ? component.parameters.parse(params)
+        : params;
 
       // Create execution context with SDK interfaces
       const scopedArtifacts = options.artifacts
@@ -249,9 +303,37 @@ export async function executeWorkflow(
 
       try {
         console.log(`⚡️ [WORKFLOW RUNNER] Executing component: ${action.componentId} for action: ${actionRef}`);
-        const rawOutput = await component.execute(parsedParams, context);
+        const rawOutput = await component.execute({ inputs: parsedInputs, params: parsedParams }, context);
         console.log(`✅ [WORKFLOW RUNNER] Component execution completed: ${action.componentId} for action: ${actionRef}`);
-        const output = component.outputSchema.parse(rawOutput);
+        let output = component.outputs.parse(rawOutput);
+
+        // Check for payload size and spill if necessary
+        if (output && options.storage) {
+          try {
+            const outputStr = JSON.stringify(output);
+            const size = Buffer.byteLength(outputStr, 'utf8');
+
+            if (size > TEMPORAL_SPILL_THRESHOLD_BYTES) {
+              const fileId = randomUUID();
+              
+              await options.storage.uploadFile(
+                fileId,
+                'output.json',
+                Buffer.from(outputStr),
+                'application/json'
+              );
+              
+              // Replace output with standardized spilled marker
+              output = {
+                __spilled__: true,
+                storageRef: fileId,
+                originalSize: size,
+              } as any;
+            }
+          } catch (err) {
+            console.warn('[WorkflowRunner] Failed to check/spill output size', err);
+          }
+        }
         results.set(action.ref, output);
         console.log(`💾 [WORKFLOW RUNNER] Result stored for: ${actionRef}`);
         // Record node I/O completion
@@ -259,7 +341,7 @@ export async function executeWorkflow(
           runId,
           nodeRef: action.ref,
           componentId: action.componentId,
-          outputs: maskSecretOutputs(component, output) as Record<string, unknown>,
+          outputs: maskSecretOutputs(outputPorts, output) as Record<string, unknown>,
           status: 'completed',
         });
 
@@ -417,4 +499,38 @@ function extractFailureMessage(value: { success: boolean; error?: unknown }): st
     return errorMessage;
   }
   return 'Component reported failure';
+}
+
+function maskSecretOutputs(outputPorts: ComponentPortMetadata[], output: unknown): unknown {
+  const secretPorts =
+    outputPorts.filter((port) => {
+      const connectionType = port.connectionType;
+
+      if (connectionType.kind === 'primitive') {
+        return connectionType.name === 'secret';
+      }
+      if (connectionType.kind === 'contract') {
+        return Boolean(connectionType.credential);
+      }
+      return false;
+    }) ?? [];
+  if (secretPorts.length === 0) {
+    return output;
+  }
+
+  if (secretPorts.some((port) => port.id === '__self__')) {
+    return '***';
+  }
+
+  if (output && typeof output === 'object' && !Array.isArray(output)) {
+    const clone = { ...(output as Record<string, unknown>) };
+    for (const port of secretPorts) {
+      if (Object.prototype.hasOwnProperty.call(clone, port.id)) {
+        clone[port.id] = '***';
+      }
+    }
+    return clone;
+  }
+
+  return '***';
 }

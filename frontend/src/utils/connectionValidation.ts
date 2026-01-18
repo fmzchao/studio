@@ -2,10 +2,11 @@ import type { Node, Edge, Connection } from 'reactflow'
 import type { FrontendNodeData } from '@/schemas/node'
 import type { ComponentMetadata } from '@/schemas/component'
 import {
-  arePortDataTypesCompatible,
-  describePortDataType,
+  arePortTypesCompatible,
+  describePortType,
   inputSupportsManualValue,
-  runtimeInputTypeToPortDataType,
+  resolvePortType,
+  runtimeInputTypeToConnectionType,
 } from '@/utils/portUtils'
 
 export interface ValidationResult {
@@ -67,7 +68,7 @@ export function validateConnection(
   // Special case: Entry Point legacy support if dynamicOutputs is missing
   if (sourceComponent.id === 'core.workflow.entrypoint' && !(sourceNode.data as any).dynamicOutputs) {
     const sourceNodeData = sourceNode.data
-    const runtimeInputsParam = sourceNodeData.parameters?.runtimeInputs
+    const runtimeInputsParam = sourceNodeData.config?.params?.runtimeInputs
     
     if (runtimeInputsParam) {
       try {
@@ -78,11 +79,11 @@ export function validateConnection(
         if (Array.isArray(runtimeInputs) && runtimeInputs.length > 0) {
           sourceOutputs = runtimeInputs.map((input: any) => {
             const runtimeType = (input.type || 'text') as string
-            const dataType = runtimeInputTypeToPortDataType(runtimeType)
+            const connectionType = runtimeInputTypeToConnectionType(runtimeType)
             return {
               id: input.id,
               label: input.label,
-              dataType,
+              connectionType,
               description: input.description || `Runtime input: ${input.label}`,
             }
           })
@@ -104,16 +105,22 @@ export function validateConnection(
     return { isValid: false, error: `Invalid connection ports: ${detail}` }
   }
 
-  if (!sourcePort.dataType || !targetPort.dataType) {
+  const hasSourceType = Boolean(sourcePort.connectionType)
+  const hasTargetType = Boolean(targetPort.connectionType)
+
+  if (!hasSourceType || !hasTargetType) {
     return { isValid: false, error: 'Port type metadata unavailable' }
   }
 
   // Check type compatibility
-  if (!arePortDataTypesCompatible(sourcePort.dataType, targetPort.dataType)) {
-    const targetTypeLabel = describePortDataType(targetPort.dataType)
+  const sourceType = resolvePortType(sourcePort)
+  const targetType = resolvePortType(targetPort)
+
+  if (!arePortTypesCompatible(sourceType, targetType)) {
+    const targetTypeLabel = describePortType(targetType)
     return {
       isValid: false,
-      error: `Type mismatch: ${describePortDataType(sourcePort.dataType)} cannot connect to ${targetTypeLabel}`,
+      error: `Type mismatch: ${describePortType(sourceType)} cannot connect to ${targetTypeLabel}`,
     }
   }
 
@@ -170,7 +177,8 @@ export function getNodeValidationWarnings(
   const warnings: string[] = []
 
   // Check for required inputs that are not connected
-  const manualParameters = (node.data.parameters ?? {}) as Record<string, unknown>
+  const manualParameters = (node.data.config?.params ?? {}) as Record<string, unknown>
+  const inputOverrides = (node.data.config?.inputOverrides ?? {}) as Record<string, unknown>
 
   component.inputs.forEach((input) => {
     if (input.required) {
@@ -180,7 +188,7 @@ export function getNodeValidationWarnings(
 
       const manualOverridesPort = input.valuePriority === 'manual-first'
       const allowsManualInput = inputSupportsManualValue(input) || manualOverridesPort
-      const manualCandidate = manualParameters[input.id]
+      const manualCandidate = inputOverrides[input.id]
       const manualValueProvided = allowsManualInput && (!hasConnection || manualOverridesPort) && manualCandidate !== undefined && manualCandidate !== null && (
         typeof manualCandidate === 'string' ? manualCandidate.trim().length > 0 : true
       )
@@ -194,7 +202,7 @@ export function getNodeValidationWarnings(
   // Check for required parameters that are not set
   component.parameters.forEach((param) => {
     if (param.required) {
-      const value = node.data.parameters?.[param.id]
+      const value = manualParameters[param.id]
       if (value === undefined || value === null || value === '') {
         warnings.push(`Required parameter "${param.label}" is not set`)
       }

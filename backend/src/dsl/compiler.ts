@@ -2,6 +2,7 @@ import { WorkflowGraphDto, WorkflowNodeDto } from '../workflows/dto/workflow-gra
 // Ensure all worker components are registered before accessing the registry
 import '../../../worker/src/components';
 import { componentRegistry } from '@shipsec/component-sdk';
+import { extractPorts } from '@shipsec/component-sdk/zod-ports';
 import {
   WorkflowAction,
   WorkflowDefinition,
@@ -61,7 +62,7 @@ export function compileWorkflowGraph(graph: WorkflowGraphDto): WorkflowDefinitio
       return true; // Let validation catch unknown components
     }
     // Skip UI-only components (they're for documentation/notes, not execution)
-    const isUiOnly = (component.metadata as any)?.uiOnly === true;
+    const isUiOnly = (component.ui as any)?.uiOnly === true;
     return !isUiOnly;
   });
 
@@ -121,8 +122,9 @@ export function compileWorkflowGraph(graph: WorkflowGraphDto): WorkflowDefinitio
       streamId: _streamId,
       groupId: _groupId,
       maxConcurrency: _maxConcurrency,
-      ...componentParams
     } = config;
+    const rawParams = (config.params ?? {}) as Record<string, unknown>;
+    const rawInputOverrides = (config.inputOverrides ?? {}) as Record<string, unknown>;
 
     // Build input mappings from edges
     const inputMappings: WorkflowAction['inputMappings'] = {};
@@ -141,14 +143,15 @@ export function compileWorkflowGraph(graph: WorkflowGraphDto): WorkflowDefinitio
     }
 
     const component = componentRegistry.get(node.type);
-    const params: Record<string, unknown> = { ...componentParams };
+    const params: Record<string, unknown> = { ...rawParams };
+    const inputOverrides: Record<string, unknown> = { ...rawInputOverrides };
 
-    let inputs = component?.metadata?.inputs ?? [];
+    let inputs = componentRegistry.getMetadata(node.type)?.inputs ?? [];
     if (component?.resolvePorts) {
       try {
         const resolved = component.resolvePorts(params);
         if (resolved.inputs) {
-          inputs = resolved.inputs;
+          inputs = extractPorts(resolved.inputs);
         }
       } catch (e) {
         // Log but fallback to static inputs
@@ -156,16 +159,14 @@ export function compileWorkflowGraph(graph: WorkflowGraphDto): WorkflowDefinitio
       }
     }
 
-    const inputMetadata = new Map(
-      inputs.map((input) => [input.id, input]),
-    );
+    const inputMetadata = new Map(inputs.map((input) => [input.id, input]));
 
     // Remove manual values for connected ports unless the port explicitly prefers manual overrides
     for (const targetKey of Object.keys(inputMappings)) {
       const metadata = inputMetadata.get(targetKey);
       const prefersManual = metadata?.valuePriority === 'manual-first';
       if (!prefersManual) {
-        delete params[targetKey];
+        delete inputOverrides[targetKey];
       }
     }
 
@@ -176,7 +177,7 @@ export function compileWorkflowGraph(graph: WorkflowGraphDto): WorkflowDefinitio
       }
 
       const hasPortMapping = Boolean(inputMappings[inputId]);
-      const manualValue = componentParams[inputId];
+      const manualValue = inputOverrides[inputId];
       const hasManual =
         manualValue !== undefined &&
         manualValue !== null &&
@@ -193,6 +194,7 @@ export function compileWorkflowGraph(graph: WorkflowGraphDto): WorkflowDefinitio
       ref: id,
       componentId: node.type,
       params,
+      inputOverrides,
       dependsOn: Array.from(incomingEdges.get(id) ?? []),
       inputMappings,
     };

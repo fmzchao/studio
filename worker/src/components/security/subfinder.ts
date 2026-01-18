@@ -1,73 +1,71 @@
 import { z } from 'zod';
 import {
   componentRegistry,
-  ComponentDefinition,
-  port,
   runComponentWithRunner,
   type DockerRunnerConfig,
   ContainerError,
   ComponentRetryPolicy,
+  defineComponent,
+  inputs,
+  outputs,
+  parameters,
+  port,
+  param,
 } from '@shipsec/component-sdk';
 import { IsolatedContainerVolume } from '../../utils/isolated-volume';
 
-const domainValueSchema = z.union([z.string(), z.array(z.string())]);
+const domainValueSchema = z.preprocess(
+  (val) => (typeof val === 'string' ? [val] : val),
+  z.array(z.string().min(1)),
+);
 
-const inputSchema = z
-  .object({
-    domains: domainValueSchema.optional().describe('Array of target domains'),
-    domain: domainValueSchema.optional().describe('Legacy single domain input'),
-    providerConfig: z
-      .string()
+const inputSchema = inputs({
+  domains: port(domainValueSchema.optional().describe('Array of target domains'), {
+    label: 'Target Domains',
+    description: 'Array of domain names to enumerate for subdomains.',
+    connectionType: { kind: 'list', element: { kind: 'primitive', name: 'text' } },
+  }),
+  providerConfig: port(
+    z.string()
       .optional()
       .describe('Resolved provider-config.yaml content (connect via Secret Loader)'),
-  })
-  .transform(({ domains, domain, providerConfig }) => {
-    const values = new Set<string>();
+    {
+      label: 'Provider Config',
+      description:
+        'Connect the provider-config.yaml contents via a Secret Loader if authenticated sources are needed.',
+      editor: 'secret',
+      connectionType: { kind: 'primitive', name: 'secret' },
+    },
+  ),
+});
 
-    const addValue = (value: string | string[] | undefined) => {
-      if (Array.isArray(value)) {
-        value.forEach((item) => {
-          const trimmed = item.trim();
-          if (trimmed.length > 0) {
-            values.add(trimmed);
-          }
-        });
-        return;
-      }
+const parameterSchema = parameters({
+  domain: param(z.string().optional().describe('Legacy single domain input'), {
+    label: 'Legacy Domain',
+    editor: 'text',
+    description: 'Legacy single-domain input (prefer Target Domains).',
+    visibleWhen: { __legacy: true },
+  }),
+});
 
-      if (typeof value === 'string') {
-        const trimmed = value.trim();
-        if (trimmed.length > 0) {
-          values.add(trimmed);
-        }
-      }
-    };
 
-    addValue(domains);
-    addValue(domain);
-
-    return {
-      domains: Array.from(values),
-      providerConfig: typeof providerConfig === 'string' && providerConfig.trim().length > 0
-        ? providerConfig
-        : undefined,
-    };
-  });
-
-type Input = z.infer<typeof inputSchema>;
-
-type Output = {
-  subdomains: string[];
-  rawOutput: string;
-  domainCount: number;
-  subdomainCount: number;
-};
-
-const outputSchema = z.object({
-  subdomains: z.array(z.string()),
-  rawOutput: z.string(),
-  domainCount: z.number(),
-  subdomainCount: z.number(),
+const outputSchema = outputs({
+  subdomains: port(z.array(z.string()), {
+    label: 'Discovered Subdomains',
+    description: 'Array of all subdomain hostnames discovered.',
+  }),
+  rawOutput: port(z.string(), {
+    label: 'Raw Output',
+    description: 'Raw tool output for debugging.',
+  }),
+  domainCount: port(z.number(), {
+    label: 'Domain Count',
+    description: 'Number of domains scanned.',
+  }),
+  subdomainCount: port(z.number(), {
+    label: 'Subdomain Count',
+    description: 'Number of subdomains discovered.',
+  }),
 });
 
 const SUBFINDER_TIMEOUT_SECONDS = 1800; // 30 minutes
@@ -85,7 +83,7 @@ const subfinderRetryPolicy: ComponentRetryPolicy = {
   ],
 };
 
-const definition: ComponentDefinition<Input, Output> = {
+const definition = defineComponent({
   id: 'shipsec.subfinder.run',
   label: 'Subfinder',
   category: 'security',
@@ -118,10 +116,11 @@ subfinder -silent -dL /inputs/domains.txt 2>/dev/null || true
       HOME: '/root',
     },
   },
-  inputSchema,
-  outputSchema,
+  inputs: inputSchema,
+  outputs: outputSchema,
+  parameters: parameterSchema,
   docs: 'Runs projectdiscovery/subfinder to discover subdomains for a given domain. Optionally accepts a provider config secret to enable authenticated sources.',
-  metadata: {
+  ui: {
     slug: 'subfinder',
     version: '1.0.0',
     type: 'scan',
@@ -137,43 +136,12 @@ subfinder -silent -dL /inputs/domains.txt 2>/dev/null || true
     isLatest: true,
     deprecated: false,
     example: '`subfinder -d example.com -silent` - Passively gathers subdomains before chaining into deeper discovery tools.',
-    inputs: [
-      {
-        id: 'domains',
-        label: 'Target Domains',
-        dataType: port.list(port.text()),
-        required: true,
-        description: 'Array of domain names to enumerate for subdomains.',
-      },
-      {
-        id: 'providerConfig',
-        label: 'Provider Config',
-        dataType: port.secret(),
-        required: false,
-        description: 'Connect the provider-config.yaml contents via a Secret Loader if authenticated sources are needed.',
-      },
-    ],
-    outputs: [
-      {
-        id: 'subdomains',
-        label: 'Discovered Subdomains',
-        dataType: port.list(port.text()),
-        description: 'Array of all subdomain hostnames discovered.',
-      },
-      {
-        id: 'rawOutput',
-        label: 'Raw Output',
-        dataType: port.text(),
-        description: 'Raw tool output for debugging.',
-      },
-    ],
     examples: [
       'Enumerate subdomains for a single target domain prior to Amass or Naabu.',
       'Quick passive discovery during scope triage workflows.',
     ],
-    parameters: [],
   },
-  async execute(input, context) {
+  async execute({ inputs, params }, context) {
     const baseRunner = definition.runner;
     if (baseRunner.kind !== 'docker') {
       throw new ContainerError('Subfinder runner is expected to be docker-based.', {
@@ -181,7 +149,35 @@ subfinder -silent -dL /inputs/domains.txt 2>/dev/null || true
       });
     }
 
-    if (input.domains.length === 0) {
+    const values = new Set<string>();
+    const addValue = (value: string | string[] | undefined) => {
+      if (Array.isArray(value)) {
+        value.forEach((item) => {
+          const trimmed = item.trim();
+          if (trimmed.length > 0) {
+            values.add(trimmed);
+          }
+        });
+        return;
+      }
+      if (typeof value === 'string') {
+        const trimmed = value.trim();
+        if (trimmed.length > 0) {
+          values.add(trimmed);
+        }
+      }
+    };
+
+    addValue(inputs.domains);
+    addValue(params.domain);
+
+    const domains = Array.from(values);
+    const providerConfig =
+      typeof inputs.providerConfig === 'string' && inputs.providerConfig.trim().length > 0
+        ? inputs.providerConfig
+        : undefined;
+
+    if (domains.length === 0) {
       return {
         subdomains: [],
         rawOutput: '',
@@ -195,9 +191,9 @@ subfinder -silent -dL /inputs/domains.txt 2>/dev/null || true
 
     try {
       await volume.initialize({
-        'domains.txt': input.domains.join('\n'),
+        'domains.txt': domains.join('\n'),
       });
-      context.logger.info(`[Subfinder] Created isolated volume for ${input.domains.length} domain(s).`);
+      context.logger.info(`[Subfinder] Created isolated volume for ${domains.length} domain(s).`);
 
       const runnerConfig: DockerRunnerConfig = {
         ...baseRunner,
@@ -205,8 +201,8 @@ subfinder -silent -dL /inputs/domains.txt 2>/dev/null || true
         volumes: [volume.getVolumeConfig('/inputs', true)],
       };
 
-      if (input.providerConfig) {
-        const encoded = Buffer.from(input.providerConfig, 'utf8').toString('base64');
+      if (providerConfig) {
+        const encoded = Buffer.from(providerConfig, 'utf8').toString('base64');
 
         runnerConfig.env = {
           ...(runnerConfig.env ?? {}),
@@ -219,7 +215,7 @@ subfinder -silent -dL /inputs/domains.txt 2>/dev/null || true
       const result = await runComponentWithRunner(
         runnerConfig,
         async () => ({}),
-        input,
+        { domains, providerConfig },
         context,
       );
 
@@ -237,7 +233,7 @@ subfinder -silent -dL /inputs/domains.txt 2>/dev/null || true
         return {
           subdomains: dedupedSubdomains,
           rawOutput,
-          domainCount: input.domains.length,
+          domainCount: domains.length,
           subdomainCount: dedupedSubdomains.length,
         };
       }
@@ -264,7 +260,7 @@ subfinder -silent -dL /inputs/domains.txt 2>/dev/null || true
           rawOutput: maybeRaw || subdomainsValue.join('\n'),
           domainCount: typeof (result as any).domainCount === 'number'
             ? (result as any).domainCount
-            : input.domains.length,
+            : domains.length,
           subdomainCount: typeof (result as any).subdomainCount === 'number'
             ? (result as any).subdomainCount
             : subdomainsValue.length,
@@ -276,7 +272,7 @@ subfinder -silent -dL /inputs/domains.txt 2>/dev/null || true
       return {
         subdomains: [],
         rawOutput: '',
-        domainCount: input.domains.length,
+        domainCount: domains.length,
         subdomainCount: 0,
       };
     } finally {
@@ -284,8 +280,15 @@ subfinder -silent -dL /inputs/domains.txt 2>/dev/null || true
       context.logger.info('[Subfinder] Cleaned up isolated volume.');
     }
   },
-};
+});
 
 componentRegistry.register(definition);
 
-export type { Input as SubfinderInput, Output as SubfinderOutput };
+// Create local type aliases for backward compatibility
+type Input = typeof inputSchema['__inferred'];
+type Output = typeof outputSchema['__inferred'];
+
+type SubfinderInput = typeof inputSchema;
+type SubfinderOutput = typeof outputSchema;
+
+export type { SubfinderInput, SubfinderOutput };
