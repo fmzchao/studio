@@ -60,6 +60,8 @@ const DataPacketComponent = memo(({ packet, onHover }: {
   )
 })
 
+DataPacketComponent.displayName = 'DataPacketComponent'
+
 // Enhanced edge with data flow visualization
 export const DataFlowEdge = memo(({ id, source, target, sourceX, sourceY, targetX, targetY, data, markerEnd, sourceHandle, targetHandle }: DataFlowEdgeProps) => {
   const [hoveredPacket, setHoveredPacket] = useState<DataPacket | null>(null)
