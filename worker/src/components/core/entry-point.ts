@@ -190,6 +190,11 @@ function runtimeInputTypeToSchema(type: string): { schema: z.ZodTypeAny; meta?: 
       };
     case 'array':
       return { schema: z.array(z.string()) };
+    case 'secret':
+      return {
+        schema: z.string(),
+        meta: { connectionType: { kind: 'primitive', name: 'secret' } },
+      };
     case 'text':
     default:
       return { schema: z.string() };

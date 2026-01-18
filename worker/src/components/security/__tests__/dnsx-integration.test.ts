@@ -33,8 +33,11 @@ dockerDescribe('DNSX Integration (Docker)', () => {
       expect(component).toBeDefined();
 
       const typedComponent = component!;
-      const params = typedComponent.inputs.parse({ domains: ['example.com'], recordTypes: ['A'] });
-      const result = typedComponent.outputs.parse(await typedComponent.execute(params, context));
+      
+      const result = typedComponent.outputs.parse(await typedComponent.execute({
+        inputs: { domains: ['example.com'] },
+        params: { recordTypes: ['A'] }
+      }, context)) as DnsxOutput;
 
       expect(result).toHaveProperty('results');
       expect(result.results.length).toBeGreaterThan(0);
@@ -53,12 +56,11 @@ dockerDescribe('DNSX Integration (Docker)', () => {
       expect(component).toBeDefined();
 
       const typedComponent = component!;
-      const params = typedComponent.inputs.parse({
-        domains: ['this-domain-definitely-does-not-exist-12345.invalid'],
-        recordTypes: ['A'],
-      });
-
-      const result = typedComponent.outputs.parse(await typedComponent.execute(params, context));
+      
+      const result = typedComponent.outputs.parse(await typedComponent.execute({
+        inputs: { domains: ['this-domain-definitely-does-not-exist-12345.invalid'] },
+        params: { recordTypes: ['A'] }
+      }, context)) as DnsxOutput;
 
       expect(result.domainCount).toBe(1);
       expect(result.recordTypes).toContain('A');

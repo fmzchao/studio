@@ -87,7 +87,7 @@ describe('subfinder component', () => {
     const component = componentRegistry.get<SubfinderInput, SubfinderOutput>('shipsec.subfinder.run');
     if (!component) throw new Error('Component not registered');
 
-    const params = component.parameters.parse({ domain: 'legacy.example.com' });
+    const params = component.parameters!.parse({ domain: 'legacy.example.com' });
     expect(params.domain).toBe('legacy.example.com');
   });
 

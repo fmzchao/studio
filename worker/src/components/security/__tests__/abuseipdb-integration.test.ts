@@ -45,14 +45,14 @@ const shouldRunIntegration =
         // 1.1.1.1 is Cloudflare DNS and should exist in AbuseIPDB
         const ipToCheck = '1.1.1.1'; 
         
-        const params = {
-            ipAddress: ipToCheck,
-            apiKey: process.env.ABUSEIPDB_API_KEY!,
-            maxAgeInDays: 90,
-            verbose: true
-        };
-
-        const result = await component!.execute(params, context) as AbuseIPDBOutput;
+        const result = await component!.execute({
+            inputs: { ipAddress: ipToCheck },
+            params: {
+                apiKey: process.env.ABUSEIPDB_API_KEY!,
+                maxAgeInDays: 90,
+                verbose: true
+            }
+        }, context) as AbuseIPDBOutput;
 
         expect(result.ipAddress).toBe(ipToCheck);
         expect(typeof result.abuseConfidenceScore).toBe('number');
@@ -66,14 +66,14 @@ const shouldRunIntegration =
         // Using Google DNS as a safe, known IP
         const ipToCheck = '8.8.8.8'; 
         
-        const params = {
-            ipAddress: ipToCheck,
-            apiKey: process.env.ABUSEIPDB_API_KEY!,
-            maxAgeInDays: 90,
-            verbose: false
-        };
-
-        const result = await component!.execute(params, context) as AbuseIPDBOutput;
+        const result = await component!.execute({
+            inputs: { ipAddress: ipToCheck },
+            params: {
+                apiKey: process.env.ABUSEIPDB_API_KEY!,
+                maxAgeInDays: 90,
+                verbose: false
+            }
+        }, context) as AbuseIPDBOutput;
 
         expect(result.ipAddress).toBe(ipToCheck);
         expect(typeof result.abuseConfidenceScore).toBe('number');

@@ -1,6 +1,5 @@
 import { beforeAll, beforeEach, describe, expect, it, mock, vi } from 'bun:test';
 import { componentRegistry, createExecutionContext, type IArtifactService } from '@shipsec/component-sdk';
-import type { ComponentDefinition } from '@shipsec/component-sdk';
 import type { FileWriterInput, FileWriterOutput } from '../file-writer';
 
 const s3SendMock = vi.fn();
@@ -15,11 +14,11 @@ mock.module('@aws-sdk/client-s3', () => {
 });
 
 describe('core.file.writer component', () => {
-  let component: ComponentDefinition<FileWriterInput, FileWriterOutput> | undefined;
+  let component: ReturnType<typeof componentRegistry.get<FileWriterInput, FileWriterOutput>>;
 
   beforeAll(async () => {
     await import('../../index');
-    component = componentRegistry.get('core.file.writer');
+    component = componentRegistry.get<FileWriterInput, FileWriterOutput>('core.file.writer');
   });
 
   beforeEach(() => {
@@ -169,8 +168,9 @@ describe('core.file.writer component', () => {
     expect(commandInput.Bucket).toBe('shipsec-artifacts');
     expect(commandInput.Key).toBe('runs/demo/report.json');
 
+
     expect(result.remoteUploads).toHaveLength(1);
-    expect(result.remoteUploads?.[0]).toMatchObject({
+    expect(result.remoteUploads![0]).toMatchObject({
       bucket: 'shipsec-artifacts',
       key: 'runs/demo/report.json',
       url: 'https://cdn.example.com/artifacts/runs/demo/report.json',

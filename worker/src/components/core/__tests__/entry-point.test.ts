@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll } from 'bun:test';
-import { createExecutionContext } from '@shipsec/component-sdk';
+import { createExecutionContext, extractPorts } from '@shipsec/component-sdk';
 import { componentRegistry } from '../../index';
 import type { EntryPointInput, EntryPointOutput } from '../entry-point';
 
@@ -132,18 +132,20 @@ describe('entry-point component', () => {
       componentRef: 'trigger-test',
     });
 
-    const params = component.inputSchema.parse({
-      runtimeInputs: [
-        { id: 'apiKey', label: 'API Key', type: 'secret', required: true },
-        { id: 'token', label: 'Token', type: 'secret', required: false },
-      ],
-      __runtimeData: {
-        apiKey: 'super-secret-key',
-        token: 'optional-token',
-      },
-    });
+    const runtimeInputs = [
+      { id: 'apiKey', label: 'API Key', type: 'secret', required: true },
+      { id: 'token', label: 'Token', type: 'secret', required: false },
+    ];
 
-    const result = await component.execute(params, context);
+    const __runtimeData = {
+      apiKey: 'super-secret-key',
+      token: 'optional-token',
+    };
+
+    const result = await component.execute({
+      inputs: { __runtimeData },
+      params: { runtimeInputs },
+    }, context);
 
     expect(result).toEqual({
       apiKey: 'super-secret-key',
@@ -161,11 +163,15 @@ describe('entry-point component', () => {
       ],
     };
 
-    const ports = component.resolvePorts?.(params as any);
-    expect(ports).toBeDefined();
-    expect(ports!.outputs).toHaveLength(1);
-    expect(ports!.outputs[0].id).toBe('apiKey');
-    expect(ports!.outputs[0].dataType.kind).toBe('primitive');
-    expect((ports!.outputs[0].dataType as any).name).toBe('secret');
+    const resolved = component.resolvePorts?.(params as any);
+    expect(resolved).toBeDefined();
+    
+    const outputSchema = (resolved as any).outputs;
+    const ports = extractPorts(outputSchema);
+
+    expect(ports).toHaveLength(1);
+    expect(ports[0].id).toBe('apiKey');
+    expect(ports[0].connectionType?.kind).toBe('primitive');
+    expect(ports[0].connectionType?.name).toBe('secret');
   });
 });

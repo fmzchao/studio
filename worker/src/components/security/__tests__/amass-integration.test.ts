@@ -32,13 +32,14 @@ const shouldRunIntegration =
       const component = componentRegistry.get<AmassInput, AmassOutput>('shipsec.amass.enum');
       expect(component).toBeDefined();
 
-      const params = component!.inputs.parse({
-        domains: ['owasp.org'],
-        active: false,
-        bruteForce: false,
-        timeoutMinutes: 1,
-      });
-      const result = await component!.execute(params, context);
+      const result = await component!.execute({
+        inputs: { domains: ['owasp.org'] },
+        params: {
+          active: false,
+          bruteForce: false,
+          timeoutMinutes: 1,
+        }
+      }, context);
 
       expect(result).toHaveProperty('subdomains');
       expect(Array.isArray(result.subdomains)).toBe(true);

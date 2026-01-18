@@ -11,7 +11,7 @@ import { validateComponentSchema, validateParameterSchema } from './schema-valid
 
 type AnyComponentDefinition = ComponentDefinition<any, any, any, any, any, any>;
 
-type ZodDef = { type?: string; typeName?: string; [key: string]: any };
+type ZodDef = { type?: string; typeName?: string;[key: string]: any };
 
 const LEGACY_TYPE_MAP: Record<string, string> = {
   ZodObject: 'object',
@@ -109,11 +109,11 @@ export class ComponentRegistry {
     });
   }
 
-  get<IS extends Record<string, any>, OS extends Record<string, any>>(
+  get<I = unknown, O = unknown>(
     id: string
-  ): ComponentDefinition<IS, OS, any, any, any, any> | undefined {
+  ): ComponentDefinition<any, any, any, I, O, any> | undefined {
     const cached = this.components.get(id);
-    return cached?.definition as ComponentDefinition<IS, OS, any, any, any, any> | undefined;
+    return cached?.definition as ComponentDefinition<any, any, any, I, O, any> | undefined;
   }
 
   getMetadata(id: string): CachedComponentMetadata | undefined {

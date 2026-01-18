@@ -76,9 +76,7 @@ describe('dnsx component', () => {
       .map((entry) => JSON.stringify(entry))
       .join('\n');
 
-    vi.spyOn(sdk, 'runComponentWithRunner').mockResolvedValue(ndjson);
-
-    const result = component.outputs.parse(await component.execute(executePayload, context));
+    const result = component.outputs.parse(await component.execute(executePayload, context)) as DnsxOutput;
 
     expect(result.domainCount).toBe(1);
     expect(result.recordCount).toBe(2);

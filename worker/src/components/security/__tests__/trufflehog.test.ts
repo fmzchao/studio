@@ -41,7 +41,7 @@ describe('trufflehog component', () => {
     };
 
     const parsedInputs = component.inputs.parse(inputValues);
-    const parsedParams = component.parameters.parse(paramValues);
+    const parsedParams = component.parameters!.parse(paramValues);
 
     expect(parsedInputs.scanTarget).toBe('https://github.com/test/repo');
     expect(parsedParams.scanType).toBe('git');
@@ -141,16 +141,16 @@ describe('trufflehog component', () => {
     const component = componentRegistry.get<TruffleHogInput, TruffleHogOutput>('shipsec.trufflehog.scan');
     if (!component) throw new Error('Component not registered');
 
-    const gitParams = component.parameters.parse({ scanType: 'git' });
+    const gitParams = component.parameters!.parse({ scanType: 'git' });
     expect(gitParams.scanType).toBe('git');
 
-    const filesystemParams = component.parameters.parse({ scanType: 'filesystem' });
+    const filesystemParams = component.parameters!.parse({ scanType: 'filesystem' });
     expect(filesystemParams.scanType).toBe('filesystem');
 
-    const s3Params = component.parameters.parse({ scanType: 's3' });
+    const s3Params = component.parameters!.parse({ scanType: 's3' });
     expect(s3Params.scanType).toBe('s3');
 
-    const dockerParams = component.parameters.parse({ scanType: 'docker' });
+    const dockerParams = component.parameters!.parse({ scanType: 'docker' });
     expect(dockerParams.scanType).toBe('docker');
   });
 
@@ -158,7 +158,7 @@ describe('trufflehog component', () => {
     const component = componentRegistry.get<TruffleHogInput, TruffleHogOutput>('shipsec.trufflehog.scan');
     if (!component) throw new Error('Component not registered');
 
-    const params = component.parameters.parse({
+    const params = component.parameters!.parse({
       scanType: 'git',
       branch: 'main',
       sinceCommit: 'HEAD~10',
@@ -172,7 +172,7 @@ describe('trufflehog component', () => {
     const component = componentRegistry.get<TruffleHogInput, TruffleHogOutput>('shipsec.trufflehog.scan');
     if (!component) throw new Error('Component not registered');
 
-    const params = component.parameters.parse({
+    const params = component.parameters!.parse({
       scanType: 'git',
       customFlags: '--fail --concurrency=8',
     });
@@ -259,7 +259,7 @@ describe('trufflehog component', () => {
     const component = componentRegistry.get<TruffleHogInput, TruffleHogOutput>('shipsec.trufflehog.scan');
     if (!component) throw new Error('Component not registered');
 
-    const params = component.parameters.parse({
+    const params = component.parameters!.parse({
       scanType: 'filesystem',
       filesystemContent: {
         'config.yaml': 'api_key: AKIAIOSFODNN7EXAMPLE',
@@ -269,7 +269,7 @@ describe('trufflehog component', () => {
 
     expect(params.filesystemContent).toBeDefined();
     expect(Object.keys(params.filesystemContent!)).toHaveLength(2);
-    expect(params.filesystemContent!['config.yaml']).toContain('AKIAIOSFODNN7EXAMPLE');
+    expect((params.filesystemContent as any)['config.yaml']).toContain('AKIAIOSFODNN7EXAMPLE');
   });
 
   it('should reject filesystemContent with non-filesystem scanType', async () => {

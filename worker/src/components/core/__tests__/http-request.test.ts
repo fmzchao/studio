@@ -6,16 +6,16 @@ import type { ExecutionContext } from "@shipsec/component-sdk";
 const mockContext: ExecutionContext = {
   runId: "test-run",
   componentRef: "test-node",
-  metadata: { workflowId: "test-wf", executionId: "test-exec" },
+  metadata: { runId: "test-run", componentRef: "test-node" },
   logger: {
-    debug: () => {},
-    info: () => {},
-    warn: () => {},
-    error: () => {},
+    debug: () => { },
+    info: () => { },
+    warn: () => { },
+    error: () => { },
   },
-  emitProgress: () => {},
+  emitProgress: () => { },
   http: {
-    fetch: async (input, init) => fetch(input as RequestInfo, init),
+    fetch: async (input, init) => fetch(input as string, init),
     toCurl: () => "",
   },
 };
@@ -40,29 +40,29 @@ describe("HTTP Request Component", () => {
         if (url.pathname === "/status/404") {
           return new Response("Not Found", { status: 404 });
         }
-        
+
         if (url.pathname === "/status/500") {
-             return new Response("Server Error", { status: 500 });
+          return new Response("Server Error", { status: 500 });
         }
 
         if (url.pathname === "/text") {
-            return new Response("Hello World", { 
-                headers: { "Content-Type": "text/plain" } 
-            });
+          return new Response("Hello World", {
+            headers: { "Content-Type": "text/plain" }
+          });
         }
-        
+
         if (url.pathname === "/headers") {
-             return Response.json({ headers: Object.fromEntries(req.headers) });
+          return Response.json({ headers: Object.fromEntries(req.headers) });
         }
-        
+
         if (url.pathname === "/delete" && req.method === "DELETE") {
-             return Response.json({ deleted: true });
+          return Response.json({ deleted: true });
         }
 
         if (url.pathname === "/timeout") {
-            // Sleep for 200ms
-             await new Promise(r => setTimeout(r, 200));
-             return new Response("Finally");
+          // Sleep for 200ms
+          await new Promise(r => setTimeout(r, 200));
+          return new Response("Finally");
         }
 
         return new Response("OK");
@@ -123,48 +123,48 @@ describe("HTTP Request Component", () => {
     expect(data.headers["x-test"]).toBe("123");
     expect(data.headers["content-type"]).toBe("application/json");
   });
-  
+
   test("should parse text response correctly", async () => {
-      const result = await definition.execute(
-        {
-          inputs: {
-            url: `${baseUrl}/text`,
-          },
-          params: {
-            method: "GET",
-            timeout: 1000,
-            contentType: "application/json",
-            failOnError: true,
-            authType: "none",
-          },
+    const result = await definition.execute(
+      {
+        inputs: {
+          url: `${baseUrl}/text`,
         },
-        mockContext
-      );
-  
-      expect(result.status).toBe(200);
-      expect(result.rawBody).toBe("Hello World");
-      // Should not try to parse "Hello World" as JSON
-      expect(result.data).toBe("Hello World");
+        params: {
+          method: "GET",
+          timeout: 1000,
+          contentType: "application/json",
+          failOnError: true,
+          authType: "none",
+        },
+      },
+      mockContext
+    );
+
+    expect(result.status).toBe(200);
+    expect(result.rawBody).toBe("Hello World");
+    // Should not try to parse "Hello World" as JSON
+    expect(result.data).toBe("Hello World");
   });
 
   test("should handle DELETE method", async () => {
-      const result = await definition.execute(
-        {
-          inputs: {
-            url: `${baseUrl}/delete`,
-          },
-          params: {
-            method: "DELETE",
-            timeout: 1000,
-            contentType: "application/json",
-            failOnError: true,
-            authType: "none",
-          },
+    const result = await definition.execute(
+      {
+        inputs: {
+          url: `${baseUrl}/delete`,
         },
-        mockContext
-      );
-      expect(result.status).toBe(200);
-      expect((result.data as any).deleted).toBe(true);
+        params: {
+          method: "DELETE",
+          timeout: 1000,
+          contentType: "application/json",
+          failOnError: true,
+          authType: "none",
+        },
+      },
+      mockContext
+    );
+    expect(result.status).toBe(200);
+    expect((result.data as any).deleted).toBe(true);
   });
 
   test("should throw on 404 if failOnError is true", async () => {
@@ -192,45 +192,45 @@ describe("HTTP Request Component", () => {
   });
 
   test("should return status 404 if failOnError is false", async () => {
-     const result = await definition.execute(
+    const result = await definition.execute(
+      {
+        inputs: {
+          url: `${baseUrl}/status/404`,
+        },
+        params: {
+          method: "GET",
+          failOnError: false, // Don't throw
+          contentType: "application/json",
+          timeout: 1000,
+          authType: "none",
+        },
+      },
+      mockContext
+    );
+    expect(result.status).toBe(404);
+    expect(result.statusText).toBe("Not Found");
+  });
+
+  test("should timeout if request takes too long", async () => {
+    try {
+      await definition.execute(
         {
           inputs: {
-            url: `${baseUrl}/status/404`,
+            url: `${baseUrl}/timeout`,
           },
           params: {
             method: "GET",
-            failOnError: false, // Don't throw
+            timeout: 50, // Server sleeps for 200ms
             contentType: "application/json",
-            timeout: 1000,
+            failOnError: true,
             authType: "none",
           },
         },
         mockContext
       );
-      expect(result.status).toBe(404);
-      expect(result.statusText).toBe("Not Found");
-  });
-
-  test("should timeout if request takes too long", async () => {
-    try {
-        await definition.execute(
-          {
-            inputs: {
-              url: `${baseUrl}/timeout`,
-            },
-            params: {
-              method: "GET",
-              timeout: 50, // Server sleeps for 200ms
-              contentType: "application/json",
-              failOnError: true,
-              authType: "none",
-            },
-          },
-          mockContext
-        );
-        expect(true).toBe(false); 
-      } catch (e: any) {
-        expect(e.message).toContain("timed out");
-      }
+      expect(true).toBe(false);
+    } catch (e: any) {
+      expect(e.message).toContain("timed out");
+    }
   });
 });

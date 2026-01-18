@@ -14,7 +14,7 @@ const mockContext: ExecutionContext = {
     debug: () => {},
   },
   emitProgress: () => {},
-  ui: {
+  metadata: {
     runId: 'test-run',
     componentRef: 'test-node',
   },
@@ -133,13 +133,13 @@ describe('Logic/Script Component', () => {
   it('correctly resolves ports', () => {
     const params = {
         code: '',
-        variables: [{ name: 'in1', type: 'string' }],
-        returns: [{ name: 'out1', type: 'boolean' }],
+        variables: [{ name: 'in1', type: 'string' as const }],
+        returns: [{ name: 'out1', type: 'boolean' as const }],
     };
-    const ports = definition.resolvePorts(params);
+    const ports = definition.resolvePorts!(params)!;
     
-    const inputPorts = extractPorts(ports.inputs);
-    const outputPorts = extractPorts(ports.outputs);
+    const inputPorts = extractPorts(ports.inputs!);
+    const outputPorts = extractPorts(ports.outputs!);
 
     expect(inputPorts).toHaveLength(1);
     expect(inputPorts[0].id).toBe('in1');

@@ -39,6 +39,9 @@ describe('file-loader component', () => {
       getFileMetadata: async () => {
         throw new Error('Not implemented');
       },
+      uploadFile: async () => {
+        throw new Error('Not implemented');
+      },
     };
 
     const context = createExecutionContext({
@@ -104,6 +107,9 @@ describe('file-loader component', () => {
         },
       }),
       getFileMetadata: async () => {
+        throw new Error('Not implemented');
+      },
+      uploadFile: async () => {
         throw new Error('Not implemented');
       },
     };

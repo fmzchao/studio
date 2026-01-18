@@ -1,4 +1,4 @@
-import { componentRegistry } from '@shipsec/component-sdk';
+import { componentRegistry, extractPorts, type ComponentPortMetadata } from '@shipsec/component-sdk';
 
 type RegisteredComponent = NonNullable<ReturnType<typeof componentRegistry.get>>;
 
@@ -34,49 +34,38 @@ function maskSecretPorts(
  * Identifies secret ports from a list of port definitions.
  */
 function getSecretPorts(
-  ports: Array<{ id: string; dataType?: { kind: string; name?: string; credential?: boolean } }> | undefined
+  ports: ComponentPortMetadata[]
 ): Array<{ id: string }> {
-  return (
-    ports?.filter((port) => {
-      if (!port.dataType) {
-        return false;
-      }
-      if (port.dataType.kind === 'primitive') {
-        return port.dataType.name === 'secret';
-      }
-      if (port.dataType.kind === 'contract') {
-        return Boolean(port.dataType.credential);
-      }
+  return ports.filter((port) => {
+    const connType = port.connectionType;
+    if (!connType) {
       return false;
-    }) ?? []
-  );
+    }
+    if (connType.kind === 'primitive') {
+      return connType.name === 'secret';
+    }
+    if (connType.kind === 'contract') {
+      return Boolean(connType.credential);
+    }
+    return false;
+  });
 }
 
 /**
- * Masks inputs containing sensitive information (secrets) based on component metadata.
+ * Masks inputs containing sensitive information (secrets) based on component port schemas.
  */
 export function maskSecretInputs(component: RegisteredComponent, input: unknown): unknown {
-  const secretPorts = getSecretPorts(component.metadata?.inputs);
+  const inputPorts = extractPorts(component.inputs);
+  const secretPorts = getSecretPorts(inputPorts);
   return maskSecretPorts(secretPorts, input);
 }
 
 /**
- * Masks outputs containing sensitive information (secrets) based on component metadata.
+ * Masks outputs containing sensitive information (secrets) based on component port schemas.
  */
 export function maskSecretOutputs(component: RegisteredComponent, output: unknown): unknown {
-  const secretPorts =
-    component.metadata?.outputs?.filter((port) => {
-      if (!port.dataType) {
-        return false;
-      }
-      if (port.dataType.kind === 'primitive') {
-        return port.dataType.name === 'secret';
-      }
-      if (port.dataType.kind === 'contract') {
-        return Boolean(port.dataType.credential);
-      }
-      return false;
-    }) ?? [];
+  const outputPorts = extractPorts(component.outputs);
+  const secretPorts = getSecretPorts(outputPorts);
     
   if (secretPorts.length === 0) {
     return output;

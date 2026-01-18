@@ -285,7 +285,7 @@ export async function runComponentActivity(
     // normalisation/parsing inside `execute` runs.
     // Docker/remote execution should be invoked from within
     // the component via `runComponentWithRunner`.
-    const output = await component.execute({ inputs: parsedInputs, params: parsedParams }, context);
+    let output = await component.execute({ inputs: parsedInputs, params: parsedParams }, context);
 
     // Check if component requested suspension (e.g. approval gate)
     const isSuspended = output && typeof output === 'object' && 'pending' in output && (output as any).pending === true;

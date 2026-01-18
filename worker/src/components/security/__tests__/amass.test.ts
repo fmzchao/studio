@@ -29,7 +29,7 @@ describe('amass component', () => {
     const paramValues = {};
 
     const parsedInputs = component.inputs.parse(inputValues);
-    const parsedParams = component.parameters.parse(paramValues);
+    const parsedParams = component.parameters!.parse(paramValues);
 
     expect(parsedParams.active).toBe(false);
     expect(parsedParams.bruteForce).toBe(false);

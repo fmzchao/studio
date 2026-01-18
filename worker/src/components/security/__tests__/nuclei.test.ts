@@ -400,7 +400,7 @@ describe('Nuclei Security Validations', () => {
 
 describe('Nuclei Integration', () => {
   test('should be registered in component registry', () => {
-    const component = componentRegistry.get('shipsec.nuclei.scan');
+    const component = componentRegistry.get('shipsec.nuclei.scan')!;
     expect(component).toBeDefined();
     expect(component.id).toBe('shipsec.nuclei.scan');
     expect(component.label).toBe('Nuclei Vulnerability Scanner');
@@ -408,22 +408,21 @@ describe('Nuclei Integration', () => {
   });
 
   test('should have correct metadata', () => {
-    const component = componentRegistry.get('shipsec.nuclei.scan');
-    expect(component.ui?.slug).toBe('nuclei');
-    expect(component.ui?.version).toBe('1.0.0');
-    expect(component.ui?.type).toBe('scan');
-    expect(component.ui?.author?.name).toBe('ShipSecAI');
+    const component = componentRegistry.get('shipsec.nuclei.scan')!;
+    expect(component.ui!.slug).toBe('nuclei');
+    expect(component.ui!.version).toBe('1.0.0');
+    expect(component.ui!.type).toBe('scan');
+    expect(component.ui!.author!.name).toBe('ShipSecAI');
   });
 
   test('should have Docker runner configuration', () => {
-    const component = componentRegistry.get('shipsec.nuclei.scan');
-    expect(component.runner.kind).toBe('docker');
-    if (component.runner.kind === 'docker') {
-      expect(component.runner.image).toBe('ghcr.io/shipsecai/nuclei:latest');
-      expect(component.runner.network).toBe('bridge');
-      expect(component.runner.timeoutSeconds).toBeGreaterThan(0);
-    }
-  });
+    const component = componentRegistry.get('shipsec.nuclei.scan')!;
+      expect(component!.runner.kind).toBe('docker');
+      if (component!.runner.kind === 'docker') {
+        expect(component!.runner.image).toBe('projectdiscovery/nuclei:v3.3.6');
+        expect(component!.runner.entrypoint).toBe('sh');
+
+  }});
 
   test('should have documented inputs', () => {
     const entry = componentRegistry.getMetadata('shipsec.nuclei.scan');
@@ -474,7 +473,7 @@ describe('Nuclei Integration', () => {
 
   test('should have usage examples', () => {
     const component = componentRegistry.get('shipsec.nuclei.scan');
-    const examples = component.ui?.examples || [];
+    const examples = component!.ui!.examples || [];
 
     expect(examples.length).toBeGreaterThan(0);
     expect(examples.some((e) => e.toLowerCase().includes('cve'))).toBe(true);

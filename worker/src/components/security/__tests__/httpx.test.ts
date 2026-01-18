@@ -122,7 +122,7 @@ describeHttpx('httpx component', () => {
 
     vi.spyOn(sdk, 'runComponentWithRunner').mockResolvedValue(payload);
 
-    const result = (await component.execute(params, context)) as HttpxOutput;
+    const result = (await component.execute({ inputs: params, params: {} }, context)) as HttpxOutput;
 
     expect(result.results).toHaveLength(1);
     expect(result.resultCount).toBe(1);
@@ -151,7 +151,7 @@ describeHttpx('httpx component', () => {
 
     vi.spyOn(sdk, 'runComponentWithRunner').mockResolvedValue(raw);
 
-    const result = await component.execute(params, context);
+    const result = await component.execute({ inputs: params, params: {} }, context);
 
     expect(result.results).toHaveLength(2);
     expect(result.options.followRedirects).toBe(true);
@@ -172,7 +172,7 @@ describeHttpx('httpx component', () => {
     });
 
     const spy = vi.spyOn(sdk, 'runComponentWithRunner');
-    const result = await component.execute(params, context);
+    const result = await component.execute({ inputs: params, params: {} }, context);
 
     expect(spy).not.toHaveBeenCalled();
     expect(result.results).toHaveLength(0);
@@ -201,6 +201,6 @@ describeHttpx('httpx component', () => {
       exitCode: 2,
     });
 
-    await expect(component.execute(params, context)).rejects.toThrow(/httpx exited with code 2/);
+    await expect(component.execute({ inputs: params, params: {} }, context)).rejects.toThrow(/httpx exited with code 2/);
   });
 });

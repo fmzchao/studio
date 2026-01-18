@@ -6,6 +6,8 @@ import {
   type ExecutionContext,
   type TraceEvent,
   withPortMeta,
+  inputs,
+  outputs,
 } from '@shipsec/component-sdk';
 
 import { executeWorkflow } from '../workflow-runner';
@@ -17,15 +19,15 @@ import '../../components';
 describe('executeWorkflow', () => {
   beforeAll(() => {
     if (!componentRegistry.has('test.echo')) {
-      const component: ComponentDefinition<{ value: string }, { echoed: string }> = {
+      const component: ComponentDefinition = {
         id: 'test.echo',
         label: 'Test Echo',
         category: 'transform',
         runner: { kind: 'inline' },
-        inputs: z.object({
+        inputs: inputs({
           value: withPortMeta(z.string(), { label: 'Value' }),
         }),
-        outputs: z.object({
+        outputs: outputs({
           echoed: withPortMeta(z.string(), { label: 'Echoed' }),
         }),
         async execute({ inputs }, context) {
@@ -180,6 +182,7 @@ describe('executeWorkflow', () => {
           ref: 'start',
           componentId: 'test.sleep.parallel',
           params: { delay: 50, label: 'start' },
+          inputOverrides: {},
           dependsOn: [],
           inputMappings: {},
         },
@@ -187,6 +190,7 @@ describe('executeWorkflow', () => {
           ref: 'branchA',
           componentId: 'test.sleep.parallel',
           params: { delay: 200, label: 'branchA' },
+          inputOverrides: {},
           dependsOn: ['start'],
           inputMappings: {},
         },
@@ -194,6 +198,7 @@ describe('executeWorkflow', () => {
           ref: 'branchB',
           componentId: 'test.sleep.parallel',
           params: { delay: 200, label: 'branchB' },
+          inputOverrides: {},
           dependsOn: ['start'],
           inputMappings: {},
         },
@@ -201,6 +206,7 @@ describe('executeWorkflow', () => {
           ref: 'merge',
           componentId: 'test.sleep.parallel',
           params: { delay: 0, label: 'merge' },
+          inputOverrides: {},
           dependsOn: ['branchA', 'branchB'],
           inputMappings: {},
         },
@@ -270,6 +276,7 @@ describe('executeWorkflow', () => {
           ref: 'start',
           componentId: 'core.workflow.entrypoint',
           params: {},
+          inputOverrides: {},
           dependsOn: [],
           inputMappings: {},
         },
@@ -277,6 +284,7 @@ describe('executeWorkflow', () => {
           ref: 'branchLeft',
           componentId: 'test.sleep.parallel',
           params: { delay: 40, label: 'left' },
+          inputOverrides: {},
           dependsOn: ['start'],
           inputMappings: {},
         },
@@ -284,6 +292,7 @@ describe('executeWorkflow', () => {
           ref: 'branchRight',
           componentId: 'test.sleep.parallel',
           params: { delay: 20, label: 'right' },
+          inputOverrides: {},
           dependsOn: ['start'],
           inputMappings: {},
         },
@@ -341,15 +350,15 @@ describe('executeWorkflow', () => {
 
   it('triggers downstream when join strategy is any', async () => {
     if (!componentRegistry.has('test.trigger.capture')) {
-      const captureComponent: ComponentDefinition<{ label: string }, { triggeredBy?: string }> = {
+      const captureComponent: ComponentDefinition = {
         id: 'test.trigger.capture',
         label: 'Capture Trigger',
         category: 'transform',
         runner: { kind: 'inline' },
-        inputs: z.object({
+        inputs: inputs({
           label: withPortMeta(z.string(), { label: 'Label' }),
         }),
-        outputs: z.object({
+        outputs: outputs({
           triggeredBy: withPortMeta(z.string().optional(), { label: 'Triggered By' }),
         }),
         async execute({ inputs }, context) {
@@ -393,6 +402,7 @@ describe('executeWorkflow', () => {
           ref: 'start',
           componentId: 'core.workflow.entrypoint',
           params: {},
+          inputOverrides: {},
           dependsOn: [],
           inputMappings: {},
         },
@@ -400,6 +410,7 @@ describe('executeWorkflow', () => {
           ref: 'branchSlow',
           componentId: 'test.sleep.parallel',
           params: { delay: 200, label: 'slow' },
+          inputOverrides: {},
           dependsOn: ['start'],
           inputMappings: {},
         },
@@ -407,6 +418,7 @@ describe('executeWorkflow', () => {
           ref: 'branchFast',
           componentId: 'test.sleep.parallel',
           params: { delay: 10, label: 'fast' },
+          inputOverrides: {},
           dependsOn: ['start'],
           inputMappings: {},
         },
@@ -423,8 +435,8 @@ describe('executeWorkflow', () => {
 
     const result = await executeWorkflow(definition);
     expect(result.success).toBe(true);
-    const outputs = result.outputs as Record<string, any>;
-    expect(outputs.merge.triggeredBy).toBe('branchFast');
+    const workflowOutputs = result.outputs as Record<string, any>;
+    expect(workflowOutputs.merge.triggeredBy).toBe('branchFast');
   });
 
   it('fails deterministically when an input mapping is missing', async () => {
@@ -499,32 +511,32 @@ describe('executeWorkflow', () => {
     const executionOrder: string[] = [];
 
     if (!componentRegistry.has('test.fail.always')) {
-      const failComponent: ComponentDefinition<{ message: string }, never> = {
+      const failComponent: ComponentDefinition = {
         id: 'test.fail.always',
         label: 'Always Fail',
         category: 'transform',
         runner: { kind: 'inline' },
-        inputs: z.object({
+        inputs: inputs({
           message: withPortMeta(z.string(), { label: 'Message' }),
         }),
-        outputs: z.never(),
-        async execute({ inputs }) {
-          throw new Error(inputs.message);
+        outputs: outputs({}),
+        async execute(params) {
+          throw new Error(params.inputs.message as string);
         },
       };
       componentRegistry.register(failComponent);
     }
 
     if (!componentRegistry.has('test.record.execution')) {
-      const recordComponent: ComponentDefinition<{ label: string }, { label: string }> = {
+      const recordComponent: ComponentDefinition = {
         id: 'test.record.execution',
         label: 'Record Execution',
         category: 'transform',
         runner: { kind: 'inline' },
-        inputs: z.object({
+        inputs: inputs({
           label: withPortMeta(z.string(), { label: 'Label' }),
         }),
-        outputs: z.object({
+        outputs: outputs({
           label: withPortMeta(z.string(), { label: 'Label' }),
         }),
         async execute({ inputs }, context) {
@@ -563,6 +575,7 @@ describe('executeWorkflow', () => {
           ref: 'start',
           componentId: 'core.workflow.entrypoint',
           params: {},
+          inputOverrides: {},
           dependsOn: [],
           inputMappings: {},
         },
@@ -593,17 +606,17 @@ describe('executeWorkflow', () => {
 
   it('injects failure metadata into error-edge components', async () => {
     if (!componentRegistry.has('test.fail.always')) {
-      const failComponent: ComponentDefinition<{ message: string }, never> = {
+      const failComponent: ComponentDefinition = {
         id: 'test.fail.always',
         label: 'Always Fail',
         category: 'transform',
         runner: { kind: 'inline' },
-        inputs: z.object({
+        inputs: inputs({
           message: withPortMeta(z.string(), { label: 'Message' }),
         }),
-        outputs: z.never(),
+        outputs: outputs({}),
         async execute(params) {
-          throw new Error(params.message);
+          throw new Error(params.inputs.message as string);
         },
       };
       componentRegistry.register(failComponent);
@@ -612,15 +625,15 @@ describe('executeWorkflow', () => {
     const failureMetadata: Array<ExecutionContext['metadata']['failure']> = [];
 
     if (!componentRegistry.has('test.capture.failure-metadata')) {
-      const captureComponent: ComponentDefinition<{ label: string }, { label: string }> = {
+      const captureComponent: ComponentDefinition = {
         id: 'test.capture.failure-metadata',
         label: 'Capture Failure Metadata',
         category: 'transform',
         runner: { kind: 'inline' },
-        inputs: z.object({
+        inputs: inputs({
           label: withPortMeta(z.string(), { label: 'Label' }),
         }),
-        outputs: z.object({
+        outputs: outputs({
           label: withPortMeta(z.string(), { label: 'Label' }),
         }),
         async execute({ inputs }, context) {
@@ -658,6 +671,7 @@ describe('executeWorkflow', () => {
           ref: 'start',
           componentId: 'core.workflow.entrypoint',
           params: {},
+          inputOverrides: {},
           dependsOn: [],
           inputMappings: {},
         },

@@ -46,6 +46,8 @@ describe('github.connection.provider component', () => {
     >('github.connection.provider');
     if (!component) throw new Error('Component not registered');
 
+    if (!component.parameters) throw new Error('Component has no parameters');
+
     const parsed = component.parameters.safeParse({
       connectionId: '   ',
     });

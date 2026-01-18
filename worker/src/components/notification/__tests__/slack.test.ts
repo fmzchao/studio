@@ -9,10 +9,10 @@ describe('Slack Component Template Support', () => {
         httpFetchMock = mock(() => Promise.resolve(new Response(JSON.stringify({ ok: true, ts: '123' }), { status: 200 })));
         return {
             logger: {
-                info: mock(() => {}),
-                error: mock(() => {}),
-                warn: mock(() => {}),
-                debug: mock(() => {}),
+                info: mock(() => { }),
+                error: mock(() => { }),
+                warn: mock(() => { }),
+                debug: mock(() => { }),
             },
             http: {
                 fetch: httpFetchMock,
@@ -46,14 +46,14 @@ describe('Slack Component Template Support', () => {
             }
         };
 
-        const result = await definition.execute(executePayload, mockContext);
+        const result = await definition.execute(executePayload as any, mockContext);
 
         expect(result.ok).toBe(true);
         const body = JSON.parse(httpFetchMock.mock.calls[0][1].body);
-        
+
         // Check text interpolation
         expect(body.text).toBe('Alert: CRITICAL issue on prod-db-01');
-        
+
         // Check blocks interpolation
         expect(body.blocks[0].text.text).toBe('*System:* prod-db-01');
     });
@@ -73,7 +73,7 @@ describe('Slack Component Template Support', () => {
             }
         };
 
-        await definition.execute(executePayload, mockContext);
+        await definition.execute(executePayload as any, mockContext);
 
         const body = JSON.parse(httpFetchMock.mock.calls[0][1].body);
         expect(body.blocks[0].text.text).toBe('Alice joined');
@@ -88,7 +88,7 @@ describe('Slack Component Template Support', () => {
             ]
         });
 
-        const ports = extractPorts(resolved.inputs);
+        const ports = extractPorts(resolved.inputs!);
         const errorPort = ports.find(i => i.id === 'error_msg');
         const tsPort = ports.find(i => i.id === 'timestamp');
 

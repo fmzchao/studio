@@ -1,8 +1,6 @@
 import { describe, it, expect, vi, beforeEach, mock } from 'bun:test';
 import '../../index';
 import { ExecutionContext } from '@shipsec/component-sdk';
-import { admin } from '@googleapis/admin';
-import { google } from 'googleapis';
 import { createMockExecutionContext } from '../../../testing/test-utils';
 
 // Mock the dependencies

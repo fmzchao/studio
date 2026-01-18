@@ -13,7 +13,7 @@ const mockRunComponentWithRunner = mock(async () => ({
 }));
 
 // Mock IsolatedContainerVolume
-const mockVolumeCleanup = mock(async () => {});
+const mockVolumeCleanup = mock(async () => { });
 const mockVolumeInitialize = mock(async () => 'test-volume-123');
 const mockVolumeGetVolumeConfig = mock(() => ({
   source: 'test-volume',
@@ -25,14 +25,14 @@ class MockIsolatedContainerVolume {
   constructor(
     public tenantId: string,
     public runId: string,
-  ) {}
+  ) { }
 
   async initialize(files: Record<string, string | Buffer>) {
-    return mockVolumeInitialize(files);
+    return mockVolumeInitialize();
   }
 
   getVolumeConfig(path: string, readOnly: boolean) {
-    return mockVolumeGetVolumeConfig(path, readOnly);
+    return mockVolumeGetVolumeConfig();
   }
 
   getVolumeName() {
@@ -55,11 +55,11 @@ describe('Nuclei Integration Tests', () => {
       runId: 'test-run-123',
       componentRef: 'node-nuclei-1',
       logger: {
-        info: mock(() => {}),
-        error: mock(() => {}),
-        warn: mock(() => {}),
+        info: mock(() => { }),
+        error: mock(() => { }),
+        warn: mock(() => { }),
       },
-      emitProgress: mock((msg: any) => {}),
+      emitProgress: mock((msg: any) => { }),
       metadata: {
         runId: 'test-run-123',
         componentRef: 'node-nuclei-1',
@@ -78,8 +78,6 @@ describe('Nuclei Integration Tests', () => {
       const input: NucleiInput = {
         targets: ['https://example.com'],
         templateIds: ['CVE-2024-1234', 'http-missing-security-headers'],
-        rateLimit: 100,
-        concurrency: 10,
       };
 
       // Mock successful nuclei output
@@ -95,11 +93,12 @@ describe('Nuclei Integration Tests', () => {
             timestamp: '2024-12-04T10:00:00Z',
           },
         ],
+        raw: '',
         stderr: '[INF] 2 templates loaded, 1 requests sent, finished in 2.5s',
         exitCode: 0,
       };
 
-      mockRunComponentWithRunner.mockResolvedValueOnce(mockNucleiOutput);
+      mockRunComponentWithRunner.mockResolvedValueOnce(mockNucleiOutput as any);
 
       // Note: This test validates the schema but doesn't run actual Docker
       // In a real integration test, you'd use a test container
@@ -110,7 +109,6 @@ describe('Nuclei Integration Tests', () => {
       const input: NucleiInput = {
         targets: ['https://example.com', 'https://test.com'],
         templateIds: ['CVE-2024-1234', 'CVE-2024-5678'],
-        rateLimit: 50,
       };
 
       const parsed = nucleiComponent.inputs.parse(input);

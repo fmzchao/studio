@@ -324,47 +324,46 @@ describe('core.ai.agent component', () => {
       stepLimit: 3,
     };
 
-    const result = (await runComponentWithRunner(
-      component!.runner,
-      (params: any, context: any) => 
-        (component!.execute as any)(params, context, {
-          ToolLoopAgent: MockToolLoopAgent as unknown as ToolLoopAgentClass,
-          stepCountIs: stepCountIsMock as unknown as StepCountIsFn,
-          tool: ((definition: any) => {
-            createdTools.push(definition);
-            return definition;
-          }) as unknown as ToolFn,
-          createOpenAI: openAiFactoryMock as unknown as CreateOpenAIFn,
-          createGoogleGenerativeAI: googleFactoryMock as unknown as CreateGoogleGenerativeAIFn,
-        }),
-      params,
-      contextWithMockFetch,
-    )) as any;
-
-    expect(createdTools).toHaveLength(1);
-    expect(stepCountIsMock).toHaveBeenCalledWith(3);
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(result.toolInvocations).toHaveLength(1);
-    expect(result.toolInvocations[0]).toMatchObject({
-      toolName: 'call_mcp_tool',
-      result: { answer: 'Evidence' },
-    });
-    expect(result.reasoningTrace[0]).toMatchObject({
-      thought: 'Consulting MCP',
-    });
-    const toolMessage = result.conversationState.messages.find((msg: any) => msg.role === 'tool');
-    expect(toolMessage?.content).toMatchObject({
-      toolName: 'call_mcp_tool',
-      result: { answer: 'Evidence' },
-    });
-    const agentSettings = toolLoopAgentConstructorMock.mock.calls[0][0];
-    expect(agentSettings.model).toMatchObject({
-      provider: 'gemini',
-      modelId: 'gemini-2.5-flash',
-    });
-    expect(result.responseText).toBe('Final resolved answer');
-    expect(result.agentRunId).toBeTruthy();
-  });
+          const result2 = (await runComponentWithRunner(
+          component!.runner,
+          (params: any, context: any) => 
+            (component!.execute as any)(params, context, {
+              ToolLoopAgent: MockToolLoopAgent as unknown as ToolLoopAgentClass,
+              stepCountIs: stepCountIsMock as unknown as StepCountIsFn,
+              tool: ((definition: any) => {
+                createdTools.push(definition);
+                return definition;
+              }) as unknown as ToolFn,
+              createOpenAI: openAiFactoryMock as unknown as CreateOpenAIFn,
+              createGoogleGenerativeAI: googleFactoryMock as unknown as CreateGoogleGenerativeAIFn,
+            }),
+          params,
+          contextWithMockFetch,
+        )) as any;
+    
+        expect(createdTools).toHaveLength(1);
+        expect(stepCountIsMock).toHaveBeenCalledWith(3);
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        expect(result2.toolInvocations).toHaveLength(1);
+        expect(result2.toolInvocations[0]).toMatchObject({
+          toolName: 'call_mcp_tool',
+          result: { answer: 'Evidence' },
+        });
+        expect(result2.reasoningTrace[0]).toMatchObject({
+          thought: 'Consulting MCP',
+        });
+        const toolMessage = result2.conversationState.messages.find((msg: any) => msg.role === 'tool');
+        expect(toolMessage?.content).toMatchObject({
+          toolName: 'call_mcp_tool',
+          result: { answer: 'Evidence' },
+        });
+        const agentSettings = toolLoopAgentConstructorMock.mock.calls[0][0];
+        expect(agentSettings.model).toMatchObject({
+          provider: 'gemini',
+          modelId: 'gemini-2.5-flash',
+        });
+        expect(result2.responseText).toBe('Final resolved answer');
+        expect(result2.agentRunId).toBeTruthy();  }});
 
   test('emits agent trace events via publisher and fallback progress stream', async () => {
     const component = componentRegistry.get('core.ai.agent');

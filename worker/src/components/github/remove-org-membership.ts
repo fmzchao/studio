@@ -14,6 +14,7 @@ import {
   inputs,
   outputs,
   port,
+  DEFAULT_SENSITIVE_HEADERS,
 } from '@shipsec/component-sdk';
 
 const inputSchema = inputs({

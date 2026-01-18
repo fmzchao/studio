@@ -29,7 +29,7 @@ describe('naabu component', () => {
     const paramValues = {};
 
     const parsedInputs = component.inputs.parse(inputValues);
-    const parsedParams = component.parameters.parse(paramValues);
+    const parsedParams = component.parameters!.parse(paramValues);
 
     expect(parsedParams.retries).toBe(1);
     expect(parsedParams.enablePing).toBe(false);
