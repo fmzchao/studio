@@ -1,8 +1,6 @@
 import { beforeAll, describe, expect, it, vi } from 'bun:test';
 import { createExecutionContext, type IArtifactService } from '@shipsec/component-sdk';
 import { componentRegistry } from '../../index';
-import type { z } from 'zod';
-import type { ComponentDefinition } from '@shipsec/component-sdk';
 import type { ArtifactWriterInput, ArtifactWriterOutput } from '../artifact-writer';
 
 describe('core.artifact.writer component', () => {

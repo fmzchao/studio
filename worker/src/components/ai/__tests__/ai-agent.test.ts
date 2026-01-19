@@ -97,7 +97,7 @@ const stepCountIsMock = vi.fn((limit: number) => ({ type: 'step-count', limit })
 interface AgentGenerateArgs {
   messages: { role: string; content: string }[];
 }
-let agentGenerateMock = vi.fn((args: AgentGenerateArgs) => {});
+let agentGenerateMock = vi.fn((_args: AgentGenerateArgs) => {});
 const toolLoopAgentConstructorMock = vi.fn((settings: any) => settings);
 let nextAgentResult = makeAgentResult();
 let toolLoopAgentGenerateImpl: ((instance: any, args: any) => Promise<any>) | null = null;
@@ -151,7 +151,7 @@ beforeAll(async () => {
 
 beforeEach(() => {
   createdTools.length = 0;
-  agentGenerateMock = vi.fn((args: AgentGenerateArgs) => {});
+  agentGenerateMock = vi.fn((_args: AgentGenerateArgs) => {});
   toolLoopAgentConstructorMock.mockReset();
   stepCountIsMock.mockReset();
   nextAgentResult = makeAgentResult();
@@ -256,7 +256,7 @@ describe('core.ai.agent component', () => {
     };
 
     toolLoopAgentGenerateImpl = async (instance) => {
-      const toolResult = await instance.settings.tools.call_mcp_tool.execute({
+      const _toolResult = await instance.settings.tools.call_mcp_tool.execute({
         toolName: 'lookup',
         arguments: { question: 'Lookup reference' },
       });
@@ -294,7 +294,7 @@ describe('core.ai.agent component', () => {
         },
       };
 
-      const result = (await runComponentWithRunner(
+      const _result = (await runComponentWithRunner(
         component!.runner,
         (payload: any, context: any) =>
           (component!.execute as any)(payload, context, {

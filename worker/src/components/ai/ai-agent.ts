@@ -31,7 +31,6 @@ import {
   McpToolArgumentSchema,
   McpToolDefinitionSchema,
   llmProviderContractName,
-  type LlmProviderConfig,
   type McpToolDefinition,
 } from '@shipsec/contracts';
 
@@ -65,7 +64,7 @@ const agentMessageSchema = z.object({
 
 type AgentMessage = z.infer<typeof agentMessageSchema>;
 
-interface CoreMessage {
+interface _CoreMessage {
   role: 'system' | 'user' | 'assistant' | 'tool';
   content: string;
 }
@@ -449,7 +448,7 @@ class AgentStreamRecorder {
     if (!textDelta.trim()) {
       return;
     }
-    const textId = this.ensureTextStream();
+    const _textId = this.ensureTextStream();
     this.emitPart({
       type: 'text-delta',
       textDelta,

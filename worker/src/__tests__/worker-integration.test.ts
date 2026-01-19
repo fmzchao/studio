@@ -8,7 +8,6 @@ import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 
 import { FileStorageAdapter } from '../adapters/file-storage.adapter';
-import { TraceAdapter } from '../adapters/trace.adapter';
 import * as schema from '../adapters/schema';
 import '../components'; // Register all components
 
@@ -316,8 +315,8 @@ workerDescribe('Worker Integration Tests', () => {
       // Error should mention file not being found
       expect(
         result.error?.includes('not found') ||
-        result.error?.includes('does not exist') ||
-        result.error?.includes('NotFound'),
+          result.error?.includes('does not exist') ||
+          result.error?.includes('NotFound'),
       ).toBe(true);
     }, 60000);
 
@@ -648,7 +647,7 @@ workerDescribe('Worker Integration Tests', () => {
       // Verify we can list workflows (even if empty)
       const workflows = temporalClient.workflow.list();
       let count = 0;
-      for await (const workflow of workflows) {
+      for await (const _workflow of workflows) {
         count++;
         if (count > 10) break; // Just verify we can iterate
       }
