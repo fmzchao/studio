@@ -108,7 +108,10 @@ function coerceValueForConnectionType(
     }
     const coerced: unknown[] = [];
     for (const item of value) {
-      const result = coerceValueForConnectionType(connectionType.element!, item);
+      if (!connectionType.element) {
+        return { ok: false, error: 'Connection type element is null for list item' };
+      }
+      const result = coerceValueForConnectionType(connectionType.element, item);
       if (!result.ok) {
         return { ok: false, error: result.error ?? 'Failed to coerce list item' };
       }
@@ -124,7 +127,10 @@ function coerceValueForConnectionType(
     const inputRecord = value as Record<string, unknown>;
     const coerced: Record<string, unknown> = {};
     for (const [key, entry] of Object.entries(inputRecord)) {
-      const result = coerceValueForConnectionType(connectionType.element!, entry);
+      if (!connectionType.element) {
+        return { ok: false, error: `Connection type element is null for key ${key}` };
+      }
+      const result = coerceValueForConnectionType(connectionType.element, entry);
       if (!result.ok) {
         return { ok: false, error: result.error ?? `Failed to coerce value for key ${key}` };
       }

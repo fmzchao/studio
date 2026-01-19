@@ -1,8 +1,8 @@
 import { z } from 'zod';
 import {
   componentRegistry,
-  defineComponent,
   ValidationError,
+  defineComponent,
   inputs,
   outputs,
   parameters,
@@ -11,7 +11,6 @@ import {
   withPortMeta,
 } from '@shipsec/component-sdk';
 import type { PortMeta } from '@shipsec/component-sdk/port-meta';
-import type { ComponentDefinition } from '@shipsec/component-sdk';
 
 // Runtime input definition schema
 const runtimeInputDefinitionSchema = z.preprocess(
@@ -61,8 +60,7 @@ const parameterSchema = parameters({
       label: 'Runtime Inputs',
       editor: 'json',
       description: 'Define what data to collect when the workflow is triggered',
-      placeholder:
-        '[{\"id\":\"myInput\",\"label\":\"My Input\",\"type\":\"text\",\"required\":true}]',
+      placeholder: '[{"id":"myInput","label":"My Input","type":"text","required":true}]',
       helpText: 'Each input creates a corresponding output.',
     },
   ),

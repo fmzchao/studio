@@ -1103,9 +1103,9 @@ Loop the Conversation State output back into the next agent invocation to keep m
     debugLog('Incoming conversation state', incomingState);
 
     const sessionId = incomingState?.sessionId ?? randomUUID();
-    const existingMessages = Array.isArray(incomingState?.messages) ? incomingState!.messages : [];
+    const existingMessages = Array.isArray(incomingState?.messages) ? incomingState.messages : [];
     const existingToolHistory = Array.isArray(incomingState?.toolInvocations)
-      ? incomingState!.toolInvocations
+      ? incomingState.toolInvocations
       : [];
     debugLog('Session details', {
       sessionId,

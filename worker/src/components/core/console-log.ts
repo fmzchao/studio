@@ -6,7 +6,6 @@ import {
   outputs,
   parameters,
   port,
-  param,
 } from '@shipsec/component-sdk';
 import { consoleLogResultSchema } from '@shipsec/contracts';
 
@@ -67,7 +66,7 @@ const definition = defineComponent({
       'Dump intermediate data structures while developing new workflows.',
     ],
   },
-  async execute({ inputs, params }, context) {
+  async execute({ inputs, params: _params }, context) {
     const label = inputs.label || 'Console Log';
 
     context.logger.info(`[${label}] ========================================`);

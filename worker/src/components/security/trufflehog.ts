@@ -99,7 +99,7 @@ const parameterSchema = parameters({
       editor: 'text',
       placeholder: 'main',
       description: 'Scan commits since this reference (git only).',
-      helpText: 'For PR scans: set this to the base branch (e.g. \"main\").',
+      helpText: 'For PR scans: set this to the base branch (e.g. "main").',
     },
   ),
   includeIssueComments: param(

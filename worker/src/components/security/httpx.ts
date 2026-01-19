@@ -33,7 +33,7 @@ const parameterSchema = parameters({
       .trim()
       .min(1, 'Ports value cannot be empty')
       .optional()
-      .describe('Comma-separated list of ports to probe (e.g. \"80,443,8080\")'),
+      .describe('Comma-separated list of ports to probe (e.g. "80,443,8080")'),
     {
       label: 'Ports',
       editor: 'text',
@@ -47,7 +47,7 @@ const parameterSchema = parameters({
       .trim()
       .min(1, 'Status codes cannot be empty')
       .optional()
-      .describe('Comma-separated list of acceptable HTTP status codes (e.g. \"200,301,302\")'),
+      .describe('Comma-separated list of acceptable HTTP status codes (e.g. "200,301,302")'),
     {
       label: 'Status Codes',
       editor: 'text',
@@ -113,7 +113,7 @@ const parameterSchema = parameters({
       .trim()
       .min(1, 'Path cannot be empty')
       .optional()
-      .describe('Specific path to append to each target during probing (e.g. \"/admin\")'),
+      .describe('Specific path to append to each target during probing (e.g. "/admin")'),
     {
       label: 'Path',
       editor: 'text',

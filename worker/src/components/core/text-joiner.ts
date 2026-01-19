@@ -75,7 +75,7 @@ const parameterSchema = parameters({
     editor: 'text',
     placeholder: '',
     description: 'Text to add before each item.',
-    helpText: 'Useful for bullet points: \"- \", numbers: \"1. \", etc.',
+    helpText: 'Useful for bullet points: "- ", numbers: "1. ", etc.',
   }),
   suffix: param(z.string().default('').describe('Suffix to add to each item'), {
     label: 'Suffix',

@@ -83,7 +83,7 @@ export async function executeWorkflow(
     const runAction = async (
       actionRef: string,
       schedulerContext: WorkflowSchedulerRunContext,
-    ): Promise<void> => {
+    ): Promise<{ activePorts?: string[] | undefined } | null> => {
       console.log(
         `🎯 [WORKFLOW RUNNER] runAction called for: ${actionRef} (triggered by: ${schedulerContext.triggeredBy || 'root'})`,
       );
@@ -447,6 +447,9 @@ export async function executeWorkflow(
 
         throw error;
       }
+
+      // Return null as per the expected return type
+      return null;
     };
 
     await runWorkflowWithScheduler(definition, {

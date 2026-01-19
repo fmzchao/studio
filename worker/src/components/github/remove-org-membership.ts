@@ -141,10 +141,6 @@ const definition = defineComponent({
   async execute({ inputs }, context) {
     const { organization, teamSlug, userIdentifier, connectionId } = inputSchema.parse(inputs);
 
-    let accessToken: string;
-    let tokenType = 'Bearer';
-    let tokenScope: string | undefined;
-
     const trimmedConnectionId = connectionId.trim();
 
     if (trimmedConnectionId.length === 0) {
@@ -160,9 +156,9 @@ const definition = defineComponent({
       `Retrieving GitHub access token from connection ${trimmedConnectionId}...`,
     );
     const connectionToken = await fetchConnectionAccessToken(trimmedConnectionId, context);
-    accessToken = connectionToken.accessToken;
-    tokenType = connectionToken.tokenType ?? 'Bearer';
-    tokenScope =
+    const accessToken = connectionToken.accessToken;
+    const tokenType = connectionToken.tokenType ?? 'Bearer';
+    const tokenScope =
       Array.isArray(connectionToken.scopes) && connectionToken.scopes.length > 0
         ? connectionToken.scopes.join(' ')
         : undefined;

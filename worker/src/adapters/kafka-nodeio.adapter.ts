@@ -147,7 +147,10 @@ export class KafkaNodeIOAdapter implements INodeIOService {
           payload.outputsSize = (spilledOutput.originalSize as number) || 0;
 
           // Replace with standardized spill marker
-          payload.outputs = createSpilledMarker(payload.outputsStorageRef!, payload.outputsSize);
+          payload.outputs = createSpilledMarker(
+            payload.outputsStorageRef ?? '',
+            payload.outputsSize,
+          );
         } else {
           const outputsStr = JSON.stringify(payload.outputs);
           const size = Buffer.byteLength(outputsStr, 'utf8');

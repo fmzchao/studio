@@ -49,7 +49,7 @@ const parameterSchema = parameters({
     label: 'Timeout',
     editor: 'text',
     placeholder: '24h',
-    description: 'How long to wait for approval (e.g., \"1h\", \"24h\", \"7d\")',
+    description: 'How long to wait for approval (e.g., "1h", "24h", "7d")',
   }),
 });
 

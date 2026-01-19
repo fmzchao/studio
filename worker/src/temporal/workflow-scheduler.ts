@@ -25,7 +25,7 @@ export interface WorkflowSchedulerOptions {
   run: (
     actionRef: string,
     context: WorkflowSchedulerRunContext,
-  ) => Promise<{ activePorts?: string[] } | void>;
+  ) => Promise<{ activePorts?: string[] } | null>;
   onNodeSkipped?: (actionRef: string) => Promise<void>;
 }
 
@@ -385,7 +385,7 @@ async function handleFailure(
   const seen = new Set<string>();
 
   while (queue.length > 0) {
-    const { ref: current, source } = queue.shift()!;
+    const { ref: current, source: _source } = queue.shift()!;
     if (seen.has(current)) {
       continue;
     }

@@ -80,7 +80,7 @@ describe('runWorkflowWithScheduler', () => {
     const order: string[] = [];
     let mergeTriggeredBy: string | undefined;
 
-    const run = async (ref: string, context: WorkflowSchedulerRunContext) => {
+    const run = async (ref: string, context: WorkflowSchedulerRunContext): Promise<{ activePorts?: string[] | undefined } | null> => {
       order.push(ref);
       if (ref === 'branchFail') {
         await new Promise((resolve) => setTimeout(resolve, 5));
@@ -94,6 +94,8 @@ describe('runWorkflowWithScheduler', () => {
       if (ref === 'merge') {
         mergeTriggeredBy = context.triggeredBy;
       }
+
+      return null;
     };
 
     await expect(
@@ -159,12 +161,14 @@ describe('runWorkflowWithScheduler', () => {
 
     const contexts = new Map<string, WorkflowSchedulerRunContext>();
 
-    const run = async (ref: string, context: WorkflowSchedulerRunContext) => {
+    const run = async (ref: string, context: WorkflowSchedulerRunContext): Promise<{ activePorts?: string[] | undefined } | null> => {
       contexts.set(ref, context);
 
       if (ref === 'fail') {
         throw new Error('boom');
       }
+
+      return null;
     };
 
     await expect(

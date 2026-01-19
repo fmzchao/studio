@@ -2,9 +2,9 @@ import { z } from 'zod';
 import {
   componentRegistry,
   ContainerError,
+  ValidationError,
   runComponentWithRunner,
   type DockerRunnerConfig,
-  ValidationError,
   withPortMeta,
   coerceBooleanFromText,
   coerceNumberFromText,
@@ -14,7 +14,6 @@ import {
   parameters,
   param,
 } from '@shipsec/component-sdk';
-import type { ComponentDefinition } from '@shipsec/component-sdk';
 
 const variableConfigSchema = z.object({
   name: z.string().min(1),
@@ -63,9 +62,6 @@ const parameterSchema = parameters({
 // For dynamic outputs, we create a base schema and catchall is added in resolvePorts
 const inputSchema = inputs({});
 const baseOutputSchema = outputs({});
-
-// Type for dynamic outputs
-type DynamicOutput = Record<string, unknown>;
 
 const mapTypeToSchema = (type: string, label: string) => {
   switch (type) {

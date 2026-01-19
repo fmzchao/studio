@@ -228,7 +228,8 @@ export class LokiLogAdapter implements WorkflowLogSink {
 
     if (!this.ensureIndexPromise) {
       this.ensureIndexPromise = (async () => {
-        await this.db!.execute(sql`
+        if (!this.db) return;
+        await this.db.execute(sql`
           WITH ranked_streams AS (
             SELECT
               id,
@@ -246,7 +247,8 @@ export class LokiLogAdapter implements WorkflowLogSink {
           );
         `);
 
-        await this.db!.execute(sql`
+        if (!this.db) return;
+        await this.db.execute(sql`
           CREATE UNIQUE INDEX IF NOT EXISTS workflow_log_streams_run_node_stream_uidx
           ON workflow_log_streams (run_id, node_ref, stream);
         `);

@@ -31,7 +31,7 @@ const parameterSchema = parameters({
       .trim()
       .min(1, 'Port list cannot be empty')
       .optional()
-      .describe('Specific ports or ranges to scan (e.g. \"80,443,1000-2000\")'),
+      .describe('Specific ports or ranges to scan (e.g. "80,443,1000-2000")'),
     {
       label: 'Ports',
       editor: 'text',
