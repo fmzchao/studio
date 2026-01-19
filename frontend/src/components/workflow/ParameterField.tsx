@@ -862,7 +862,7 @@ export function ParameterField({
           JSON.parse(nextValue); // Validate JSON syntax
           setJsonError(null);
           onChange(nextValue); // Pass string, not parsed object
-        } catch (error) {
+        } catch (_error) {
           setJsonError('Invalid JSON');
           // Keep showing error, don't update parent
         }

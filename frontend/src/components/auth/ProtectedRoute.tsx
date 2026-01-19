@@ -145,7 +145,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
                 Sign In
               </Button>
               <p className="text-xs text-center text-muted-foreground">
-                You'll be redirected back after signing in
+                You&apos;ll be redirected back after signing in
               </p>
             </CardContent>
           </Card>
@@ -198,7 +198,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
               </div>
               <CardTitle>Insufficient Permissions</CardTitle>
               <CardDescription>
-                You don't have the required permissions to access this content
+                You don&apos;t have the required permissions to access this content
               </CardDescription>
             </CardHeader>
             <CardContent>

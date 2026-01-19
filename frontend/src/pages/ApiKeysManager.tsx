@@ -485,8 +485,8 @@ export function ApiKeysManager() {
               {confirmAction?.type === 'revoke' ? 'Revoke API Key' : 'Delete API Key'}
             </DialogTitle>
             <DialogDescription>
-              Are you sure you want to {confirmAction?.type} the key "
-              <span className="font-medium text-foreground">{confirmAction?.target.name}</span>"?
+              Are you sure you want to {confirmAction?.type} the key &quot;
+              <span className="font-medium text-foreground">{confirmAction?.target.name}</span>&quot;?
               {confirmAction?.type === 'revoke'
                 ? ' Applications using this key will immediately stop working.'
                 : ' This action cannot be undone.'}

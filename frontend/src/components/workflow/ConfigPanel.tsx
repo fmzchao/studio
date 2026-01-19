@@ -396,7 +396,8 @@ export function ConfigPanel({
     };
 
     if (value === undefined) {
-      delete updatedParams[paramId];
+      const { [paramId]: _removed, ...rest } = updatedParams;
+      updatedParams = rest;
     } else {
       updatedParams[paramId] = value;
     }
@@ -420,7 +421,8 @@ export function ConfigPanel({
     };
 
     if (value === undefined) {
-      delete updatedOverrides[inputId];
+      const { [inputId]: _removed, ...rest } = updatedOverrides;
+      updatedOverrides = rest;
     } else {
       updatedOverrides[inputId] = value;
     }
@@ -631,9 +633,8 @@ export function ConfigPanel({
         await onScheduleAction(schedule, action);
       } finally {
         setScheduleActionState((state) => {
-          const next = { ...state };
-          delete next[schedule.id];
-          return next;
+          const { [schedule.id]: _removed, ...rest } = state;
+          return rest;
         });
       }
     },

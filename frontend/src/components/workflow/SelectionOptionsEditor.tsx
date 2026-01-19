@@ -110,7 +110,7 @@ function toInternal(value: any): InternalOption[] {
       if (Array.isArray(parsed)) {
         list = parsed;
       }
-    } catch (e) {
+    } catch (_e) {
       // Might be comma separated string if it failed parsing
       list = value
         .split(',')

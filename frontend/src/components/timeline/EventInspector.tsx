@@ -328,7 +328,7 @@ export function EventInspector({ className, layoutVariant = 'stacked-soft' }: Ev
   const formatData = (data: Record<string, unknown>) => {
     try {
       return JSON.stringify(data, null, 2);
-    } catch (error) {
+    } catch (_error) {
       return 'Unable to render data payload';
     }
   };

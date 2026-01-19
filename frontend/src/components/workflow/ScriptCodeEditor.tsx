@@ -316,7 +316,7 @@ export function ScriptCodeEditor({
                   Your code must include <code className="bg-muted px-1 rounded">Input</code> and
                   <code className="bg-muted px-1 rounded">Output</code> interfaces, and a
                   <code className="bg-muted px-1 rounded">script</code> function. When you change
-                  variables, click "Sync Types" to update the interfaces.
+                  variables, click &quot;Sync Types&quot; to update the interfaces.
                 </p>
               </div>
 
@@ -346,7 +346,7 @@ function script(input: Input): Output {
               <div>
                 <h4 className="font-semibold mb-1">External Packages</h4>
                 <p className="text-muted-foreground mb-2 text-sm">
-                  Import any npm package directly using URLs from CDNs like <code>esm.sh</code> or{' '}
+                  Import any npm package directly using URLs from CDNs like <code>esm.sh</code> or
                   <code>unpkg.com</code>:
                 </p>
                 <pre className="text-xs bg-muted p-2 rounded overflow-x-auto text-muted-foreground mb-3">

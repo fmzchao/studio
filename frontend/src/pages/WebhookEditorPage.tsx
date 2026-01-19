@@ -119,7 +119,7 @@ export function WebhookEditorPage() {
     if (!initialForm) return false;
     try {
       return JSON.stringify(form) !== JSON.stringify(initialForm);
-    } catch (e) {
+    } catch (_e) {
       return true;
     }
   }, [form, initialForm]);

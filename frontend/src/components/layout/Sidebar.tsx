@@ -629,7 +629,7 @@ export function Sidebar({ canManageWorkflows = true }: SidebarProps) {
                   ) !== 1
                     ? ' components'
                     : ' component'}{' '}
-                  matching "{searchQuery}"
+                  matching &quot;{searchQuery}&quot;
                 </div>
               )}
 
@@ -734,7 +734,7 @@ export function Sidebar({ canManageWorkflows = true }: SidebarProps) {
                 ) && (
                   <div className="text-center py-8">
                     <p className="text-sm text-muted-foreground">
-                      No components found matching "{searchQuery}"
+                      No components found matching &quot;{searchQuery}&quot;
                     </p>
                     <p className="text-xs text-muted-foreground mt-1">
                       Try different keywords or clear the search

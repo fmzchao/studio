@@ -121,7 +121,7 @@ export function RunWorkflowDialog({
     } else if (normalizedType === 'json') {
       try {
         parsedValue = value ? JSON.parse(value as string) : undefined;
-      } catch (error) {
+      } catch (_error) {
         setErrors((prev) => ({
           ...prev,
           [inputId]: 'Invalid JSON format',

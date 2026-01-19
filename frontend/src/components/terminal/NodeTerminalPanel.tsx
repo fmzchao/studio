@@ -194,7 +194,7 @@ export function NodeTerminalPanel({
       if (fitAddonRef.current) {
         try {
           fitAddonRef.current.fit();
-        } catch (error) {
+        } catch (_error) {
           // Ignore resize errors during terminal recreation
         }
       }
@@ -336,7 +336,7 @@ export function NodeTerminalPanel({
         if (fitAddonRef.current) {
           try {
             fitAddonRef.current.fit();
-          } catch (error) {
+          } catch (_error) {
             // Ignore fit errors during terminal recreation
           }
         }

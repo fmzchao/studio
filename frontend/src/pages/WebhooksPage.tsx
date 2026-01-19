@@ -107,11 +107,11 @@ export function WebhooksPage() {
           name: workflow.name ?? 'Untitled workflow',
         }));
         setWorkflowOptions(normalized);
-      } catch (err) {
-        console.error('Failed to load workflows', err);
+      } catch (_err) {
+        console.error('Failed to load workflows', _err);
         toast({
           title: 'Unable to load workflows',
-          description: err instanceof Error ? err.message : 'Please try refreshing the page.',
+          description: _err instanceof Error ? _err.message : 'Please try refreshing the page.',
           variant: 'destructive',
         });
       } finally {
@@ -166,7 +166,7 @@ export function WebhooksPage() {
         title: 'Webhook URL copied',
         description: 'The webhook URL has been copied to your clipboard.',
       });
-    } catch (err) {
+    } catch (_err) {
       toast({
         title: 'Failed to copy',
         description: 'Could not copy the webhook URL to clipboard.',
@@ -182,10 +182,10 @@ export function WebhooksPage() {
         title: 'Webhooks refreshed',
         description: 'Latest webhook configurations have been loaded.',
       });
-    } catch (err) {
+    } catch (_err) {
       toast({
         title: 'Refresh failed',
-        description: err instanceof Error ? err.message : 'Try again in a moment.',
+        description: _err instanceof Error ? _err.message : 'Try again in a moment.',
         variant: 'destructive',
       });
     }
@@ -211,10 +211,10 @@ export function WebhooksPage() {
         title: 'Webhook deleted',
         description: `Successfully deleted webhook ${webhook.name}`,
       });
-    } catch (err) {
+    } catch (_err) {
       toast({
         title: 'Failed to delete webhook',
-        description: err instanceof Error ? err.message : 'Unknown error occurred',
+        description: _err instanceof Error ? _err.message : 'Unknown error occurred',
         variant: 'destructive',
       });
     } finally {
@@ -242,10 +242,10 @@ export function WebhooksPage() {
         title: 'URL regenerated',
         description: 'New webhook URL has been generated',
       });
-    } catch (err) {
+    } catch (_err) {
       toast({
         title: 'Failed to regenerate URL',
-        description: err instanceof Error ? err.message : 'Unknown error occurred',
+        description: _err instanceof Error ? _err.message : 'Unknown error occurred',
         variant: 'destructive',
       });
     } finally {
@@ -499,8 +499,8 @@ export function WebhooksPage() {
                           <Link2 className="h-10 w-10 text-muted-foreground" />
                           <p className="font-medium">No webhooks found</p>
                           <p className="text-sm text-muted-foreground max-w-lg">
-                            Create your first webhook with the "New webhook" button or tweak the
-                            filters above.
+                            Create your first webhook with the &quot;New webhook&quot; button or tweak the
+                            filters above.&nbsp;
                           </p>
                         </div>
                       </TableCell>

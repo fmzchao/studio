@@ -103,7 +103,7 @@ export function NodeIOInspector() {
               outputs: detail.outputs || null,
               errorMessage: detail.errorMessage || null,
             } as NodeIO);
-          } catch (err) {
+          } catch (_err) {
             setSelectedNodeIO(null);
           }
         };

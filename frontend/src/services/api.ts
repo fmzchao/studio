@@ -107,7 +107,7 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
       } else {
         // If we can't get a fresh token, fall back to store token
       }
-    } catch (error) {
+    } catch (_error) {
       // Fall back to store token if fresh token fetch fails
     }
   }
@@ -635,7 +635,7 @@ export const api = {
             token = freshToken;
             storeState.setToken(freshToken);
           }
-        } catch (error) {
+        } catch (_error) {
           // Ignore token fetch errors for SSE, will fallback to existing
         }
       }

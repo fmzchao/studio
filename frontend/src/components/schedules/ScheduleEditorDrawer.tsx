@@ -273,9 +273,8 @@ export function ScheduleEditorDrawer({
   const handleRuntimeInputChange = (input: RuntimeInputDefinition, value: unknown) => {
     const inputType = normalizeRuntimeInputType(input.type);
     setRuntimeErrors((prev) => {
-      const next = { ...prev };
-      delete next[input.id];
-      return next;
+      const { [input.id]: _removed, ...rest } = prev;
+      return rest;
     });
 
     let parsedValue: unknown = value;
@@ -324,9 +323,8 @@ export function ScheduleEditorDrawer({
   const handleFileUpload = async (inputId: string, file: File) => {
     setUploading((prev) => ({ ...prev, [inputId]: true }));
     setRuntimeErrors((prev) => {
-      const next = { ...prev };
-      delete next[inputId];
-      return next;
+      const { [inputId]: _removed, ...rest } = prev;
+      return rest;
     });
     try {
       const fileData = await api.files.upload(file);
@@ -352,14 +350,12 @@ export function ScheduleEditorDrawer({
 
   const removeOverrideNode = (nodeId: string) => {
     setNodeOverridesDraft((prev) => {
-      const next = { ...prev };
-      delete next[nodeId];
-      return next;
+      const { [nodeId]: _removed, ...rest } = prev;
+      return rest;
     });
     setNodeOverrideErrors((prev) => {
-      const next = { ...prev };
-      delete next[nodeId];
-      return next;
+      const { [nodeId]: _removed, ...rest } = prev;
+      return rest;
     });
   };
 
@@ -367,9 +363,8 @@ export function ScheduleEditorDrawer({
     setNodeOverridesDraft((prev) => ({ ...prev, [nodeId]: value }));
     if (!value.trim()) {
       setNodeOverrideErrors((prev) => {
-        const next = { ...prev };
-        delete next[nodeId];
-        return next;
+        const { [nodeId]: _removed, ...rest } = prev;
+        return rest;
       });
       return;
     }
@@ -377,9 +372,8 @@ export function ScheduleEditorDrawer({
       const parsed = JSON.parse(value);
       if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
         setNodeOverrideErrors((prev) => {
-          const next = { ...prev };
-          delete next[nodeId];
-          return next;
+          const { [nodeId]: _removed, ...rest } = prev;
+          return rest;
         });
       } else {
         setNodeOverrideErrors((prev) => ({
