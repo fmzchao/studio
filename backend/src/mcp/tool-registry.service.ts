@@ -11,6 +11,7 @@
 
 import { Injectable, Logger, Inject, OnModuleDestroy } from '@nestjs/common';
 import type Redis from 'ioredis';
+import { type ToolInputSchema } from '@shipsec/component-sdk';
 import { SecretsEncryptionService } from '../secrets/secrets.encryption';
 
 export const TOOL_REGISTRY_REDIS = Symbol('TOOL_REGISTRY_REDIS');
@@ -24,20 +25,6 @@ export type RegisteredToolType = 'component' | 'remote-mcp' | 'local-mcp';
  * Status of a registered tool
  */
 export type ToolStatus = 'pending' | 'ready' | 'error';
-
-/**
- * JSON Schema for tool input
- */
-export interface ToolInputSchema {
-  type: 'object';
-  properties: Record<string, {
-    type: string;
-    description?: string;
-    enum?: unknown[];
-    items?: unknown;
-  }>;
-  required: string[];
-}
 
 /**
  * A tool registered in the registry
@@ -237,7 +224,9 @@ export class ToolRegistryService implements OnModuleDestroy {
     await this.redis.hset(key, nodeId, JSON.stringify(tool));
     await this.redis.expire(key, REGISTRY_TTL_SECONDS);
 
-    this.logger.log(`Registered local MCP: ${toolName} (node: ${nodeId}, container: ${containerId}, run: ${runId})`);
+    this.logger.log(
+      `Registered local MCP: ${toolName} (node: ${nodeId}, container: ${containerId}, run: ${runId})`,
+    );
   }
 
   /**
@@ -251,7 +240,7 @@ export class ToolRegistryService implements OnModuleDestroy {
     const key = this.getRegistryKey(runId);
     const toolsHash = await this.redis.hgetall(key);
 
-    return Object.values(toolsHash).map(json => JSON.parse(json) as RegisteredTool);
+    return Object.values(toolsHash).map((json) => JSON.parse(json) as RegisteredTool);
   }
 
   /**
@@ -277,7 +266,7 @@ export class ToolRegistryService implements OnModuleDestroy {
    */
   async getToolByName(runId: string, toolName: string): Promise<RegisteredTool | null> {
     const tools = await this.getToolsForRun(runId);
-    return tools.find(t => t.toolName === toolName) ?? null;
+    return tools.find((t) => t.toolName === toolName) ?? null;
   }
 
   /**
@@ -362,13 +351,15 @@ export class ToolRegistryService implements OnModuleDestroy {
 
     const tools = await this.getToolsForRun(runId);
     const containerIds = tools
-      .filter(t => t.type === 'local-mcp' && t.containerId)
-      .map(t => t.containerId!);
+      .filter((t) => t.type === 'local-mcp' && t.containerId)
+      .map((t) => t.containerId!);
 
     const key = this.getRegistryKey(runId);
     await this.redis.del(key);
 
-    this.logger.log(`Cleaned up tool registry for run ${runId} (${tools.length} tools, ${containerIds.length} containers)`);
+    this.logger.log(
+      `Cleaned up tool registry for run ${runId} (${tools.length} tools, ${containerIds.length} containers)`,
+    );
 
     return containerIds;
   }

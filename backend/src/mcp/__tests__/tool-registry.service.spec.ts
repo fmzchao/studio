@@ -1,10 +1,10 @@
-import { describe, it, expect, beforeEach, mock } from 'bun:test';
-import { ToolRegistryService, TOOL_REGISTRY_REDIS } from '../tool-registry.service';
+import { describe, it, expect, beforeEach } from 'bun:test';
+import { ToolRegistryService } from '../tool-registry.service';
 import type { SecretsEncryptionService } from '../../secrets/secrets.encryption';
 
 // Mock Redis
 class MockRedis {
-  private data: Map<string, Map<string, string>> = new Map();
+  private data = new Map<string, Map<string, string>>();
 
   async hset(key: string, field: string, value: string): Promise<number> {
     if (!this.data.has(key)) {
@@ -58,10 +58,7 @@ describe('ToolRegistryService', () => {
   beforeEach(() => {
     redis = new MockRedis();
     encryption = new MockEncryptionService();
-    service = new ToolRegistryService(
-      redis as any,
-      encryption as any as SecretsEncryptionService,
-    );
+    service = new ToolRegistryService(redis as any, encryption as any as SecretsEncryptionService);
   });
 
   describe('registerComponentTool', () => {
@@ -113,7 +110,7 @@ describe('ToolRegistryService', () => {
 
       const tools = await service.getToolsForRun('run-1');
       expect(tools.length).toBe(2);
-      expect(tools.map(t => t.toolName).sort()).toEqual(['tool_a', 'tool_b']);
+      expect(tools.map((t) => t.toolName).sort()).toEqual(['tool_a', 'tool_b']);
     });
   });
 
