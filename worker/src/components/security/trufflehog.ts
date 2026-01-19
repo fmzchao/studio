@@ -282,7 +282,7 @@ function parseRawOutput(rawOutput: string): Output {
       if (secret.Verified === true) {
         verifiedCount++;
       }
-    } catch (error) {
+    } catch (_error) {
       // Skip non-JSON lines (like status messages)
       continue;
     }

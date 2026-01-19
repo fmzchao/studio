@@ -391,7 +391,7 @@ export function ConfigPanel({
     const nodeData: FrontendNodeData = selectedNode.data;
     const config = nodeData.config || { params: {}, inputOverrides: {} };
 
-    const updatedParams = {
+    let updatedParams = {
       ...(config.params ?? {}),
     };
 
@@ -416,7 +416,7 @@ export function ConfigPanel({
     const nodeData: FrontendNodeData = selectedNode.data;
     const config = nodeData.config || { params: {}, inputOverrides: {} };
 
-    const updatedOverrides = {
+    let updatedOverrides = {
       ...(config.inputOverrides ?? {}),
     };
 

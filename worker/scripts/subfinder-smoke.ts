@@ -21,7 +21,15 @@ async function main() {
     domains: ['hackerone.com', 'bugcrowd.com', 'projectdiscovery.io'],
   });
 
-  const result = await runComponentWithRunner(component.runner, component.execute, input, context);
+  const result = await runComponentWithRunner(
+    component.runner,
+    component.execute,
+    {
+      inputs: input,
+      params: {},
+    },
+    context,
+  );
   console.log(JSON.stringify(result, null, 2));
 }
 

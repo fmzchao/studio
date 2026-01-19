@@ -23,12 +23,8 @@ describe('naabu component', () => {
     const component = componentRegistry.get<NaabuInput, NaabuOutput>('shipsec.naabu.scan');
     if (!component) throw new Error('Component not registered');
 
-    const inputValues = {
-      targets: ['scanme.sh'],
-    };
     const paramValues = {};
 
-    const parsedInputs = component.inputs.parse(inputValues);
     const parsedParams = component.parameters!.parse(paramValues);
 
     expect(parsedParams.retries).toBe(1);

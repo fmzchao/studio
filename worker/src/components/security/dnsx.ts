@@ -58,8 +58,6 @@ const inputSchema = inputs({
   ),
 });
 
-type Input = z.infer<typeof inputSchema>;
-
 const parameterSchema = parameters({
   recordTypes: param(z.array(recordTypeEnum).default(['A']), {
     label: 'Record Types',

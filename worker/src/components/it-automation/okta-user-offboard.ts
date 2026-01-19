@@ -73,15 +73,6 @@ interface AuditLog {
   };
 }
 
-interface OktaUserOffboardResult {
-  success: boolean;
-  audit: AuditLog;
-  error?: string;
-  userDeactivated: boolean;
-  userDeleted: boolean;
-  message: string;
-}
-
 const auditSchema = z.object({
   timestamp: z.string(),
   action: z.string(),

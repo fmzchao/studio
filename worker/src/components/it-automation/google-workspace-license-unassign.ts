@@ -286,7 +286,7 @@ const definition = defineComponent({
     }
 
     let beforeState: UserState | undefined;
-    let userDeleted = false;
+    let _userDeleted = false;
 
     try {
       // Validate secret input
@@ -331,13 +331,13 @@ const definition = defineComponent({
       if (!dry_run) {
         context.emitProgress('Deleting user account');
         await deleteUser(primary_email, adminClient);
-        userDeleted = true;
+        _userDeleted = true;
         context.logger.info(
           `[GoogleWorkspace] Successfully deleted user account: ${primary_email}`,
         );
       } else {
         context.emitProgress('DRY RUN: Would delete user account');
-        userDeleted = true; // Simulate successful deletion
+        _userDeleted = true; // Simulate successful deletion
       }
 
       const auditLog: AuditLog = {

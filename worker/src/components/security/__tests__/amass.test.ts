@@ -23,12 +23,8 @@ describe('amass component', () => {
     const component = componentRegistry.get<AmassInput, AmassOutput>('shipsec.amass.enum');
     if (!component) throw new Error('Component not registered');
 
-    const inputValues = {
-      domains: ['example.com'],
-    };
     const paramValues = {};
 
-    const parsedInputs = component.inputs.parse(inputValues);
     const parsedParams = component.parameters!.parse(paramValues);
 
     expect(parsedParams.active).toBe(false);

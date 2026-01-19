@@ -1,4 +1,4 @@
-import { describe, it, expect, mock, beforeEach, afterEach } from 'bun:test';
+import { describe, it, expect, mock, beforeEach } from 'bun:test';
 import { extractPorts } from '@shipsec/component-sdk';
 import { definition } from '../slack';
 

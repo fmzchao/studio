@@ -4,10 +4,7 @@ import {
   ComponentRetryPolicy,
   type ExecutionContext,
   ConfigurationError,
-  AuthenticationError,
-  PermissionError,
   NetworkError,
-  TimeoutError,
   NotFoundError,
   fromHttpResponse,
   defineComponent,
@@ -370,173 +367,6 @@ async function fetchConnectionAccessToken(
   };
 }
 
-async function completeDeviceAuthorization(
-  clientId: string,
-  clientSecret: string,
-  context: ExecutionContext,
-): Promise<{ accessToken: string; scope?: string }> {
-  context.emitProgress('Starting GitHub device authorization...');
-  const device = await requestDeviceCode(clientId, context);
-
-  const instructionUrl = device.verificationUriComplete ?? device.verificationUri;
-  context.logger.info(
-    `[GitHub] Prompting for device authorization at ${instructionUrl}. Code ${device.userCode}`,
-  );
-  context.emitProgress(
-    `Authorize GitHub access at ${instructionUrl} using code ${device.userCode}. Waiting for approval...`,
-  );
-
-  const token = await pollForAccessToken(clientId, clientSecret, device, context);
-  context.emitProgress('GitHub authorization successful.');
-  return token;
-}
-
-interface DeviceCodeDetails {
-  deviceCode: string;
-  userCode: string;
-  verificationUri: string;
-  verificationUriComplete?: string;
-  expiresIn: number;
-  interval?: number;
-}
-
-async function requestDeviceCode(
-  clientId: string,
-  context: ExecutionContext,
-): Promise<DeviceCodeDetails> {
-  const body = new URLSearchParams({
-    client_id: clientId,
-    scope: 'admin:org read:org',
-  });
-
-  const response = await context.http.fetch('https://github.com/login/device/code', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      Accept: 'application/json',
-    },
-    body: body.toString(),
-  });
-
-  if (!response.ok) {
-    const raw = await safeReadText(response);
-    throw fromHttpResponse(response, `Failed to initiate GitHub device authorization: ${raw}`);
-  }
-
-  const payload = (await response.json()) as {
-    device_code?: string;
-    user_code?: string;
-    verification_uri?: string;
-    verification_uri_complete?: string;
-    expires_in?: number;
-    interval?: number;
-    error?: string;
-    error_description?: string;
-  };
-
-  if (payload.error) {
-    throw new AuthenticationError(
-      `GitHub device authorization error: ${payload.error_description ?? payload.error}`,
-      { details: { error: payload.error, errorDescription: payload.error_description } },
-    );
-  }
-
-  if (
-    !payload.device_code ||
-    !payload.user_code ||
-    !payload.verification_uri ||
-    !payload.expires_in
-  ) {
-    throw new AuthenticationError(
-      'GitHub device authorization response was missing required fields.',
-      {
-        details: { receivedFields: Object.keys(payload) },
-      },
-    );
-  }
-
-  return {
-    deviceCode: payload.device_code,
-    userCode: payload.user_code,
-    verificationUri: payload.verification_uri,
-    verificationUriComplete: payload.verification_uri_complete,
-    expiresIn: payload.expires_in,
-    interval: payload.interval,
-  };
-}
-
-async function pollForAccessToken(
-  clientId: string,
-  clientSecret: string,
-  device: DeviceCodeDetails,
-  context: ExecutionContext,
-): Promise<{ accessToken: string; scope?: string }> {
-  const params = new URLSearchParams({
-    client_id: clientId,
-    device_code: device.deviceCode,
-    grant_type: 'urn:ietf:params:oauth:grant-type:device_code',
-    client_secret: clientSecret,
-  });
-
-  const timeoutAt = Date.now() + device.expiresIn * 1000;
-  let pollIntervalMs = Math.max(0, (device.interval ?? 5) * 1000);
-
-  while (Date.now() < timeoutAt) {
-    await delay(pollIntervalMs);
-
-    const response = await context.http.fetch('https://github.com/login/oauth/access_token', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        Accept: 'application/json',
-      },
-      body: params.toString(),
-    });
-
-    if (!response.ok) {
-      const raw = await safeReadText(response);
-      throw fromHttpResponse(response, `Failed to exchange GitHub device code: ${raw}`);
-    }
-
-    const payload = (await response.json()) as {
-      access_token?: string;
-      scope?: string;
-      token_type?: string;
-      error?: string;
-      error_description?: string;
-    };
-
-    if (payload.access_token) {
-      context.logger.info('[GitHub] Device authorization approved.');
-      return {
-        accessToken: payload.access_token,
-        scope: payload.scope,
-      };
-    }
-
-    switch (payload.error) {
-      case 'authorization_pending':
-        context.emitProgress('Waiting for GitHub authorization approval...');
-        continue;
-      case 'slow_down':
-        pollIntervalMs += 5000;
-        context.emitProgress('GitHub asked to slow down polling, increasing interval.');
-        continue;
-      case 'access_denied':
-        throw new PermissionError('GitHub authorization was denied by the user.');
-      case 'expired_token':
-        throw new TimeoutError('GitHub device authorization expired before approval.', 0);
-      default:
-        throw new AuthenticationError(
-          `GitHub device authorization failed: ${payload.error_description ?? payload.error ?? 'unknown_error'}`,
-          { details: { error: payload.error, errorDescription: payload.error_description } },
-        );
-    }
-  }
-
-  throw new TimeoutError('Timed out waiting for GitHub device authorization to complete.', 0);
-}
-
 async function resolveLogin(
   identifier: string,
   headers: Record<string, string>,
@@ -583,13 +413,6 @@ async function resolveLogin(
 
   context.logger.info(`[GitHub] Using provided username ${trimmed}.`);
   return trimmed;
-}
-
-async function delay(ms: number): Promise<void> {
-  if (ms <= 0) {
-    return;
-  }
-  await new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 async function safeReadText(response: Response): Promise<string> {

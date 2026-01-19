@@ -17,7 +17,7 @@ import {
 } from '@shipsec/component-sdk';
 
 import type { DockerRunnerConfig } from '@shipsec/component-sdk';
-import { awsCredentialSchema, awsCredentialContractName } from '@shipsec/contracts';
+import { awsCredentialSchema } from '@shipsec/contracts';
 import { IsolatedContainerVolume } from '../../utils/isolated-volume';
 
 const recommendedFlagOptions = [
@@ -822,7 +822,7 @@ function parseSegment(segment: string, segmentIndex: number, errors: string[]): 
       }
       return [parsed];
     }
-  } catch (error) {
+  } catch (_error) {
     // Fallback to NDJSON parsing
     const ndjsonResults: unknown[] = [];
     trimmed

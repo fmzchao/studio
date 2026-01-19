@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach, mock } from 'bun:test';
 import '../../index';
-import { ExecutionContext } from '@shipsec/component-sdk';
 import { createMockExecutionContext } from '../../../testing/test-utils';
 
 // Mock the Okta SDK

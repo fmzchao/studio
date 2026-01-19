@@ -515,7 +515,7 @@ const definition = defineComponent({
         `[Nuclei] Scan complete: ${findings.length} finding(s) from ${parsedInputs.targets.length} target(s)`,
       );
 
-      const output: Output = {
+      const output = {
         findings,
         rawOutput: stdout,
         targetCount: parsedInputs.targets.length,
@@ -761,7 +761,7 @@ function parseNucleiOutput(raw: string, context: any): Finding[] {
 
 function extractStats(
   stderr: string,
-  output: string,
+  _output: string,
 ): { templatesLoaded: number; requestsSent: number; duration: number } {
   const stats = {
     templatesLoaded: 0,
@@ -790,7 +790,7 @@ function extractStats(
 componentRegistry.register(definition);
 
 // Create local type aliases for backward compatibility
-type Input = (typeof inputSchema)['__inferred'];
-type Output = (typeof outputSchema)['__inferred'];
+type Input = typeof inputSchema;
+type Output = typeof outputSchema;
 
 export type { Input as NucleiInput, Output as NucleiOutput };

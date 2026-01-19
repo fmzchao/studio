@@ -127,7 +127,7 @@ const definition = defineComponent({
       case 'file':
         endpoint = `${baseUrl}/files/${indicator}`;
         break;
-      case 'url':
+      case 'url': {
         // URL endpoints usually require the URL to be base64 encoded without padding
         const b64Url = Buffer.from(indicator)
           .toString('base64')
@@ -136,6 +136,7 @@ const definition = defineComponent({
           .replace(/\//g, '_');
         endpoint = `${baseUrl}/urls/${b64Url}`;
         break;
+      }
     }
 
     context.logger.info(`[VirusTotal] Checking ${type}: ${indicator}`);

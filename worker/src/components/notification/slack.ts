@@ -185,7 +185,7 @@ const definition = defineComponent({
       try {
         const interpolated = interpolate(blocks, contextData);
         finalBlocks = JSON.parse(interpolated);
-      } catch (e) {
+      } catch (_e) {
         context.logger.warn(
           '[Slack] Failed to parse blocks JSON after interpolation, sending as raw string',
         );

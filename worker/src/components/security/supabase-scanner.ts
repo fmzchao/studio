@@ -346,11 +346,11 @@ const definition = defineComponent({
             issues = Array.isArray(safe.data.issues) ? (safe.data.issues as unknown[]) : undefined;
           }
           stdoutCombined = text.trim();
-        } catch (e) {
+        } catch (_e) {
           report = { raw: text };
           stdoutCombined = text.trim();
         }
-      } catch (e) {
+      } catch (_e) {
         context.logger.error('[SupabaseScanner] Output JSON file not found or unreadable.');
         errors.push('Scanner output file not found.');
       }

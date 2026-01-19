@@ -63,6 +63,7 @@ const serialDefinition: WorkflowDefinition = {
       params: {},
       dependsOn: [],
       inputMappings: {},
+      inputOverrides: {},
     },
     {
       ref: 'stepA',
@@ -70,6 +71,7 @@ const serialDefinition: WorkflowDefinition = {
       params: { delay: 150, label: 'A' },
       dependsOn: ['start'],
       inputMappings: {},
+      inputOverrides: {},
     },
     {
       ref: 'stepB',
@@ -77,6 +79,7 @@ const serialDefinition: WorkflowDefinition = {
       params: { delay: 150, label: 'B' },
       dependsOn: ['stepA'],
       inputMappings: {},
+      inputOverrides: {},
     },
     {
       ref: 'stepC',
@@ -84,6 +87,7 @@ const serialDefinition: WorkflowDefinition = {
       params: { delay: 150, label: 'C' },
       dependsOn: ['stepB'],
       inputMappings: {},
+      inputOverrides: {},
     },
   ],
 };
@@ -122,6 +126,7 @@ const parallelDefinition: WorkflowDefinition = {
       params: {},
       dependsOn: [],
       inputMappings: {},
+      inputOverrides: {},
     },
     {
       ref: 'branch1',
@@ -129,6 +134,7 @@ const parallelDefinition: WorkflowDefinition = {
       params: { delay: 150, label: 'branch-1' },
       dependsOn: ['start'],
       inputMappings: {},
+      inputOverrides: {},
     },
     {
       ref: 'branch2',
@@ -136,6 +142,7 @@ const parallelDefinition: WorkflowDefinition = {
       params: { delay: 150, label: 'branch-2' },
       dependsOn: ['start'],
       inputMappings: {},
+      inputOverrides: {},
     },
     {
       ref: 'merge',
@@ -143,6 +150,7 @@ const parallelDefinition: WorkflowDefinition = {
       params: { data: 'merge complete' },
       dependsOn: ['branch1', 'branch2'],
       inputMappings: {},
+      inputOverrides: {},
     },
   ],
 };

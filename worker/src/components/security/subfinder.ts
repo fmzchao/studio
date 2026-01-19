@@ -286,8 +286,6 @@ subfinder -silent -dL /inputs/domains.txt 2>/dev/null || true
 
 componentRegistry.register(definition);
 
-// Create local type aliases for backward compatibility
-type Input = (typeof inputSchema)['__inferred'];
 type Output = (typeof outputSchema)['__inferred'];
 
 type SubfinderInput = typeof inputSchema;

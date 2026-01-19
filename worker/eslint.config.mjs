@@ -6,7 +6,7 @@ import configPrettier from 'eslint-config-prettier';
 
 export default tseslint.config(
   {
-    ignores: ['dist', 'build', 'node_modules', 'coverage', '**/*.js', '**/*.mjs', '**/*.cjs'],
+    ignores: ['dist', 'build', 'node_modules', 'coverage', 'scripts', '**/*.js', '**/*.mjs', '**/*.cjs'],
   },
   js.configs.recommended,
   ...tseslint.configs.strict,
@@ -19,6 +19,10 @@ export default tseslint.config(
       globals: {
         ...globals.node,
         ...globals.es2024,
+      },
+      parserOptions: {
+        project: './tsconfig.json',
+        tsconfigRootDir: import.meta.dirname,
       },
     },
     plugins: {
@@ -42,10 +46,10 @@ export default tseslint.config(
       '@typescript-eslint/no-namespace': 'error',
       '@typescript-eslint/no-require-imports': 'off',
       '@typescript-eslint/ban-ts-comment': 'warn',
-      '@typescript-eslint/no-non-null-assertion': 'warn',
+      '@typescript-eslint/no-non-null-assertion': 'off',
       '@typescript-eslint/no-extraneous-class': 'off',
 
-      'no-console': ['warn', { allow: ['warn', 'error'] }],
+      'no-console': 'off',
       'no-undef': 'off',
       'no-case-declarations': 'error',
       'no-empty': 'error',

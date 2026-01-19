@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterEach, vi } from 'bun:test';
 import * as sdk from '@shipsec/component-sdk';
 import { componentRegistry } from '../../index';
-import { AbuseIPDBInput, AbuseIPDBOutput, definition } from '../abuseipdb';
+import { AbuseIPDBInput, AbuseIPDBOutput } from '../abuseipdb';
 
 describe('abuseipdb component', () => {
   beforeAll(async () => {

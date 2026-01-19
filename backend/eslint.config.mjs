@@ -20,6 +20,10 @@ export default tseslint.config(
         ...globals.node,
         ...globals.es2024,
       },
+      parserOptions: {
+        project: './tsconfig.json',
+        tsconfigRootDir: import.meta.dirname,
+      },
     },
     plugins: {
       prettier,

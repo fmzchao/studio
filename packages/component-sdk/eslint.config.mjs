@@ -14,6 +14,7 @@ export default [
       parserOptions: {
         ecmaVersion: "latest",
         sourceType: "module",
+        tsconfigRootDir: import.meta.dirname,
       },
     },
     plugins: {

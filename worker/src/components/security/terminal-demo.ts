@@ -220,7 +220,7 @@ const definition = defineComponent({
         } else {
           parsedOutput.rawOutput = raw.trim();
         }
-      } catch (e) {
+      } catch (_e) {
         // If parsing fails, use the raw string as output (but filter out any JSON input that leaked)
         const cleaned = raw
           .replace(/\{"target".*?\}/g, '')
