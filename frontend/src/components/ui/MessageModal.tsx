@@ -18,6 +18,7 @@ interface MessageModalProps {
 }
 
 export function MessageModal({ open, onOpenChange, title, message }: MessageModalProps) {
+  // eslint-disable-next-line no-control-regex
   const hasAnsi = /\u001b\[[0-9;]*m/.test(message);
   const [wrap, setWrap] = useState(true);
   const [colorize, setColorize] = useState(true);
@@ -30,18 +31,24 @@ export function MessageModal({ open, onOpenChange, title, message }: MessageModa
       const c = localStorage.getItem('messageModal.color');
       if (c !== null) setColorize(c === '1');
       else setColorize(hasAnsi);
-    } catch {}
+    } catch {
+      // Ignore localStorage errors (e.g., in iframes or when cookies disabled)
+    }
   }, []);
 
   useEffect(() => {
     try {
       localStorage.setItem('messageModal.wrap', wrap ? '1' : '0');
-    } catch {}
+    } catch {
+      // Ignore localStorage errors (e.g., in iframes or when cookies disabled)
+    }
   }, [wrap]);
   useEffect(() => {
     try {
       localStorage.setItem('messageModal.color', colorize ? '1' : '0');
-    } catch {}
+    } catch {
+      // Ignore localStorage errors (e.g., in iframes or when cookies disabled)
+    }
   }, [colorize]);
 
   const ansiHtml = useMemo(() => {

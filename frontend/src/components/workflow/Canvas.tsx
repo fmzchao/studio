@@ -554,7 +554,9 @@ export function Canvas({
           workflow_id: workflowId ?? undefined,
           component_slug: String(component.slug ?? component.id),
         });
-      } catch {}
+      } catch {
+        // Ignore analytics tracking errors
+      }
 
       // Mark workflow as dirty
       markDirty();

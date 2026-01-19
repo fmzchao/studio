@@ -699,7 +699,7 @@ export const useExecutionTimelineStore = create<TimelineStore>()(
             ? state.eventDuration
             : state.events.length > 0 && state.timelineStartTime !== null
               ? new Date(state.events[state.events.length - 1].timestamp).getTime() -
-              state.timelineStartTime
+                state.timelineStartTime
               : 0;
 
         const normalized = normalizeDataPackets(packets, state.timelineStartTime, derivedDuration);

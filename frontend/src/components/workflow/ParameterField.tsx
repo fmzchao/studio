@@ -578,7 +578,7 @@ export function ParameterField({
       );
     }
 
-    case 'multi-select':
+    case 'multi-select': {
       const selectedValues = Array.isArray(currentValue) ? currentValue : [];
       return (
         <div className="space-y-2">
@@ -622,6 +622,7 @@ export function ParameterField({
           )}
         </div>
       );
+    }
 
     case 'file':
       return (
