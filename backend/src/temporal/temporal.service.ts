@@ -201,6 +201,19 @@ export class TemporalService implements OnModuleDestroy {
     await handle.signal(input.signalName, input.args);
   }
 
+  /**
+   * Query a running workflow for state
+   */
+  async queryWorkflow<T = unknown>(input: {
+    workflowId: string;
+    queryType: string;
+    args?: unknown[];
+  }): Promise<T> {
+    const handle = await this.getWorkflowHandle({ workflowId: input.workflowId });
+    this.logger.debug(`Querying workflow ${input.workflowId} with query '${input.queryType}'`);
+    return handle.query(input.queryType, ...(input.args ?? []));
+  }
+
   private async getWorkflowHandle(ref: WorkflowRunReference): Promise<WorkflowHandle<any>> {
     const client = await this.getClient();
     return client.getHandle(ref.workflowId, ref.runId);
@@ -232,8 +245,7 @@ export class TemporalService implements OnModuleDestroy {
       } catch (error) {
         this.clientPromise = undefined;
         this.logger.error(
-          `Failed to connect to Temporal: ${
-            error instanceof Error ? error.message : String(error)
+          `Failed to connect to Temporal: ${error instanceof Error ? error.message : String(error)
           }`,
         );
         throw error;
@@ -251,8 +263,7 @@ export class TemporalService implements OnModuleDestroy {
     } catch (error) {
       if (!this.isNotFoundError(error)) {
         this.logger.error(
-          `Failed to describe Temporal namespace ${this.namespace}: ${
-            error instanceof Error ? error.message : String(error)
+          `Failed to describe Temporal namespace ${this.namespace}: ${error instanceof Error ? error.message : String(error)
           }`,
         );
         throw error;

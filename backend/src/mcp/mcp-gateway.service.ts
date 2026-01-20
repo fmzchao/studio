@@ -1,9 +1,8 @@
-import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { ErrorCode, McpError } from '@modelcontextprotocol/sdk/types.js';
-import { componentRegistry } from '@shipsec/component-sdk';
 
 import { ToolRegistryService, RegisteredTool } from './tool-registry.service';
 import { TemporalService } from '../temporal/temporal.service';
@@ -18,7 +17,7 @@ export class McpGatewayService {
   constructor(
     private readonly toolRegistry: ToolRegistryService,
     private readonly temporalService: TemporalService,
-  ) {}
+  ) { }
 
   /**
    * Get or create an MCP Server instance for a specific workflow run
@@ -189,7 +188,7 @@ export class McpGatewayService {
   }
 
   /**
-   * Internal handler for executing component-based tools
+   * Internal handler for executing component-based tools via Temporal workflow
    */
   private async callComponentTool(
     tool: RegisteredTool,
@@ -200,39 +199,73 @@ export class McpGatewayService {
       throw new BadRequestException(`Component ID missing for tool '${tool.toolName}'`);
     }
 
-    const component = componentRegistry.get(tool.componentId);
-    if (!component) {
-      throw new NotFoundException(`Component '${tool.componentId}' not found in registry`);
-    }
-
     // Resolve credentials from registry
     const credentials = await this.toolRegistry.getToolCredentials(runId, tool.nodeId);
 
-    this.logger.log(`Executing tool '${tool.toolName}' (${tool.componentId}) for run ${runId}`);
+    // Generate a unique call ID for this tool invocation
+    const callId = `${runId}:${tool.nodeId}:${Date.now()}`;
 
-    // Merge credentials (pre-bound) and agent arguments (action inputs)
-    const mergedInputs = {
-      ...(credentials ?? {}),
-      ...args,
-    };
-
-    // Execute the component logic
-    return await component.execute(
-      { inputs: mergedInputs as any, params: {} as any },
-      {
-        runId,
-        componentRef: tool.nodeId,
-        logger: new Logger(`Tool:${tool.toolName}`) as any,
-        emitProgress: () => {},
-        http: {
-          fetch: fetch as any,
-          toCurl: () => 'curl ...',
-        },
-        metadata: {
-          correlationId: `${runId}:${tool.nodeId}:mcp`,
-        } as any,
-      },
+    this.logger.log(
+      `Signaling tool execution: callId=${callId}, tool='${tool.toolName}' (${tool.componentId})`,
     );
+
+    // Signal the workflow to execute the tool
+    await this.temporalService.signalWorkflow({
+      workflowId: runId,
+      signalName: 'executeToolCall',
+      args: {
+        callId,
+        nodeId: tool.nodeId,
+        componentId: tool.componentId,
+        arguments: args,
+        credentials: credentials ?? undefined,
+        requestedAt: new Date().toISOString(),
+      },
+    });
+
+    // Poll for the result via workflow query
+    // The workflow will execute the component and store the result
+    const result = await this.pollForToolCallResult(runId, callId);
+
+    if (!result.success) {
+      throw new Error(result.error ?? 'Tool execution failed');
+    }
+
+    return result.output;
+  }
+
+  /**
+   * Poll the workflow for a tool call result
+   */
+  private async pollForToolCallResult(
+    runId: string,
+    callId: string,
+    timeoutMs = 60000,
+    pollIntervalMs = 500,
+  ): Promise<{ success: boolean; output?: unknown; error?: string }> {
+    const startTime = Date.now();
+
+    while (Date.now() - startTime < timeoutMs) {
+      try {
+        // Query the workflow for tool call results
+        const result = await this.temporalService.queryWorkflow({
+          workflowId: runId,
+          queryType: 'getToolCallResult',
+          args: [callId],
+        });
+
+        if (result) {
+          return result as { success: boolean; output?: unknown; error?: string };
+        }
+      } catch (error) {
+        // Query might fail if workflow is busy, continue polling
+        this.logger.debug(`Polling for tool result: ${error}`);
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+    }
+
+    return { success: false, error: `Tool call timed out after ${timeoutMs}ms` };
   }
 
   /**
