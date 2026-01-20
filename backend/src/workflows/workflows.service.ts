@@ -40,7 +40,7 @@ import {
   ExecutionInputPreview,
   ExecutionTriggerMetadata,
 } from '@shipsec/shared';
-import type { WorkflowRunRecord, WorkflowVersionRecord } from '../database/schema';
+import type { WorkflowRunRecord, WorkflowVersionRecord, WorkflowGraph } from '../database/schema';
 import type { AuthContext } from '../auth/types';
 
 export interface WorkflowRunRequest {
@@ -366,10 +366,93 @@ export class WorkflowsService {
     record: WorkflowRecord,
     version?: WorkflowVersionRecord | null,
   ): ServiceWorkflowResponse {
+    // Resolve dynamic ports for the graph so Entry Point nodes show correct outputs
+    const resolvedGraph = this.resolveGraphPorts(record.graph);
+
     return {
       ...record,
+      graph: resolvedGraph,
       currentVersionId: version?.id ?? null,
       currentVersion: version?.version ?? null,
+    };
+  }
+
+  /**
+   * Resolve dynamic ports for all nodes in a workflow graph.
+   * This ensures Entry Point nodes and other components with resolvePorts
+   * have their dynamicInputs/dynamicOutputs populated correctly.
+   */
+  private resolveGraphPorts(graph: WorkflowGraph): WorkflowGraph {
+    if (!graph || !Array.isArray(graph.nodes)) {
+      return graph;
+    }
+
+    const nodesWithResolvedPorts = graph.nodes.map((node) => {
+      const nodeData = node.data;
+      const componentId =
+        node.type !== 'workflow'
+          ? node.type
+          : (nodeData as any)?.componentId || (nodeData as any)?.componentSlug;
+
+      if (!componentId) {
+        return node;
+      }
+
+      try {
+        const entry = componentRegistry.getMetadata(componentId);
+        if (!entry) {
+          return node;
+        }
+        const component = entry.definition;
+        const baseInputs = entry.inputs ?? extractPorts(component.inputs);
+        const baseOutputs = entry.outputs ?? extractPorts(component.outputs);
+
+        // Get parameters from node data (stored in config.params)
+        const params = nodeData.config?.params || {};
+
+        if (typeof component.resolvePorts === 'function') {
+          try {
+            const resolved = component.resolvePorts(params);
+            return {
+              ...node,
+              data: {
+                ...nodeData,
+                dynamicInputs: resolved.inputs ? extractPorts(resolved.inputs) : baseInputs,
+                dynamicOutputs: resolved.outputs ? extractPorts(resolved.outputs) : baseOutputs,
+              },
+            };
+          } catch (resolveError) {
+            this.logger.warn(
+              `Failed to resolve ports for component ${componentId}: ${resolveError}`,
+            );
+            return {
+              ...node,
+              data: {
+                ...nodeData,
+                dynamicInputs: baseInputs,
+                dynamicOutputs: baseOutputs,
+              },
+            };
+          }
+        } else {
+          return {
+            ...node,
+            data: {
+              ...nodeData,
+              dynamicInputs: baseInputs,
+              dynamicOutputs: baseOutputs,
+            },
+          };
+        }
+      } catch (error) {
+        this.logger.warn(`Failed to get component ${componentId} for port resolution: ${error}`);
+        return node;
+      }
+    });
+
+    return {
+      ...graph,
+      nodes: nodesWithResolvedPorts,
     };
   }
 
@@ -1237,8 +1320,9 @@ export class WorkflowsService {
         const baseInputs = entry.inputs ?? extractPorts(component.inputs);
         const baseOutputs = entry.outputs ?? extractPorts(component.outputs);
 
-        // Get parameters from node data (they may be stored in config.params, parameters, or at data level)
-        const params = nodeData.parameters || nodeData.config?.params || nodeData.config || {};
+        // Get parameters from node data
+        // The schema stores params inside config.params, but some legacy data might have it at different levels
+        const params = nodeData.config?.params || nodeData.parameters || nodeData.config || {};
 
         // Resolve ports using the component's resolvePorts function if available
         if (typeof component.resolvePorts === 'function') {
