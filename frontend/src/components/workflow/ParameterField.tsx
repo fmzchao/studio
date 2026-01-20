@@ -229,18 +229,9 @@ export function ParameterField({
 
   const isReceivingInput = Boolean(connectedInput);
 
-  const [secretMode, setSecretMode] = useState<'select' | 'manual'>(() => {
-    if (parameter.type !== 'secret') {
-      return 'manual';
-    }
-    if (
-      typeof currentValue === 'string' &&
-      secrets.some((secret) => secret.id === currentValue || secret.name === currentValue)
-    ) {
-      return 'select';
-    }
-    return secrets.length > 0 ? 'select' : 'manual';
-  });
+  // Secret editor only supports selecting from the store (no manual mode)
+  // Secret IDs are resolved to actual values at runtime by the worker
+  const _secretMode = 'select' as const;
 
   useEffect(() => {
     if (parameter.type !== 'secret') {
@@ -256,22 +247,18 @@ export function ParameterField({
       return;
     }
 
-    if (secrets.length === 0) {
-      setSecretMode('manual');
-      return;
-    }
-
+    // Auto-select first secret if current value is not a valid secret ID
     if (
-      secretMode === 'select' &&
-      (typeof currentValue !== 'string' ||
-        !secrets.some((secret) => secret.id === currentValue || secret.name === currentValue))
+      secrets.length > 0 &&
+      (typeof currentValue !== 'string' || !secrets.some((secret) => secret.id === currentValue))
     ) {
       const firstSecret = secrets[0];
       if (firstSecret) {
-        onChange(firstSecret.name);
+        // Store secret.id (not name) for runtime resolution
+        onChange(firstSecret.id);
       }
     }
-  }, [parameter.type, secretMode, secrets, currentValue, onChange, isReceivingInput]);
+  }, [parameter.type, secrets, currentValue, onChange, isReceivingInput]);
 
   useEffect(() => {
     if (parameter.type !== 'secret') {
@@ -657,11 +644,8 @@ export function ParameterField({
 
     case 'secret': {
       const hasSecrets = secrets.length > 0;
+      // Find secret by ID (new format) or name (legacy format for migration)
       const activeSecret = secrets.find((s) => s.id === currentValue || s.name === currentValue);
-
-      const selectedSecretKey = activeSecret?.name ?? '';
-
-      const manualValue = typeof currentValue === 'string' && !activeSecret ? currentValue : '';
       const disableForGithubConnection =
         isRemoveGithubComponent && parameter.id === 'clientSecret' && isGithubConnectionMode;
 
@@ -669,31 +653,6 @@ export function ParameterField({
         connectedInput?.source && connectedInput?.output
           ? `${connectedInput.source}.${connectedInput.output}`
           : connectedInput?.source;
-
-      const handleModeChange = (mode: 'select' | 'manual') => {
-        if (disableForGithubConnection) {
-          return;
-        }
-        if (isReceivingInput) {
-          return;
-        }
-        if (mode === 'select') {
-          if (!hasSecrets) {
-            setSecretMode('manual');
-            return;
-          }
-          const existing =
-            secrets.find((s) => s.id === currentValue || s.name === currentValue) ?? secrets[0];
-          setSecretMode('select');
-          updateSecretValue(existing?.name ?? undefined);
-          return;
-        }
-
-        setSecretMode('manual');
-        if (selectedSecretKey) {
-          updateSecretValue(undefined);
-        }
-      };
 
       return (
         <div className="space-y-3">
@@ -709,101 +668,68 @@ export function ParameterField({
               Using a stored GitHub connection, so the OAuth client secret is managed automatically.
             </p>
           )}
+
+          {secretsError && <p className="text-xs text-destructive">{secretsError}</p>}
+
+          {hasSecrets ? (
+            <>
+              <select
+                value={activeSecret?.id ?? ''}
+                onChange={(e) => {
+                  const nextValue = e.target.value;
+                  // Store secret.id for runtime resolution
+                  updateSecretValue(nextValue === '' ? undefined : nextValue);
+                }}
+                className="w-full px-3 py-2 text-sm border rounded-md bg-background"
+                disabled={isReceivingInput || disableForGithubConnection}
+              >
+                <option value="">Select a secret…</option>
+                {secrets.map((secret) => (
+                  <option key={secret.id} value={secret.id}>
+                    {secret.name}
+                  </option>
+                ))}
+              </select>
+
+              {activeSecret && (
+                <p className="text-xs text-muted-foreground">
+                  Selected: <span className="font-mono">{activeSecret.name}</span>
+                </p>
+              )}
+            </>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              No stored secrets yet. Create one in the Secret Manager.
+            </p>
+          )}
+
           <div className="flex flex-wrap items-center gap-2">
             <Button
               type="button"
               size="sm"
-              variant={secretMode === 'select' ? 'default' : 'outline'}
-              onClick={() => handleModeChange('select')}
-              disabled={!hasSecrets || isReceivingInput || disableForGithubConnection}
+              variant="ghost"
+              onClick={() => {
+                refreshSecrets().catch((error) => {
+                  console.error('Failed to refresh secrets', error);
+                });
+              }}
+              disabled={secretsLoading || isReceivingInput || disableForGithubConnection}
             >
-              From store
+              {secretsLoading ? 'Refreshing…' : 'Refresh'}
             </Button>
             <Button
               type="button"
               size="sm"
-              variant={secretMode === 'manual' ? 'default' : 'outline'}
-              onClick={() => handleModeChange('manual')}
+              variant="outline"
+              onClick={() => navigate('/secrets')}
               disabled={isReceivingInput || disableForGithubConnection}
             >
-              Manual ID
+              Manage secrets
             </Button>
-            <div className="ml-auto flex items-center gap-2">
-              <Button
-                type="button"
-                size="sm"
-                variant="ghost"
-                onClick={() => {
-                  refreshSecrets().catch((error) => {
-                    console.error('Failed to refresh secrets', error);
-                  });
-                }}
-                disabled={secretsLoading || isReceivingInput || disableForGithubConnection}
-              >
-                {secretsLoading ? 'Refreshing…' : 'Refresh'}
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={() => navigate('/secrets')}
-                disabled={isReceivingInput || disableForGithubConnection}
-              >
-                Manage secrets
-              </Button>
-            </div>
           </div>
 
-          {secretsError && <p className="text-xs text-destructive">{secretsError}</p>}
-
-          {secretMode === 'select' && hasSecrets && (
-            <select
-              value={selectedSecretKey}
-              onChange={(e) => {
-                const nextValue = e.target.value;
-                updateSecretValue(nextValue === '' ? undefined : nextValue);
-              }}
-              className="w-full px-3 py-2 text-sm border rounded-md bg-background"
-              disabled={isReceivingInput || disableForGithubConnection}
-            >
-              <option value="">Select a secret…</option>
-              {secrets.map((secret) => (
-                <option key={secret.id} value={secret.name}>
-                  {secret.name}
-                </option>
-              ))}
-            </select>
-          )}
-
-          {secretMode === 'select' && !hasSecrets && (
-            <p className="text-xs text-muted-foreground">
-              No stored secrets yet. Create one in the Secret Manager or switch to manual entry.
-            </p>
-          )}
-
-          {secretMode === 'manual' && (
-            <Input
-              id={`${parameter.id}-manual`}
-              type="text"
-              placeholder="Paste secret ID…"
-              value={manualValue}
-              onChange={(e) => updateSecretValue(e.target.value)}
-              className="text-sm"
-              disabled={isReceivingInput || disableForGithubConnection}
-            />
-          )}
-
-          {secretMode === 'select' && activeSecret && (
-            <p className="text-xs text-muted-foreground">
-              Reference: <span className="font-mono">{activeSecret.name}</span> (ID:{' '}
-              {activeSecret.id.substring(0, 8)}...)
-            </p>
-          )}
-
-          {secretsError && <p className="text-xs text-destructive">{secretsError}</p>}
-
           <p className="text-xs text-muted-foreground">
-            Secrets are securely stored; only references are shared with components.
+            Secrets are resolved at runtime. Only the secret reference is stored in the workflow.
           </p>
         </div>
       );

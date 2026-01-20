@@ -9,11 +9,13 @@ import {
   ValidationError,
   TEMPORAL_SPILL_THRESHOLD_BYTES,
   isSpilledDataMarker,
+  extractPorts,
   type IFileStorageService,
   type ISecretsService,
   type ITraceService,
   type INodeIOService,
   type AgentTracePublisher,
+  type ComponentPortMetadata,
 } from '@shipsec/component-sdk';
 
 import {
@@ -258,6 +260,103 @@ export async function runComponentActivity(
 
   await unspill(resolvedParams, 'Parameter');
   await unspill(resolvedInputs, 'Input');
+
+  // Resolve secret references in inputOverrides
+  // When a user selects a secret from the store in the config panel,
+  // the secret ID is stored. We need to resolve it to the actual value.
+  const resolveSecretInputOverrides = async (
+    inputs: Record<string, unknown>,
+    inputOverrides: Record<string, unknown>,
+  ) => {
+    if (!globalSecrets) {
+      return;
+    }
+
+    // Get input port metadata to identify which inputs are secret-type
+    const inputPorts = component.inputs ? extractPorts(component.inputs) : [];
+
+    for (const [key, value] of Object.entries(inputOverrides)) {
+      // Only resolve if:
+      // 1. The value is a string (secret ID)
+      // 2. The corresponding input port is a secret type
+      if (typeof value !== 'string' || !value) {
+        continue;
+      }
+
+      const portMeta = inputPorts.find((p: ComponentPortMetadata) => p.id === key);
+      const isSecretPort =
+        portMeta?.editor === 'secret' ||
+        (portMeta?.connectionType?.kind === 'primitive' &&
+          portMeta?.connectionType?.name === 'secret');
+
+      if (!isSecretPort) {
+        continue;
+      }
+
+      // This is a secret reference, resolve it
+      try {
+        const resolved = await globalSecrets.get(value);
+        if (resolved?.value) {
+          inputs[key] = resolved.value;
+          console.log(`[Activity] Resolved secret reference for input '${key}'`);
+        } else {
+          console.warn(
+            `[Activity] Secret '${value}' not found for input '${key}', keeping original value`,
+          );
+        }
+      } catch (err) {
+        console.warn(`[Activity] Failed to resolve secret '${value}' for input '${key}': ${err}`);
+        // Keep the original value on failure
+      }
+    }
+  };
+
+  // Resolve secret references for input overrides
+  await resolveSecretInputOverrides(resolvedInputs, input.inputOverrides ?? {});
+
+  // Also resolve secret references in params (for params with editor: 'secret')
+  const resolveSecretParams = async (
+    params: Record<string, unknown>,
+    rawParams: Record<string, unknown>,
+  ) => {
+    if (!globalSecrets || !component.parameters) {
+      return;
+    }
+
+    const paramPorts = extractPorts(component.parameters);
+
+    for (const [key, value] of Object.entries(rawParams)) {
+      if (typeof value !== 'string' || !value) {
+        continue;
+      }
+
+      const portMeta = paramPorts.find((p: ComponentPortMetadata) => p.id === key);
+      const isSecretParam =
+        portMeta?.editor === 'secret' ||
+        (portMeta?.connectionType?.kind === 'primitive' &&
+          portMeta?.connectionType?.name === 'secret');
+
+      if (!isSecretParam) {
+        continue;
+      }
+
+      try {
+        const resolved = await globalSecrets.get(value);
+        if (resolved?.value) {
+          params[key] = resolved.value;
+          console.log(`[Activity] Resolved secret reference for param '${key}'`);
+        } else {
+          console.warn(
+            `[Activity] Secret '${value}' not found for param '${key}', keeping original value`,
+          );
+        }
+      } catch (err) {
+        console.warn(`[Activity] Failed to resolve secret '${value}' for param '${key}': ${err}`);
+      }
+    }
+  };
+
+  await resolveSecretParams(resolvedParams, input.rawParams ?? {});
 
   for (const warning of warningsToReport) {
     context.trace?.record({
