@@ -209,7 +209,7 @@ function TerminalButton({
           const needsDataUpdate =
             terminalNode.data.runId !== selectedRunId ||
             terminalNode.data.timelineSync !==
-              (mode === 'execution' && (playbackMode !== 'live' || !isLiveFollowing));
+            (mode === 'execution' && (playbackMode !== 'live' || !isLiveFollowing));
 
           // Update terminal node position to follow parent node if parent moved or resized
           const lastPosition = parentPositionRef.current;
@@ -226,17 +226,17 @@ function TerminalButton({
               nds.map((n) =>
                 n.id === terminalNodeId
                   ? {
-                      ...n,
-                      position: needsPositionUpdate ? expectedPosition : n.position,
-                      data: needsDataUpdate
-                        ? {
-                            ...n.data,
-                            runId: selectedRunId,
-                            timelineSync:
-                              mode === 'execution' && (playbackMode !== 'live' || !isLiveFollowing),
-                          }
-                        : n.data,
-                    }
+                    ...n,
+                    position: needsPositionUpdate ? expectedPosition : n.position,
+                    data: needsDataUpdate
+                      ? {
+                        ...n.data,
+                        runId: selectedRunId,
+                        timelineSync:
+                          mode === 'execution' && (playbackMode !== 'live' || !isLiveFollowing),
+                      }
+                      : n.data,
+                  }
                   : n,
               ),
             );
@@ -290,9 +290,9 @@ function TerminalButton({
             nds.map((n) =>
               n.id === terminalNodeId
                 ? {
-                    ...n,
-                    position: expectedPosition,
-                  }
+                  ...n,
+                  position: expectedPosition,
+                }
                 : n,
             ),
           );
@@ -590,18 +590,18 @@ export const WorkflowNode = ({ data, selected, id }: NodeProps<NodeData>) => {
       nodes.map((node) =>
         node.id === id
           ? {
-              ...node,
-              data: {
-                ...(node.data as any),
-                ui: {
-                  ...(node.data as any).ui,
-                  size: {
-                    width: clampedWidth,
-                    height: clampedHeight,
-                  },
+            ...node,
+            data: {
+              ...(node.data as any),
+              ui: {
+                ...(node.data as any).ui,
+                size: {
+                  width: clampedWidth,
+                  height: clampedHeight,
                 },
               },
-            }
+            },
+          }
           : node,
       ),
     );
@@ -766,6 +766,17 @@ export const WorkflowNode = ({ data, selected, id }: NodeProps<NodeData>) => {
       console.error('Failed to parse runtimeInputs:', error);
     }
   }
+
+  // Update ReactFlow's internal handle positions when dynamic ports change.
+  // This is critical for Entry Point nodes with runtime inputs - without this,
+  // dragging from Input 2 would incorrectly connect from Input 1's stale cached position.
+  const outputIds = effectiveOutputs.map((o) => o.id).join(',');
+  const inputIds = componentInputs.map((i) => i.id).join(',');
+  useEffect(() => {
+    // Tell ReactFlow to recalculate handle positions for this node
+    updateNodeInternals(id);
+  }, [id, outputIds, inputIds, updateNodeInternals]);
+
   const manualOverridesPort = (input: InputPort) => input.valuePriority === 'manual-first';
 
   const manualValueProvidedForInput = (input: InputPort, hasConnection: boolean) => {
@@ -924,23 +935,23 @@ export const WorkflowNode = ({ data, selected, id }: NodeProps<NodeData>) => {
 
         // Timeline active states for entry point (when it has active execution status)
         isEntryPoint &&
-          isTimelineActive &&
-          effectiveStatus === 'running' &&
-          !isPlaying &&
-          'border-dashed',
+        isTimelineActive &&
+        effectiveStatus === 'running' &&
+        !isPlaying &&
+        'border-dashed',
 
         // Enhanced border styling for timeline (non-entry-point nodes only)
         !isEntryPoint && isTimelineActive && effectiveStatus === 'running' && 'border-blue-400',
         !isEntryPoint &&
-          isTimelineActive &&
-          effectiveStatus === 'running' &&
-          !isPlaying &&
-          'border-dashed',
+        isTimelineActive &&
+        effectiveStatus === 'running' &&
+        !isPlaying &&
+        'border-dashed',
         !isEntryPoint && isTimelineActive && effectiveStatus === 'error' && 'border-red-400',
 
         // Node status states (non-entry-point nodes only)
         !isEntryPoint &&
-          (effectiveStatus !== 'idle' || isTimelineActive) && [nodeStyle.bg, nodeStyle.border],
+        (effectiveStatus !== 'idle' || isTimelineActive) && [nodeStyle.bg, nodeStyle.border],
 
         // Default state (all nodes when idle) - white/grey background
         (!nodeData.status || nodeData.status === 'idle') && !isTimelineActive && ['border-border'],
@@ -962,9 +973,9 @@ export const WorkflowNode = ({ data, selected, id }: NodeProps<NodeData>) => {
         // Text block and entry point sizing
         ...(isTextBlock
           ? {
-              width: Math.max(MIN_TEXT_WIDTH, textSize.width ?? DEFAULT_TEXT_WIDTH),
-              minHeight: Math.max(MIN_TEXT_HEIGHT, textSize.height ?? DEFAULT_TEXT_HEIGHT),
-            }
+            width: Math.max(MIN_TEXT_WIDTH, textSize.width ?? DEFAULT_TEXT_WIDTH),
+            minHeight: Math.max(MIN_TEXT_HEIGHT, textSize.height ?? DEFAULT_TEXT_HEIGHT),
+          }
           : isEntryPoint
             ? { width: 160, minHeight: 160 }
             : {}),
@@ -1078,9 +1089,9 @@ export const WorkflowNode = ({ data, selected, id }: NodeProps<NodeData>) => {
                         'h-4 w-4 flex-shrink-0',
                         nodeStyle.iconClass,
                         isTimelineActive &&
-                          effectiveStatus === 'running' &&
-                          isPlaying &&
-                          'animate-spin',
+                        effectiveStatus === 'running' &&
+                        isPlaying &&
+                        'animate-spin',
                         isTimelineActive && effectiveStatus === 'error' && 'animate-bounce',
                       )}
                     />
@@ -1437,8 +1448,8 @@ export const WorkflowNode = ({ data, selected, id }: NodeProps<NodeData>) => {
 
               const manualDisplay =
                 manualValueProvided &&
-                inputSupportsManualValue(input) &&
-                typeof manualCandidate === 'string'
+                  inputSupportsManualValue(input) &&
+                  typeof manualCandidate === 'string'
                   ? manualCandidate.trim()
                   : '';
               const previewText =
@@ -1601,10 +1612,10 @@ export const WorkflowNode = ({ data, selected, id }: NodeProps<NodeData>) => {
                               !hasBranchDecision && designModeColors[branchColor],
                               // Active branch - always green
                               isActive &&
-                                'bg-green-50 dark:bg-green-900/30 border-green-400 dark:border-green-600 text-green-700 dark:text-green-300 ring-1 ring-green-400/50',
+                              'bg-green-50 dark:bg-green-900/30 border-green-400 dark:border-green-600 text-green-700 dark:text-green-300 ring-1 ring-green-400/50',
                               // Inactive/Skipped branch - MUTED/OFF state
                               isInactive &&
-                                'bg-slate-50/50 dark:bg-slate-900/20 border-dashed border-slate-200 dark:border-slate-800 text-slate-300 dark:text-slate-600 opacity-30 grayscale-[0.8]',
+                              'bg-slate-50/50 dark:bg-slate-900/20 border-dashed border-slate-200 dark:border-slate-800 text-slate-300 dark:text-slate-600 opacity-30 grayscale-[0.8]',
                             )}
                           >
                             {isActive && <LucideIcons.Check className="h-2.5 w-2.5" />}
@@ -1622,7 +1633,7 @@ export const WorkflowNode = ({ data, selected, id }: NodeProps<NodeData>) => {
                               !hasBranchDecision && handleDesignColors[branchColor],
                               isActive && '!border-green-500 !bg-green-500',
                               isInactive &&
-                                '!border-slate-300 !bg-slate-200 dark:!bg-slate-800 opacity-30',
+                              '!border-slate-300 !bg-slate-200 dark:!bg-slate-800 opacity-30',
                             )}
                             style={{ top: '50%', right: '-18px', transform: 'translateY(-50%)' }}
                           />
