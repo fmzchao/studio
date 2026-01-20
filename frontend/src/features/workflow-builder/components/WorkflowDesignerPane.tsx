@@ -93,7 +93,7 @@ export function WorkflowDesignerPane({
   const [webhooksPanelExpanded, setWebhooksPanelExpanded] = useState(false);
 
   // Default webhook URL for direct workflow invocation
-  const defaultWebhookUrl = workflowId ? `${API_BASE_URL}/workflows/${workflowId}/run` : '';
+  const defaultWebhookUrl = workflowId ? `${API_BASE_URL}/api/v1/workflows/${workflowId}/run` : '';
 
   // Auto-open webhooks sidebar if navigated back with query param
   useEffect(() => {

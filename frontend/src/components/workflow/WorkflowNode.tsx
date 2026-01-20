@@ -538,8 +538,8 @@ export const WorkflowNode = ({ data, selected, id }: NodeProps<NodeData>) => {
   const workflowIdFromRoute = params?.id && params.id !== 'new' ? params.id : undefined;
   const workflowId = workflowIdFromStore || workflowIdFromNode || workflowIdFromRoute;
   const workflowInvokeUrl = workflowId
-    ? `${API_BASE_URL}/workflows/${workflowId}/run`
-    : `${API_BASE_URL}/workflows/{workflowId}/run`;
+    ? `${API_BASE_URL}/api/v1/workflows/${workflowId}/run`
+    : `${API_BASE_URL}/api/v1/workflows/{workflowId}/run`;
 
   // Get schedule and webhook sidebar callbacks from Canvas context
   const { onOpenScheduleSidebar, onOpenWebhooksSidebar } = useEntryPointActions();

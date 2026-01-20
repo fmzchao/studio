@@ -220,7 +220,7 @@ export function WorkflowWebhooksSidebar({
         {!isLoading &&
           !error &&
           webhooks.map((webhook) => {
-            const webhookUrl = `${WEBHOOK_BASE_URL}/webhooks/inbound/${webhook.webhookPath}`;
+            const webhookUrl = `${WEBHOOK_BASE_URL}/api/v1/webhooks/inbound/${webhook.webhookPath}`;
 
             // Generate a sample payload that combines expectedInputs with generic fields
             // to show it can accept "whatever payload"
