@@ -273,12 +273,22 @@ export async function runComponentActivity(
     }
 
     // Get input port metadata to identify which inputs are secret-type
-    const inputPorts = component.inputs ? extractPorts(component.inputs) : [];
+    // For components with dynamic ports, we must resolve them first
+    let inputsSchema = component.inputs;
+    if (typeof component.resolvePorts === 'function') {
+      try {
+        const resolved = component.resolvePorts(resolvedParams);
+        if (resolved?.inputs) {
+          inputsSchema = resolved.inputs;
+        }
+      } catch (err) {
+        console.warn(`[Activity] Failed to resolve ports for secret check: ${err}`);
+      }
+    }
+
+    const inputPorts = inputsSchema ? extractPorts(inputsSchema) : [];
 
     for (const [key, value] of Object.entries(inputOverrides)) {
-      // Only resolve if:
-      // 1. The value is a string (secret ID)
-      // 2. The corresponding input port is a secret type
       if (typeof value !== 'string' || !value) {
         continue;
       }
@@ -295,18 +305,16 @@ export async function runComponentActivity(
 
       // This is a secret reference, resolve it
       try {
+        console.log(`[Activity] Resolving secret '${key}'...`);
         const resolved = await globalSecrets.get(value);
         if (resolved?.value) {
           inputs[key] = resolved.value;
-          console.log(`[Activity] Resolved secret reference for input '${key}'`);
+          console.log(`[Activity] Successfully resolved secret reference for input '${key}'`);
         } else {
-          console.warn(
-            `[Activity] Secret '${value}' not found for input '${key}', keeping original value`,
-          );
+          console.warn(`[Activity] Secret '${value}' not found in store for input '${key}'`);
         }
       } catch (err) {
-        console.warn(`[Activity] Failed to resolve secret '${value}' for input '${key}': ${err}`);
-        // Keep the original value on failure
+        console.warn(`[Activity] Error resolving secret '${value}' for input '${key}': ${err}`);
       }
     }
   };
@@ -341,17 +349,16 @@ export async function runComponentActivity(
       }
 
       try {
+        console.log(`[Activity] Resolving secret '${key}'...`);
         const resolved = await globalSecrets.get(value);
         if (resolved?.value) {
           params[key] = resolved.value;
-          console.log(`[Activity] Resolved secret reference for param '${key}'`);
+          console.log(`[Activity] Successfully resolved secret reference for param '${key}'`);
         } else {
-          console.warn(
-            `[Activity] Secret '${value}' not found for param '${key}', keeping original value`,
-          );
+          console.warn(`[Activity] Secret '${value}' not found in store for param '${key}'`);
         }
       } catch (err) {
-        console.warn(`[Activity] Failed to resolve secret '${value}' for param '${key}': ${err}`);
+        console.warn(`[Activity] Error resolving secret '${value}' for param '${key}': ${err}`);
       }
     }
   };

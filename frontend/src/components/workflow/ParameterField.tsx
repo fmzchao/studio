@@ -229,9 +229,8 @@ export function ParameterField({
 
   const isReceivingInput = Boolean(connectedInput);
 
-  // Secret editor only supports selecting from the store (no manual mode)
   // Secret IDs are resolved to actual values at runtime by the worker
-  const _secretMode = 'select' as const;
+  // and selecting from store is mandatory to ensure security and portability.
 
   useEffect(() => {
     if (parameter.type !== 'secret') {
