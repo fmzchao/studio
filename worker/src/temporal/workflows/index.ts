@@ -173,7 +173,7 @@ export async function shipsecWorkflowRun(
           ...(request.credentials ?? {}),
           ...request.arguments,
         },
-        params: {},
+        params: request.parameters ?? {},
         metadata: {
           streamId: request.callId,
         },

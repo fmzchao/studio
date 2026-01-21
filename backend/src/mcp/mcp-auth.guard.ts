@@ -26,19 +26,24 @@ export class McpAuthGuard implements CanActivate {
     const http = context.switchToHttp();
     const request = http.getRequest<McpGatewayRequest>();
 
+    let token: string | undefined;
+
+    // Try Authorization header (Standard Bearer token)
     const authHeader = request.headers['authorization'];
-    if (!authHeader || typeof authHeader !== 'string') {
-      this.logger.warn('Missing Authorization header for MCP request');
-      throw new UnauthorizedException('Authorization header required');
+    if (authHeader && typeof authHeader === 'string' && authHeader.startsWith('Bearer ')) {
+      token = authHeader.substring(7);
+      this.logger.log(`Found Bearer token in Authorization header for ${request.url}`);
     }
 
-    if (!authHeader.startsWith('Bearer ')) {
-      this.logger.warn('Invalid Authorization format for MCP request');
-      throw new UnauthorizedException('Bearer token required');
+    if (!token) {
+      this.logger.warn(`Missing or invalid Authorization header for MCP request to ${request.url}`);
+      throw new UnauthorizedException('Bearer token required in Authorization header');
     }
 
-    const token = authHeader.substring(7);
     const authInfo = await this.mcpAuthService.validateToken(token);
+    if (authInfo) {
+      this.logger.log(`Successfully validated MCP session token for run: ${authInfo.extra?.runId}`);
+    }
 
     if (!authInfo) {
       this.logger.warn('Invalid or expired MCP session token');

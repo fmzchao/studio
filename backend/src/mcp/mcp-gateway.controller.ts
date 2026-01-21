@@ -1,13 +1,16 @@
-import { Controller, Get, Post, UseGuards, Req, Res, Logger } from '@nestjs/common';
+import { Controller, All, UseGuards, Req, Res, Logger } from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 
+import { Public } from '../auth/public.decorator';
 import { McpAuthGuard, type McpGatewayRequest } from './mcp-auth.guard';
 import { McpGatewayService } from './mcp-gateway.service';
 
 @ApiTags('mcp')
 @Controller('mcp')
+@Public()
+@UseGuards(McpAuthGuard)
 export class McpGatewayController {
   private readonly logger = new Logger(McpGatewayController.name);
 
@@ -16,11 +19,9 @@ export class McpGatewayController {
 
   constructor(private readonly mcpGateway: McpGatewayService) {}
 
-  @Get('sse')
-  @ApiOperation({ summary: 'Establish an MCP SSE connection' })
-  @UseGuards(McpAuthGuard)
-  async establishSse(@Req() req: McpGatewayRequest, @Res() res: Response) {
-    // Extract info from validated AuthInfo (provided by McpAuthGuard)
+  @All('gateway')
+  @ApiOperation({ summary: 'Unified MCP Gateway endpoint (Streamable HTTP)' })
+  async handleGateway(@Req() req: McpGatewayRequest, @Res() res: Response) {
     const auth = req.auth;
     if (!auth || !auth.extra) {
       return res.status(401).send('Authentication missing');
@@ -33,67 +34,51 @@ export class McpGatewayController {
       return res.status(400).send('runId missing in session token');
     }
 
-    // Validate MCP Protocol Version if provided
-    const protocolVersion = req.headers['mcp-protocol-version'];
-    if (protocolVersion && protocolVersion !== '2025-06-18') {
-      this.logger.warn(`Unsupported MCP protocol version: ${protocolVersion}`);
+    let transport = this.transports.get(runId);
+
+    // Initialization if transport doesn't exist
+    if (!transport) {
+      this.logger.log(`Initializing new MCP transport for run: ${runId}`);
+
+      const allowedToolsHeader = req.headers['x-allowed-tools'];
+      const allowedTools =
+        typeof allowedToolsHeader === 'string'
+          ? allowedToolsHeader.split(',').map((t) => t.trim())
+          : undefined;
+
+      transport = new StreamableHTTPServerTransport({
+        sessionIdGenerator: () => runId,
+      });
+      this.transports.set(runId, transport);
+
+      try {
+        const server = await this.mcpGateway.getServerForRun(runId, organizationId, allowedTools);
+        await server.connect(transport);
+      } catch (error) {
+        this.logger.error(`Failed to initialize MCP server for run ${runId}: ${error}`);
+        this.transports.delete(runId);
+        return res
+          .status(error instanceof Error && error.name === 'NotFoundException' ? 404 : 403)
+          .send(error instanceof Error ? error.message : 'Access denied');
+      }
     }
 
-    this.logger.log(`Establishing MCP Streamable HTTP connection for run: ${runId}`);
-
-    const allowedToolsHeader = req.headers['x-allowed-tools'];
-    const allowedTools =
-      typeof allowedToolsHeader === 'string'
-        ? allowedToolsHeader.split(',').map((t) => t.trim())
-        : undefined;
-
-    // Create a new transport for this specific run
-    const transport = new StreamableHTTPServerTransport();
-    this.transports.set(runId, transport);
-
-    try {
-      const server = await this.mcpGateway.getServerForRun(runId, organizationId, allowedTools);
-
-      // Connect the server to this transport.
-      await server.connect(transport);
-
-      // Handle the initial GET request to start the SSE stream
-      await transport.handleRequest(req, res);
-
-      // Clean up when the client disconnects
+    if (req.method === 'GET') {
+      // Cleanup on client disconnect (specifically for the SSE stream)
       res.on('close', async () => {
-        this.logger.log(`MCP connection closed for run: ${runId}`);
+        this.logger.log(`MCP SSE connection closed for run: ${runId}`);
+        // We don't necessarily want to delete the transport here if POSTs are still allowed,
+        // but for ShipSec run-bounded sessions, closing SSE usually means the agent is done.
         this.transports.delete(runId);
         await this.mcpGateway.cleanupRun(runId);
       });
-    } catch (error) {
-      this.logger.error(`Failed to establish SSE connection: ${error}`);
-      this.transports.delete(runId);
-      if (!res.headersSent) {
-        const statusCode = error instanceof Error && error.name === 'NotFoundException' ? 404 : 403;
-        res.status(statusCode).send(error instanceof Error ? error.message : 'Access denied');
-      }
+
+      // Handle the initial GET request to start the SSE stream
+      // We don't await this because for SSE, it blocks until the connection is closed.
+      void transport.handleRequest(req, res);
+    } else {
+      // Handle POST (Messages) or DELETE (Session termination)
+      await transport.handleRequest(req, res, req.body);
     }
-  }
-
-  @Post('messages')
-  @ApiOperation({ summary: 'Send an MCP message to an established connection' })
-  @UseGuards(McpAuthGuard)
-  async handleMessage(@Req() req: McpGatewayRequest, @Res() res: Response) {
-    const auth = req.auth;
-    if (!auth || !auth.extra) {
-      return res.status(401).send('Authentication missing');
-    }
-
-    const runId = auth.extra.runId as string;
-    const transport = this.transports.get(runId);
-
-    if (!transport) {
-      this.logger.warn(`Received MCP message for unknown or closed run: ${runId}`);
-      return res.status(404).send('No active MCP connection for this runId');
-    }
-
-    // Process the POST message via the transport
-    await transport.handleRequest(req, res);
   }
 }

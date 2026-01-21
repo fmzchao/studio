@@ -355,6 +355,7 @@ export class McpGatewayService {
         nodeId: tool.nodeId,
         componentId: tool.componentId,
         arguments: args,
+        parameters: tool.parameters,
         credentials: credentials ?? undefined,
         requestedAt: new Date().toISOString(),
       },

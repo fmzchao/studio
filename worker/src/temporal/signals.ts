@@ -53,6 +53,8 @@ export interface ToolCallRequest {
   arguments: Record<string, unknown>;
   /** Pre-bound credentials from tool registration */
   credentials?: Record<string, unknown>;
+  /** Component parameters */
+  parameters?: Record<string, unknown>;
   /** Timestamp when the call was initiated */
   requestedAt: string;
 }

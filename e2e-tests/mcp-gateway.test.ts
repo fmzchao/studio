@@ -1,7 +1,6 @@
-
 import { describe, test, expect, beforeAll, afterAll } from 'bun:test';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 
 const API_BASE = 'http://127.0.0.1:3211/api/v1';
 const HEADERS = {
@@ -68,13 +67,13 @@ e2eDescribe('MCP Gateway E2E', () => {
                 },
                 {
                     id: 'wait',
-                    type: 'core.flow.delay',
+                    type: 'core.logic.script',
                     position: { x: 200, y: 0 },
                     data: {
                         label: 'Wait',
                         config: {
                             params: {
-                                seconds: 30, // Wait 30 seconds
+                                code: 'async function script() { console.log("Waiting 60s..."); await new Promise(resolve => setTimeout(resolve, 60000)); return { done: true }; }',
                             },
                         },
                     },
@@ -99,7 +98,7 @@ e2eDescribe('MCP Gateway E2E', () => {
         const toolName = 'test_script';
         const componentId = 'core.logic.script';
 
-        await fetch(`${API_BASE}/mcp/internal/register-component`, {
+        const regRes = await fetch(`${API_BASE}/internal/mcp/register-component`, {
             method: 'POST',
             headers: HEADERS,
             body: JSON.stringify({
@@ -110,37 +109,50 @@ e2eDescribe('MCP Gateway E2E', () => {
                 description: 'Test Script Tool',
                 inputSchema: {
                     type: 'object',
-                    properties: {
-                        code: { type: 'string' },
-                    },
+                    properties: {},
                 },
                 credentials: {},
+                parameters: {
+                    code: 'async function script() { return { result: { msg: "Hello from Tool" } }; }',
+                    returns: [{ name: 'result', type: 'json' }]
+                }
             }),
         });
+
+        if (!regRes.ok) {
+            const text = await regRes.text();
+            throw new Error(`Failed to register tool: ${regRes.status} ${text}`);
+        }
 
         console.log(`[Test] Registered tool ${toolName}`);
 
         // 2.5 Generate a session-specific MCP token
-        const tokenRes = await fetch(`${API_BASE}/mcp/internal/generate-token`, {
+        const tokenRes = await fetch(`${API_BASE}/internal/mcp/generate-token`, {
             method: 'POST',
             headers: HEADERS,
             body: JSON.stringify({
                 runId,
-                organizationId: 'test-org',
+                organizationId: 'local-dev',
                 agentId: 'test-agent'
             }),
         });
+
+        if (!tokenRes.ok) {
+            const text = await tokenRes.text();
+            throw new Error(`Failed to generate token: ${tokenRes.status} ${text}`);
+        }
+
         const { token } = await tokenRes.json();
         console.log(`[Test] Generated session token: ${token.substring(0, 10)}...`);
 
         // 3. Connect via MCP Client using the Session Token
-        const transport = new SSEClientTransport(new URL(`${API_BASE}/mcp/sse`), {
-            eventSourceInit: {
+        const transport = new StreamableHTTPClientTransport(new URL(`${API_BASE}/mcp/gateway`), {
+            requestInit: {
                 headers: {
                     ...HEADERS,
                     'Authorization': `Bearer ${token}`
-                },
-            } as any
+                }
+            }
         });
 
         const client = new Client(
@@ -164,9 +176,7 @@ e2eDescribe('MCP Gateway E2E', () => {
         console.log(`[Test] Calling tool ${toolName}...`);
         const result = await client.callTool({
             name: toolName,
-            arguments: {
-                code: 'return { msg: "Hello from Tool" };',
-            },
+            arguments: {},
         });
 
         console.log(`[Test] Tool result:`, result);
