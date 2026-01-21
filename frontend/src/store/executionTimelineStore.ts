@@ -507,7 +507,7 @@ export const useExecutionTimelineStore = create<TimelineStore>()(
       const previousRunId = state.selectedRunId;
 
       // Save current node selection to history before switching runs
-      let updatedHistory = { ...state.nodeSelectionHistory };
+      const updatedHistory = { ...state.nodeSelectionHistory };
       if (previousRunId && previousRunId !== runId) {
         updatedHistory[previousRunId] = state.selectedNodeId;
       }
