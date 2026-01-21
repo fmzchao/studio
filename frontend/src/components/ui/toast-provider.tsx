@@ -139,7 +139,12 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                     )}
                   >
                     {/* Left accent */}
-                    <div className={cn('absolute left-0 top-0 bottom-0 w-1 rounded-l-lg', styles.accent)} />
+                    <div
+                      className={cn(
+                        'absolute left-0 top-0 bottom-0 w-1 rounded-l-lg',
+                        styles.accent,
+                      )}
+                    />
 
                     <div className="flex items-start gap-3 p-3 pl-4">
                       <div className="flex-1 min-w-0">
@@ -205,7 +210,10 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                     )}
                     style={{
                       // Position behind the front card
-                      top: hiddenCount > 0 ? 16 + (stackedToasts.length - 1 - index) * 8 : (stackedToasts.length - 1 - index) * 8,
+                      top:
+                        hiddenCount > 0
+                          ? 16 + (stackedToasts.length - 1 - index) * 8
+                          : (stackedToasts.length - 1 - index) * 8,
                       // Scale down slightly for depth effect
                       transform: `scale(${1 - depth * 0.03})`,
                       transformOrigin: 'top center',
@@ -216,10 +224,17 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                     }}
                   >
                     {/* Left accent */}
-                    <div className={cn('absolute left-0 top-0 bottom-0 w-1 rounded-l-lg', styles.accent)} />
+                    <div
+                      className={cn(
+                        'absolute left-0 top-0 bottom-0 w-1 rounded-l-lg',
+                        styles.accent,
+                      )}
+                    />
 
                     <div className="p-3 pl-4">
-                      <p className="text-sm font-semibold text-foreground truncate">{toast.title}</p>
+                      <p className="text-sm font-semibold text-foreground truncate">
+                        {toast.title}
+                      </p>
                       <p className="mt-0.5 text-xs text-muted-foreground truncate">
                         {typeof toast.description === 'string' ? toast.description : ''}
                       </p>
@@ -240,17 +255,21 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                   style={{ zIndex: 20 }}
                 >
                   {/* Left accent */}
-                  <div className={cn(
-                    'absolute left-0 top-0 bottom-0 w-1 rounded-l-lg',
-                    variantStyles[frontToast.variant || 'default'].accent,
-                  )} />
+                  <div
+                    className={cn(
+                      'absolute left-0 top-0 bottom-0 w-1 rounded-l-lg',
+                      variantStyles[frontToast.variant || 'default'].accent,
+                    )}
+                  />
 
                   <div className="flex items-start gap-3 p-3 pl-4">
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold text-foreground">{frontToast.title}</p>
                       {frontToast.description && (
                         <p className="mt-1 text-xs text-muted-foreground break-words max-h-[80px] overflow-y-auto">
-                          {typeof frontToast.description === 'string' ? frontToast.description : frontToast.description}
+                          {typeof frontToast.description === 'string'
+                            ? frontToast.description
+                            : frontToast.description}
                         </p>
                       )}
                     </div>
