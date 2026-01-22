@@ -209,7 +209,10 @@ export function Canvas({
     (changes: EdgeChange[]) => {
       // Handle edge removals by cleaning up input mappings
       if (mode !== 'design') {
-        applyEdgesChange(changes);
+        const allowedChanges = changes.filter((change) => change.type !== 'remove');
+        if (allowedChanges.length > 0) {
+          applyEdgesChange(allowedChanges);
+        }
         return;
       }
 
@@ -335,18 +338,18 @@ export function Canvas({
         nextNodes = nodes.map((node) =>
           node.id === params.target
             ? {
-                ...node,
-                data: {
-                  ...node.data,
-                  inputs: {
-                    ...(node.data.inputs as Record<string, unknown>),
-                    [targetHandle]: {
-                      source: params.source,
-                      output: params.sourceHandle,
-                    },
-                  } as Record<string, unknown>,
-                },
-              }
+              ...node,
+              data: {
+                ...node.data,
+                inputs: {
+                  ...(node.data.inputs as Record<string, unknown>),
+                  [targetHandle]: {
+                    source: params.source,
+                    output: params.sourceHandle,
+                  },
+                } as Record<string, unknown>,
+              },
+            }
             : node,
         );
         setNodes(nextNodes);
@@ -984,8 +987,10 @@ export function Canvas({
               }}
               nodeTypes={nodeTypes}
               edgeTypes={edgeTypes}
-              nodesDraggable
+              nodesDraggable={mode === 'design'}
               nodesConnectable={mode === 'design'}
+              edgesUpdatable={mode === 'design'}
+              deleteKeyCode={mode === 'design' ? ['Backspace', 'Delete'] : []}
               elementsSelectable
             >
               <Background
@@ -1037,7 +1042,7 @@ export function Canvas({
                     onScheduleAction={resolvedOnScheduleAction}
                     onScheduleDelete={resolvedOnScheduleDelete}
                     onViewSchedules={resolvedOnViewSchedules}
-                    onWidthChange={() => {}} // Not resizable on mobile
+                    onWidthChange={() => { }} // Not resizable on mobile
                   />
                 </div>,
                 document.getElementById('mobile-bottom-sheet-portal') || document.body,
