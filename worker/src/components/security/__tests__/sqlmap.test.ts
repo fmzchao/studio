@@ -18,12 +18,12 @@ describe('sqlmap component', () => {
     expect(component!.category).toBe('security');
   });
 
-  it('should use docker runner with shell wrapper', () => {
+  it('should use docker runner with default entrypoint', () => {
     const component = componentRegistry.get('shipsec.sqlmap.scan');
     expect(component!.runner.kind).toBe('docker');
     if (component!.runner.kind === 'docker') {
-      expect(component!.runner.entrypoint).toBe('sh');
-      expect(component!.runner.command).toContain('-c');
+      expect(component!.runner.entrypoint).toBeUndefined();
+      expect(component!.runner.command).toEqual([]);
       expect(component!.runner.image).toBe('googlesky/sqlmap:latest');
     }
   });
@@ -39,7 +39,7 @@ describe('sqlmap component', () => {
 
     const result = await component.execute(
       {
-        inputs: { targetUrl: '' },
+        inputs: { targets: [] },
         params: {},
       },
       context,
@@ -55,16 +55,20 @@ describe('sqlmap component', () => {
     const component = componentRegistry.get('shipsec.sqlmap.scan');
     if (!component) throw new Error('Component not registered');
 
-    const validInput = { targetUrl: 'http://example.com/page.php?id=1' };
-    const parsed = component.inputs.parse(validInput);
-    expect(parsed.targetUrl).toBe('http://example.com/page.php?id=1');
+    const validInput = {
+      targets: ['http://example.com/page.php?id=1', 'http://test.com/vuln.php'],
+    };
+    const parsed = component.inputs.parse(validInput) as { targets: string[] };
+    expect(parsed.targets).toHaveLength(2);
+    expect(parsed.targets[0]).toBe('http://example.com/page.php?id=1');
   });
 
   it('should reject invalid URL', () => {
     const component = componentRegistry.get('shipsec.sqlmap.scan');
     if (!component) throw new Error('Component not registered');
 
-    expect(() => component.inputs.parse({ targetUrl: 'not-a-url' })).toThrow();
+    expect(() => component.inputs.parse({ targets: ['not-a-url'] })).toThrow();
+    expect(() => component.inputs.parse({ targets: [] })).toThrow();
   });
 
   it('should have correct parameter schema with defaults', () => {
@@ -116,7 +120,7 @@ describe('sqlmap component', () => {
       tables: ['users', 'products'],
       rawOutput: 'sqlmap output...',
       scanInfo: {
-        targetUrl: 'http://example.com/page.php?id=1',
+        targets: ['http://example.com/page.php?id=1'],
         level: '1',
         risk: '1',
         technique: 'BEUSTQ',

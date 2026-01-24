@@ -24,10 +24,15 @@ const levelEnum = z.enum(['1', '2', '3', '4', '5']);
 const riskEnum = z.enum(['1', '2', '3']);
 
 const inputSchema = inputs({
-  targetUrl: port(z.string().url('Must be a valid URL'), {
-    label: 'Target URL',
-    description: 'Target URL with injectable parameter (e.g., http://example.com/page.php?id=1)',
-  }),
+  targets: port(
+    z.array(z.string().url('Must be a valid URL')).min(1, 'At least one target is required'),
+    {
+      label: 'Targets',
+      description:
+        'List of target URLs with injectable parameters (e.g., http://example.com/page.php?id=1)',
+      connectionType: { kind: 'list', element: { kind: 'primitive', name: 'text' } },
+    },
+  ),
 });
 
 const parameterSchema = parameters({
@@ -228,7 +233,7 @@ const outputSchema = outputs({
   }),
   scanInfo: port(
     z.object({
-      targetUrl: z.string(),
+      targets: z.array(z.string()),
       level: z.string(),
       risk: z.string(),
       technique: z.string(),
@@ -260,10 +265,9 @@ const definition = defineComponent({
   runner: {
     kind: 'docker',
     image: SQLMAP_IMAGE,
-    entrypoint: 'sh',
     network: 'bridge',
     timeoutSeconds: SQLMAP_TIMEOUT_SECONDS,
-    command: ['-c', 'python /sqlmap/sqlmap.py "$@"', '--'],
+    command: [],
   },
   inputs: inputSchema,
   outputs: outputSchema,
@@ -284,7 +288,7 @@ const definition = defineComponent({
     },
     isLatest: true,
     deprecated: false,
-    example: 'sqlmap -u "http://example.com/page.php?id=1" --batch --banner',
+    example: 'sqlmap -m targets.txt --batch --banner',
     examples: [
       'Basic scan: Test a URL parameter for SQL injection vulnerabilities.',
       'POST data: Use --data to test POST parameters.',
@@ -294,10 +298,14 @@ const definition = defineComponent({
   },
   async execute({ inputs, params }, context) {
     const parsedParams = parameterSchema.parse(params);
-    const { targetUrl } = inputs;
+    const { targets } = inputs;
 
-    if (!targetUrl || targetUrl.trim().length === 0) {
-      context.logger.info('[SQLMap] No target URL provided, skipping execution.');
+    const normalizedTargets = targets
+      .map((t: string) => t.trim())
+      .filter((t: string) => t.length > 0);
+
+    if (normalizedTargets.length === 0) {
+      context.logger.info('[SQLMap] No targets provided, skipping execution.');
       return outputSchema.parse({
         vulnerable: false,
         injectionPoints: [],
@@ -309,7 +317,7 @@ const definition = defineComponent({
         tables: [],
         rawOutput: '',
         scanInfo: {
-          targetUrl: '',
+          targets: [],
           level: parsedParams.level,
           risk: parsedParams.risk,
           technique: parsedParams.technique,
@@ -318,8 +326,8 @@ const definition = defineComponent({
       });
     }
 
-    context.logger.info(`[SQLMap] Scanning target: ${targetUrl}`);
-    context.emitProgress(`Starting SQLMap scan on ${targetUrl}`);
+    context.logger.info(`[SQLMap] Scanning ${normalizedTargets.length} target(s)`);
+    context.emitProgress(`Starting SQLMap scan on ${normalizedTargets.length} target(s)`);
 
     const baseRunner = definition.runner;
     if (baseRunner.kind !== 'docker') {
@@ -332,11 +340,16 @@ const definition = defineComponent({
     const volume = new IsolatedContainerVolume(tenantId, context.runId);
 
     try {
-      await volume.initialize({});
+      // Prepare input file
+      const inputFiles: Record<string, string> = {
+        'targets.txt': normalizedTargets.join('\n'),
+      };
+
+      await volume.initialize(inputFiles);
 
       const sqlmapArgs: string[] = [
-        '-u',
-        targetUrl,
+        '-m',
+        '/data/targets.txt',
         '--batch', // Non-interactive mode
         '-v',
         '3', // Verbosity for better output parsing
@@ -462,7 +475,7 @@ const definition = defineComponent({
         tables: parsed.tables,
         rawOutput,
         scanInfo: {
-          targetUrl,
+          targets: normalizedTargets,
           level: parsedParams.level,
           risk: parsedParams.risk,
           technique: parsedParams.technique,
