@@ -199,6 +199,21 @@ const parameterSchema = parameters({
       description: 'Extract XHR request URL and method in output (headless only).',
     },
   ),
+  dynamicOnly: param(
+    z
+      .boolean()
+      .optional()
+      .default(true)
+      .describe(
+        'Only return dynamic endpoints (URLs with query params, forms, or dynamic extensions)',
+      ),
+    {
+      label: 'Dynamic Only',
+      editor: 'boolean',
+      description:
+        'Filter to only return dynamic endpoints that may have injection vulnerabilities (e.g., URLs with query parameters, .php, .asp, .jsp extensions).',
+    },
+  ),
 });
 
 const endpointSchema = z.object({
@@ -253,6 +268,7 @@ const outputSchema = outputs({
       ignoreQueryParams: z.boolean(),
       formExtraction: z.boolean(),
       xhrExtraction: z.boolean(),
+      dynamicOnly: z.boolean(),
     }),
     {
       label: 'Options',
@@ -348,6 +364,7 @@ const definition = defineComponent({
       ignoreQueryParams: parsedParams.ignoreQueryParams ?? false,
       formExtraction: parsedParams.formExtraction ?? false,
       xhrExtraction: parsedParams.xhrExtraction ?? false,
+      dynamicOnly: parsedParams.dynamicOnly ?? true,
     };
 
     if (runnerParams.targets.length === 0) {
@@ -374,6 +391,7 @@ const definition = defineComponent({
           ignoreQueryParams: runnerParams.ignoreQueryParams,
           formExtraction: runnerParams.formExtraction,
           xhrExtraction: runnerParams.xhrExtraction,
+          dynamicOnly: runnerParams.dynamicOnly,
         },
       };
       return outputSchema.parse(emptyOutput);
@@ -497,7 +515,7 @@ const definition = defineComponent({
         runnerOutput = rawRunnerResult;
       }
 
-      const { endpoints, urls } = parseKatanaOutput(runnerOutput);
+      const { endpoints, urls } = parseKatanaOutput(runnerOutput, runnerParams.dynamicOnly);
 
       context.logger.info(
         `[katana] Completed crawl with ${endpoints.length} endpoint(s) from ${runnerParams.targets.length} target(s)`,
@@ -525,6 +543,7 @@ const definition = defineComponent({
           ignoreQueryParams: runnerParams.ignoreQueryParams,
           formExtraction: runnerParams.formExtraction,
           xhrExtraction: runnerParams.xhrExtraction,
+          dynamicOnly: runnerParams.dynamicOnly,
         },
       };
 
@@ -536,7 +555,10 @@ const definition = defineComponent({
   },
 });
 
-function parseKatanaOutput(raw: string): { endpoints: Endpoint[]; urls: string[] } {
+function parseKatanaOutput(
+  raw: string,
+  dynamicOnly = true,
+): { endpoints: Endpoint[]; urls: string[] } {
   if (!raw || raw.trim().length === 0) {
     return { endpoints: [], urls: [] };
   }
@@ -556,16 +578,18 @@ function parseKatanaOutput(raw: string): { endpoints: Endpoint[]; urls: string[]
     } catch {
       // If not JSON, treat as plain URL
       if (line.startsWith('http://') || line.startsWith('https://')) {
-        urls.push(line);
-        endpoints.push({
-          url: line,
-          method: null,
-          endpoint: null,
-          source: null,
-          tag: null,
-          attribute: null,
-          timestamp: null,
-        });
+        if (!dynamicOnly || isDynamicUrl(line)) {
+          urls.push(line);
+          endpoints.push({
+            url: line,
+            method: null,
+            endpoint: null,
+            source: null,
+            tag: null,
+            attribute: null,
+            timestamp: null,
+          });
+        }
       }
       continue;
     }
@@ -591,6 +615,11 @@ function parseKatanaOutput(raw: string): { endpoints: Endpoint[]; urls: string[]
       continue;
     }
 
+    // Check if we should filter for dynamic URLs only
+    if (dynamicOnly && !isDynamicUrl(urlValue, payload)) {
+      continue;
+    }
+
     urls.push(urlValue);
 
     const endpoint: Endpoint = {
@@ -609,7 +638,226 @@ function parseKatanaOutput(raw: string): { endpoints: Endpoint[]; urls: string[]
     }
   }
 
-  return { endpoints, urls: Array.from(new Set(urls)) };
+  // Deduplicate endpoints by URL pattern when dynamicOnly is enabled
+  const finalEndpoints = dynamicOnly ? deduplicateByPattern(endpoints) : endpoints;
+  const finalUrls = dynamicOnly
+    ? Array.from(new Set(finalEndpoints.map((e) => e.url)))
+    : Array.from(new Set(urls));
+
+  return { endpoints: finalEndpoints, urls: finalUrls };
+}
+
+// Static file extensions that should always be filtered out
+const STATIC_EXTENSIONS = [
+  '.css',
+  '.js',
+  '.mjs',
+  '.map',
+  '.png',
+  '.jpg',
+  '.jpeg',
+  '.gif',
+  '.svg',
+  '.ico',
+  '.webp',
+  '.avif',
+  '.bmp',
+  '.tiff',
+  '.woff',
+  '.woff2',
+  '.ttf',
+  '.eot',
+  '.otf',
+  '.mp3',
+  '.mp4',
+  '.webm',
+  '.ogg',
+  '.wav',
+  '.avi',
+  '.mov',
+  '.pdf',
+  '.doc',
+  '.docx',
+  '.xls',
+  '.xlsx',
+  '.ppt',
+  '.pptx',
+  '.zip',
+  '.rar',
+  '.7z',
+  '.tar',
+  '.gz',
+  '.xml',
+  '.json',
+  '.txt',
+  '.md',
+  '.yaml',
+  '.yml',
+];
+
+// Dynamic file extensions commonly associated with server-side processing
+const DYNAMIC_EXTENSIONS = [
+  '.php',
+  '.asp',
+  '.aspx',
+  '.jsp',
+  '.jspx',
+  '.do',
+  '.action',
+  '.cgi',
+  '.pl',
+  '.py',
+  '.rb',
+  '.cfm',
+  '.cfml',
+];
+
+// Tags that indicate dynamic content (forms, XHR, etc.)
+const DYNAMIC_TAGS = ['form', 'input', 'xhr', 'fetch', 'ajax'];
+
+/**
+ * Check if a URL points to a static resource (should be filtered out)
+ */
+function isStaticResource(url: string): boolean {
+  try {
+    const parsedUrl = new URL(url);
+    // Remove query string for extension check
+    const pathname = parsedUrl.pathname.toLowerCase();
+    return STATIC_EXTENSIONS.some((ext) => pathname.endsWith(ext));
+  } catch {
+    return STATIC_EXTENSIONS.some((ext) => url.toLowerCase().includes(ext));
+  }
+}
+
+/**
+ * Determines if a URL is "dynamic" - meaning it may be vulnerable to injection attacks.
+ * Dynamic URLs include:
+ * - URLs with query parameters (?key=value) - excluding static resources
+ * - URLs with dynamic file extensions (.php, .asp, .aspx, .jsp, .do, .action, .cgi, .pl)
+ * - URLs from form submissions or XHR requests
+ * - URLs containing path parameters that look dynamic (/api/users/123)
+ */
+function isDynamicUrl(url: string, payload?: any): boolean {
+  // First, filter out static resources (even if they have query params like cache busters)
+  if (isStaticResource(url)) {
+    return false;
+  }
+
+  try {
+    const parsedUrl = new URL(url);
+
+    // Has query parameters (and not a static resource)
+    if (parsedUrl.search && parsedUrl.search.length > 1) {
+      return true;
+    }
+
+    // Has dynamic file extension
+    const pathname = parsedUrl.pathname.toLowerCase();
+    if (DYNAMIC_EXTENSIONS.some((ext) => pathname.endsWith(ext))) {
+      return true;
+    }
+
+    // Path contains numeric IDs or UUIDs (potential path parameters)
+    // e.g., /api/users/123 or /items/550e8400-e29b-41d4-a716-446655440000
+    const pathSegments = pathname.split('/').filter((s) => s.length > 0);
+    const hasPathParam = pathSegments.some((segment) => {
+      // Numeric ID
+      if (/^\d+$/.test(segment)) return true;
+      // UUID
+      if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(segment))
+        return true;
+      return false;
+    });
+    if (hasPathParam) {
+      return true;
+    }
+
+    // Check payload metadata for dynamic indicators
+    if (payload) {
+      const tag = (payload.request?.tag ?? payload.tag ?? '').toLowerCase();
+      if (DYNAMIC_TAGS.some((dt) => tag.includes(dt))) {
+        return true;
+      }
+
+      // POST/PUT/PATCH/DELETE methods are typically dynamic
+      const method = (payload.request?.method ?? payload.method ?? '').toUpperCase();
+      if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+        return true;
+      }
+    }
+
+    return false;
+  } catch {
+    // If URL parsing fails, check for basic patterns
+    return url.includes('?') || DYNAMIC_EXTENSIONS.some((ext) => url.toLowerCase().includes(ext));
+  }
+}
+
+/**
+ * Normalize a URL by replacing dynamic path segments (IDs, UUIDs) with placeholders.
+ * This allows deduplication of URLs like /bbs-topic/9158 and /bbs-topic/1234 into /bbs-topic/{id}
+ */
+function normalizeUrlPattern(url: string): string {
+  try {
+    const parsedUrl = new URL(url);
+    const pathSegments = parsedUrl.pathname.split('/');
+
+    const normalizedSegments = pathSegments.map((segment) => {
+      if (!segment) return segment;
+
+      // Replace numeric IDs with {id}
+      if (/^\d+$/.test(segment)) {
+        return '{id}';
+      }
+
+      // Replace UUIDs with {uuid}
+      if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(segment)) {
+        return '{uuid}';
+      }
+
+      // Replace hex hashes (like git commits, md5, sha1) with {hash}
+      if (/^[0-9a-f]{32,64}$/i.test(segment)) {
+        return '{hash}';
+      }
+
+      return segment;
+    });
+
+    parsedUrl.pathname = normalizedSegments.join('/');
+
+    // Normalize query params: keep keys but replace values with {value}
+    if (parsedUrl.search) {
+      const params = new URLSearchParams(parsedUrl.search);
+      const normalizedParams = new URLSearchParams();
+      for (const key of params.keys()) {
+        normalizedParams.set(key, '{value}');
+      }
+      parsedUrl.search = normalizedParams.toString();
+    }
+
+    return parsedUrl.toString();
+  } catch {
+    return url;
+  }
+}
+
+/**
+ * Deduplicate endpoints by their normalized URL pattern.
+ * Keeps the first occurrence of each pattern.
+ */
+function deduplicateByPattern(endpoints: Endpoint[]): Endpoint[] {
+  const seenPatterns = new Set<string>();
+  const result: Endpoint[] = [];
+
+  for (const endpoint of endpoints) {
+    const pattern = normalizeUrlPattern(endpoint.url);
+    if (!seenPatterns.has(pattern)) {
+      seenPatterns.add(pattern);
+      result.push(endpoint);
+    }
+  }
+
+  return result;
 }
 
 function normaliseString(value: unknown): string | null {
