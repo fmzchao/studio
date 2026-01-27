@@ -322,7 +322,9 @@ export function ExecutionInspector({ onRerunRun }: ExecutionInspectorProps = {})
                       size="sm"
                       className="h-7 px-3 gap-1.5"
                       disabled={isRunLive(selectedRun)}
-                      title={isRunLive(selectedRun) ? 'Wait for run to complete' : 'Rerun this workflow'}
+                      title={
+                        isRunLive(selectedRun) ? 'Wait for run to complete' : 'Rerun this workflow'
+                      }
                       onClick={() => onRerunRun(selectedRun.id)}
                     >
                       <RefreshCw className="h-3.5 w-3.5" />
