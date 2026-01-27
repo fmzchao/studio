@@ -37,9 +37,7 @@ export function NodeProgressBar({
     calculatedWidth = fallbackWidth;
   }
 
-  const width = Number.isFinite(calculatedWidth)
-    ? Math.max(0, Math.min(100, calculatedWidth))
-    : 0;
+  const width = Number.isFinite(calculatedWidth) ? Math.max(0, Math.min(100, calculatedWidth)) : 0;
 
   const eventLabel =
     totalEvents > 0

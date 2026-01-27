@@ -1,11 +1,4 @@
-import {
-  Loader2,
-  CheckCircle,
-  XCircle,
-  Clock,
-  Ban,
-  ShieldAlert,
-} from 'lucide-react';
+import { Loader2, CheckCircle, XCircle, Clock, Ban, ShieldAlert } from 'lucide-react';
 
 /**
  * Status icons mapping for different node states
