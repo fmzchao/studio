@@ -42,5 +42,14 @@ if [[ "$STASHED" == true ]]; then
   fi
 fi
 
+# Push to fork
+PUSH_REMOTE="fork"
+echo "⬆️  Pushing rebased changes to $PUSH_REMOTE/$BRANCH..."
+if git push "$PUSH_REMOTE" "$BRANCH" --force-with-lease; then
+  echo "✅ Push successful!"
+else
+  echo "❌ Push failed. You may need to push manually."
+fi
+
 echo "✅ Sync complete!"
 git status --short
